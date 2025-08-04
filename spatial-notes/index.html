@@ -1,0 +1,2323 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spatial Notes - Sök och Klunga</title>
+    <script src="https://unpkg.com/cytoscape@3.26.0/dist/cytoscape.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+        }
+        
+        .toolbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: white;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            z-index: 1000;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .search-box {
+            flex: 1;
+            max-width: 400px;
+            margin-right: 10px;
+        }
+        
+        .tag-filter-box {
+            flex: 0.7;
+            max-width: 300px;
+            margin-right: 20px;
+        }
+        
+        .tag-filter-input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            font-size: 14px;
+            background: rgba(255, 255, 255, 0.95);
+        }
+        
+        .layout-selector {
+            flex: 0.5;
+            margin-right: 20px;
+        }
+        
+        .layout-selector select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            font-size: 14px;
+            background: rgba(255, 255, 255, 0.95);
+            cursor: pointer;
+        }
+        
+        .search-input {
+            width: 100%;
+            padding: 10px 15px;
+            border: 2px solid #ddd;
+            border-radius: 25px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        
+        .search-input:focus {
+            border-color: #007acc;
+        }
+        
+        .add-card-btn {
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .add-card-btn:hover {
+            background: #005999;
+        }
+        
+        .menu-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .menu-button {
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .menu-button:hover {
+            background: #005999;
+        }
+        
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            right: 0;
+            background-color: white;
+            min-width: 200px;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            border-radius: 8px;
+            z-index: 1001;
+            border: 1px solid #ddd;
+        }
+        
+        .dropdown-content button {
+            background: none;
+            border: none;
+            color: #333;
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+            width: 100%;
+            text-align: left;
+            cursor: pointer;
+            font-size: 14px;
+            border-radius: 0;
+        }
+        
+        .dropdown-content button:first-child {
+            border-radius: 8px 8px 0 0;
+        }
+        
+        .dropdown-content button:last-child {
+            border-radius: 0 0 8px 8px;
+        }
+        
+        .dropdown-content button:hover {
+            background-color: #f5f5f5;
+        }
+        
+        .menu-dropdown:hover .dropdown-content {
+            display: block;
+        }
+        
+        #cy {
+            position: fixed;
+            top: 60px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, #f8f9fa 25%, transparent 25%), 
+                        linear-gradient(-45deg, #f8f9fa 25%, transparent 25%), 
+                        linear-gradient(45deg, transparent 75%, #f8f9fa 75%), 
+                        linear-gradient(-45deg, transparent 75%, #f8f9fa 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+        
+        .search-results-info {
+            position: fixed;
+            top: 70px;
+            right: 20px;
+            background: rgba(0, 122, 204, 0.9);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 15px;
+            font-size: 12px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 999;
+        }
+        
+        .search-results-info.visible {
+            opacity: 1;
+        }
+        
+        .selection-info {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(33, 150, 243, 0.9);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s ease;
+            z-index: 1000;
+            max-width: 300px;
+            line-height: 1.4;
+        }
+        
+        .selection-info.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        /* The invisible ruler for measuring text height */
+        #text-ruler {
+            position: absolute;
+            left: -1000px; /* Position off-screen */
+            top: -1000px;
+            visibility: hidden;
+            white-space: pre-wrap; /* Respect newlines and wrap text */
+            word-wrap: break-word;
+        }
+        
+        /* Enhanced box selection styling */
+        .cy-box-selection {
+            background-color: rgba(33, 150, 243, 0.1) !important;
+            border: 2px dashed rgba(33, 150, 243, 0.6) !important;
+            border-radius: 4px !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <div class="search-box">
+            <input type="text" class="search-input" placeholder='Sök: "bias and social" OR "not psychology"' id="searchInput">
+        </div>
+        <div class="tag-filter-box">
+            <input type="text" class="tag-filter-input" placeholder="Filter på tags: tech, psychology..." id="tagFilterInput">
+        </div>
+        <div class="layout-selector">
+            <select id="layoutSelect" onchange="applyLayout()">
+                <option value="preset">Manuell layout</option>
+                <option value="cola">Cola (håller avstånd)</option>
+                <option value="cose">Cose (organisk)</option>
+                <option value="grid">Grid (rutnät)</option>
+            </select>
+        </div>
+        <button class="add-card-btn" onclick="addNewCard()">+ Nytt kort</button>
+        <div class="menu-dropdown">
+            <button class="menu-button">
+                ⚙️ Meny
+                <span>▼</span>
+            </button>
+            <div class="dropdown-content">
+                <button onclick="saveBoard()">💾 Spara</button>
+                <button onclick="loadBoard()">📂 Ladda</button>
+                <button onclick="exportToJSON()">📋 Exportera JSON</button>
+                <button onclick="importFromJSON()">📁 Importera JSON</button>
+                <button onclick="importFromExtractor()">📥 Från PDF-Extractor</button>
+                <button onclick="toggleMetadataView()" id="metadataBtn">🔍 Metadata</button>
+                <button onclick="clearBoard()">🗑️ Rensa</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="search-results-info" id="searchInfo"></div>
+    <div class="selection-info" id="selectionInfo"></div>
+    
+    <!-- The invisible ruler -->
+    <div id="text-ruler"></div>
+    
+    <div id="cy"></div>
+
+    <script>
+        // Global variables
+        let cy;
+        let cardIdCounter = 45;
+        let searchActive = false;
+        
+        // Mouse position tracking
+        let lastMousePosition = { x: null, y: null };
+        
+        // Get arrangement position based on mouse or fallback to screen center
+        function getArrangementPosition() {
+            // If we have a valid mouse position, use it
+            if (lastMousePosition.x !== null && lastMousePosition.y !== null) {
+                // Convert browser coordinates to cytoscape model coordinates
+                const cyContainer = cy.container();
+                const containerRect = cyContainer.getBoundingClientRect();
+                const relativeX = lastMousePosition.x - containerRect.left;
+                const relativeY = lastMousePosition.y - containerRect.top;
+                
+                // Convert to cytoscape world coordinates
+                const pan = cy.pan();
+                const zoom = cy.zoom();
+                const modelX = (relativeX - pan.x) / zoom;
+                const modelY = (relativeY - pan.y) / zoom;
+                
+                console.log('Mouse position conversion:', {
+                    mouse: lastMousePosition,
+                    container: containerRect,
+                    relative: {x: relativeX, y: relativeY},
+                    pan, zoom,
+                    model: {x: modelX, y: modelY}
+                });
+                
+                return { x: modelX, y: modelY };
+            }
+            
+            // Fallback to screen center
+            const viewport = cy.extent();
+            console.log('Using fallback screen center:', {
+                x: (viewport.x1 + viewport.x2) / 2,
+                y: (viewport.y1 + viewport.y2) / 2
+            });
+            return {
+                x: (viewport.x1 + viewport.x2) / 2,
+                y: (viewport.y1 + viewport.y2) / 2
+            };
+        }
+        
+        // Text measurement using invisible ruler
+        let textRuler = null;
+        
+        function initTextRuler() {
+            textRuler = document.getElementById('text-ruler');
+        }
+        
+        /**
+         * Measures the actual rendered height of a node's text using the invisible ruler.
+         * @param {object} node The Cytoscape node.
+         * @returns {number} The measured height of the text in pixels.
+         */
+        function getMeasuredTextHeight(node) {
+            if (!textRuler) initTextRuler();
+            
+            const title = node.data('title') || '';
+            const text = node.data('text') || '';
+            const tags = node.data('tags') || [];
+            
+            // Get the final text content without custom wrapping
+            let rawText = text.replace(/\*\*|`|\*|\[|\]/g, '').replace(/^- /gm, '• ');
+            
+            // Add tags to the measurement
+            let tagDisplay = '';
+            if (tags.length > 0) {
+                tagDisplay = '\n\n' + tags.map(tag => `#${tag}`).join(' ');
+            }
+            
+            const mainText = title ? `${title.toUpperCase()}\n\n${rawText}` : rawText;
+            const fullLabel = mainText + tagDisplay;
+
+            // Use EXACT same text-max-width calculation as Cytoscape will use
+            const nodeWidth = 180 + Math.min(120, (title + text).length * 0.9);
+            const textMaxWidth = nodeWidth - 15;
+
+            // Style the ruler to match the node's text properties EXACTLY
+            textRuler.style.width = `${textMaxWidth}px`;
+            textRuler.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            textRuler.style.fontSize = title ? '18px' : '16px';
+            textRuler.style.lineHeight = '1.2';
+            textRuler.style.padding = '0';
+            textRuler.style.margin = '0';
+            textRuler.style.border = 'none';
+            textRuler.style.textAlign = 'center'; // Match Cytoscape text alignment
+            textRuler.style.wordWrap = 'break-word';
+            
+            // Set the text and measure
+            textRuler.textContent = fullLabel;
+            const measuredHeight = textRuler.offsetHeight;
+            
+            return measuredHeight;
+        }
+        
+        // Subtle orphan prevention - use non-breaking spaces to keep last 2-3 words together
+        function preventOrphansSubtly(text) {
+            const words = text.split(' ');
+            
+            // If text is short, don't modify
+            if (words.length <= 4) return text;
+            
+            // Join last 2-3 words with non-breaking spaces to prevent orphan words
+            const lastWords = words.slice(-3); // Last 3 words
+            const beforeWords = words.slice(0, -3); // Everything before last 3 words
+            
+            // Use non-breaking space (Unicode 00A0) to keep last words together
+            const joinedLastWords = lastWords.join('\u00A0');
+            
+            return beforeWords.length > 0 ? 
+                beforeWords.join(' ') + ' ' + joinedLastWords : 
+                joinedLastWords;
+        }
+        
+        // Sample data - strukturerade kort med titel och text
+        const initialCards = [
+            { id: 'card1', title: 'Machine Learning', text: '**Djupinlärning** revolutionerar allt från *bildigenkänning* till språkförståelse. ML är framtiden för AI.', tags: ['tech', 'ai', 'future'] },
+            { id: 'card2', title: 'JavaScript', text: 'Ett **mångsidigt** programmeringsspråk som kan användas för:\n- Frontend\n- Backend\n- Mobilappar', tags: ['tech', 'programming', 'web'] },
+            { id: 'card3', title: 'Spatial Design', text: 'Handlar om att organisera information i **2D eller 3D rum** istället för linjära listor.', tags: ['design', 'ux', 'spatial'] },
+            { id: 'card4', title: 'Cytoscape.js', text: 'Ett *kraftfullt* bibliotek för att skapa interaktiva **grafer och nätverk**.', tags: ['tech', 'library', 'visualization'] },
+            { id: 'card5', title: 'UX Design', text: 'Användargränssnitt ska vara **intuitiva**. Bra UX gör komplex funktionalitet *enkel* att använda.', tags: ['design', 'ux', 'usability'] }
+        ];
+        
+
+        // Initialize Cytoscape
+        function initCytoscape() {
+            cy = cytoscape({
+                container: document.getElementById('cy'),
+                
+                elements: initialCards.map((card, index) => ({
+                    data: {
+                        id: card.id,
+                        title: card.title || '',
+                        text: card.text || '', 
+                        tags: card.tags || [],
+                        searchMatch: false,
+                        // Hidden metadata for advanced analysis
+                        export_timestamp: card.export_timestamp || null,
+                        export_session: card.export_session || null,
+                        export_source: card.export_source || null,
+                        source_file: card.source_file || null,
+                        page_number: card.page_number || null,
+                        matched_terms: card.matched_terms || null,
+                        card_index: card.card_index || null
+                    },
+                    position: {
+                        x: 200 + (index % 3) * 300,
+                        y: 200 + Math.floor(index / 3) * 200
+                    }
+                })),
+                
+                style: [
+                    {
+                        selector: 'node',
+                        style: {
+                            'background-color': '#ffffff',
+                            'border-width': 2,
+                            'border-color': '#ddd',
+                            'width': function(node) {
+                                const title = node.data('title') || '';
+                                const text = node.data('text') || '';
+                                
+                                // Calculate width based on content length (your original logic)
+                                const baseWidth = 180;
+                                const extraWidth = Math.min(120, (title + text).length * 0.9);
+                                return baseWidth + extraWidth;
+                            },
+                            'height': function(node) {
+                                // Use the ruler to get exact height
+                                const measuredHeight = getMeasuredTextHeight(node);
+                                return Math.max(100, measuredHeight + 10); // Fixed padding för att testa
+                            },
+                            'shape': 'round-rectangle',
+                            'cursor': 'grab',
+                            'label': function(node) {
+                                const title = node.data('title') || '';
+                                const text = node.data('text') || '';
+                                const tags = node.data('tags') || [];
+                                
+                                // Simple markdown conversion for display
+                                let displayText = text;
+                                displayText = displayText.replace(/\*\*(.*?)\*\*/g, '$1'); // Remove **bold**
+                                displayText = displayText.replace(/\*(.*?)\*/g, '$1'); // Remove *italic*
+                                displayText = displayText.replace(/`(.*?)`/g, '$1'); // Remove `code`
+                                displayText = displayText.replace(/^- /gm, '• '); // Convert - to bullets
+                                
+                                // Apply subtle orphan prevention using non-breaking spaces
+                                displayText = preventOrphansSubtly(displayText);
+                                
+                                // Add tags at the bottom if they exist (filter out PDF filename tags)
+                                let tagDisplay = '';
+                                if (tags.length > 0) {
+                                    // Filter out tags that look like PDF filenames (author-year-title format)
+                                    const visibleTags = tags.filter(tag => {
+                                        // Hide tags that match PDF filename pattern: Author-YYYY-title-words
+                                        const pdfPattern = /^[A-Za-z\-]+\-\d{4}\-[a-z\-]+$/;
+                                        return !pdfPattern.test(tag);
+                                    });
+                                    
+                                    if (visibleTags.length > 0) {
+                                        tagDisplay = '\n\n' + visibleTags.map(tag => `#${tag}`).join(' ');
+                                    }
+                                }
+                                
+                                const mainText = title ? `${title.toUpperCase()}\n\n${displayText}` : displayText;
+                                return mainText + tagDisplay;
+                            },
+                            'text-wrap': 'wrap',
+                            'text-max-width': function(node) {
+                                const title = node.data('title') || '';
+                                const text = node.data('text') || '';
+                                const nodeWidth = 180 + Math.min(120, (title + text).length * 0.9);
+                                return nodeWidth - 15;
+                            },
+                            'text-valign': 'center',
+                            'text-halign': 'center',
+                            'font-size': function(node) {
+                                const title = node.data('title') || '';
+                                return title ? 18 : 16; // Larger font for nodes with titles
+                            },
+                            'font-family': '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                            'color': '#333'
+                        }
+                    },
+                    {
+                        selector: 'node.search-match',
+                        style: {
+                            'background-color': '#bbdefb',
+                            'border-color': '#1976d2',
+                            'border-width': 4,
+                            'box-shadow': '0 0 15px rgba(25, 118, 210, 0.6)'
+                        }
+                    },
+                    {
+                        selector: 'node.tag-filtered',
+                        style: {
+                            'background-color': '#f0f0f0',
+                            'border-color': '#ddd',
+                            'opacity': 0.3
+                        }
+                    },
+                    {
+                        selector: 'node:selected',
+                        style: {
+                            'border-color': '#1565c0',
+                            'border-width': 4,
+                            'box-shadow': '0 0 20px rgba(21, 101, 192, 0.7)'
+                        }
+                    },
+                    {
+                        selector: 'node.pinned',
+                        style: {
+                            'border-color': '#2e7d32',
+                            'border-width': 4,
+                            'background-color': '#c8e6c9',
+                            'box-shadow': '0 0 12px rgba(46, 125, 50, 0.5)'
+                        }
+                    }
+                ],
+                
+                layout: {
+                    name: 'preset'
+                },
+                
+                // Enable panning and zooming  
+                zoomingEnabled: true,
+                panningEnabled: false,  // Start with panning disabled
+                boxSelectionEnabled: true,
+                selectionType: 'additive',
+                
+                // Configure user interaction
+                userPanningEnabled: false,  // Disable default user panning
+                userZoomingEnabled: true,
+                autoungrabify: false,
+                autounselectify: false,
+                
+                // Custom zoom sensitivity (slower zoom)
+                wheelSensitivity: 0.3
+            });
+            
+            // Make nodes draggable
+            cy.nodes().grabify();
+            
+            // Double-click to edit card
+            cy.on('dblclick', 'node', function(evt) {
+                editCard(evt.target);
+            });
+            
+            // Right-click to pin/unpin card
+            cy.on('cxttap', 'node', function(evt) {
+                const node = evt.target;
+                if (node.hasClass('pinned')) {
+                    unpinCard(node);
+                } else {
+                    pinCard(node);
+                }
+            });
+            
+            // Double-click to edit card
+            cy.on('dblclick', 'node', function(evt) {
+                const node = evt.target;
+                editCard(node);
+            });
+            
+            // Update selection info when selection changes
+            cy.on('select unselect', 'node', function(evt) {
+                updateSelectionInfo();
+            });
+            
+            // Track mouse position for arrangement positioning
+            cy.on('mousemove', function(evt) {
+                lastMousePosition.x = evt.originalEvent.clientX;
+                lastMousePosition.y = evt.originalEvent.clientY;
+            });
+            
+            // Also track mouse on the container directly
+            document.addEventListener('mousemove', function(evt) {
+                lastMousePosition.x = evt.clientX;
+                lastMousePosition.y = evt.clientY;
+                // Debug: uncomment to see if mouse tracking works
+                // console.log('Mouse moved to:', evt.clientX, evt.clientY);
+            });
+            
+            // Control panning vs box selection based on Ctrl key
+            cy.on('mousedown', function(evt) {
+                const originalEvent = evt.originalEvent;
+                if (originalEvent.ctrlKey) {
+                    // Ctrl+Left = enable panning, disable box selection
+                    cy.panningEnabled(true);
+                    cy.userPanningEnabled(true);
+                    cy.boxSelectionEnabled(false);
+                } else {
+                    // Left = enable box selection, disable panning
+                    cy.panningEnabled(false);
+                    cy.userPanningEnabled(false);
+                    cy.boxSelectionEnabled(true);
+                }
+            });
+            
+            // Reset to default state on mouse up
+            cy.on('mouseup', function(evt) {
+                cy.panningEnabled(false);
+                cy.userPanningEnabled(false);
+                cy.boxSelectionEnabled(true);
+            });
+            
+            // Disable context menu on right click
+            cy.container().addEventListener('contextmenu', function(evt) {
+                evt.preventDefault();
+            });
+            
+            
+        }
+        
+        // Boolean search functionality
+        function performSearch(query) {
+            if (!query.trim()) {
+                clearSearch();
+                return;
+            }
+            
+            searchActive = true;
+            let matchCount = 0;
+            
+            cy.nodes().forEach(node => {
+                const title = (node.data('title') || '').toLowerCase();
+                const text = (node.data('text') || '').toLowerCase();
+                const searchableText = title + ' ' + text; // Search in both title and text
+                
+                const matches = evaluateBooleanQuery(query.toLowerCase(), searchableText);
+                
+                if (matches) {
+                    node.addClass('search-match');
+                    node.data('searchMatch', true);
+                    node.select(); // Markera kortet som selekterat
+                    matchCount++;
+                } else {
+                    node.removeClass('search-match');
+                    node.data('searchMatch', false);
+                    node.unselect(); // Avmarkera kortet
+                }
+            });
+            
+            // Show search results info
+            const searchInfo = document.getElementById('searchInfo');
+            searchInfo.textContent = `${matchCount} kort hittade`;
+            searchInfo.classList.add('visible');
+        }
+        
+        // Boolean query evaluation
+        function evaluateBooleanQuery(query, searchableText) {
+            // Handle different boolean operators
+            
+            // Split by OR first (lowest precedence)
+            if (query.includes(' or ')) {
+                const orParts = query.split(' or ');
+                return orParts.some(part => evaluateBooleanQuery(part.trim(), searchableText));
+            }
+            
+            // Handle NOT operations - improved logic
+            if (query.includes(' not ')) {
+                const notIndex = query.indexOf(' not ');
+                const beforeNot = query.substring(0, notIndex).trim();
+                const afterNot = query.substring(notIndex + 5).trim(); // ' not '.length = 5
+                
+                // If there's something before NOT, it must match
+                let beforeMatches = true;
+                if (beforeNot) {
+                    beforeMatches = evaluateBooleanQuery(beforeNot, searchableText);
+                }
+                
+                // The part after NOT must NOT match
+                const afterMatches = evaluateBooleanQuery(afterNot, searchableText);
+                
+                return beforeMatches && !afterMatches;
+            }
+            
+            // Handle AND operations (default behavior and explicit)
+            const andParts = query.includes(' and ') ? 
+                query.split(' and ') : 
+                query.split(' ').filter(term => term.length > 0);
+                
+            return andParts.every(term => {
+                term = term.trim();
+                if (term.startsWith('"') && term.endsWith('"')) {
+                    // Exact phrase search
+                    const phrase = term.slice(1, -1);
+                    return searchableText.includes(phrase);
+                } else {
+                    // Regular word search
+                    return searchableText.includes(term);
+                }
+            });
+        }
+        
+        // Pin/unpin functionality
+        function pinCard(node) {
+            node.addClass('pinned');
+            node.data('pinned', true);
+        }
+        
+        function unpinCard(node) {
+            node.removeClass('pinned');
+            node.data('pinned', false);
+        }
+        
+        
+        // Clear search
+        function clearSearch() {
+            searchActive = false;
+            
+            cy.nodes().removeClass('search-match');
+            cy.nodes().data('searchMatch', false);
+            cy.nodes().unselect(); // Avmarkera alla kort när sökning rensas
+            
+            const searchInfo = document.getElementById('searchInfo');
+            searchInfo.classList.remove('visible');
+        }
+        
+        // Tag filtering functions
+        function performTagFilter(filterText) {
+            if (!filterText.trim()) {
+                clearTagFilter();
+                return;
+            }
+            
+            // Split by comma and clean up
+            const filterTags = filterText.toLowerCase().split(',').map(tag => tag.trim()).filter(tag => tag);
+            
+            cy.nodes().forEach(node => {
+                const nodeTags = node.data('tags') || [];
+                const nodeTagsLower = nodeTags.map(tag => tag.toLowerCase());
+                
+                // Check if node has any of the filter tags (search in ALL tags, including PDF filename tags)
+                const hasMatchingTag = filterTags.some(filterTag => 
+                    nodeTagsLower.some(nodeTag => nodeTag.includes(filterTag))
+                );
+                
+                if (hasMatchingTag) {
+                    node.removeClass('tag-filtered');
+                } else {
+                    node.addClass('tag-filtered');
+                }
+            });
+            
+            const visibleNodes = cy.nodes().not('.tag-filtered');
+            const searchInfo = document.getElementById('searchInfo');
+            searchInfo.textContent = `${visibleNodes.length} kort med tags: ${filterTags.join(', ')}`;
+            searchInfo.classList.add('visible');
+        }
+        
+        function clearTagFilter() {
+            cy.nodes().removeClass('tag-filtered');
+            const searchInfo = document.getElementById('searchInfo');
+            searchInfo.classList.remove('visible');
+        }
+        
+        // Multi-selection functions
+        function pinSelectedCards() {
+            const selectedNodes = cy.$('node:selected');
+            selectedNodes.forEach(node => {
+                if (!node.hasClass('pinned')) {
+                    pinCard(node);
+                }
+            });
+            if (selectedNodes.length > 0) {
+                console.log(`Pinned ${selectedNodes.length} cards`);
+                updateSelectionInfo(); // Update after pinning
+            }
+        }
+        
+        function unpinSelectedCards() {
+            const selectedNodes = cy.$('node:selected');
+            selectedNodes.forEach(node => {
+                if (node.hasClass('pinned')) {
+                    unpinCard(node);
+                }
+            });
+            if (selectedNodes.length > 0) {
+                console.log(`Unpinned ${selectedNodes.length} cards`);
+                updateSelectionInfo(); // Update after unpinning
+            }
+        }
+        
+        function deleteSelectedCards() {
+            const selectedNodes = cy.$('node:selected');
+            if (selectedNodes.length > 0) {
+                const count = selectedNodes.length;
+                selectedNodes.remove();
+                console.log(`Deleted ${count} cards`);
+                updateSelectionInfo(); // Update after deletion
+            }
+        }
+        
+        // Alignment functions for selected cards
+        function alignSelectedVertical() {
+            const selectedNodes = cy.$('node:selected');
+            if (selectedNodes.length < 2) return;
+            
+            // Get the leftmost card's X position as reference (fixed reference point)
+            let referenceX = selectedNodes[0].position().x;
+            selectedNodes.forEach(node => {
+                if (node.position().x < referenceX) {
+                    referenceX = node.position().x;
+                }
+            });
+            
+            // Sort cards by current Y position to maintain relative order
+            const sortedNodes = selectedNodes.sort((a, b) => a.position().y - b.position().y);
+            
+            // Start from the topmost card's position, adjusted for its height
+            const firstCardHeight = Math.max(100, getMeasuredTextHeight(sortedNodes[0]) + 10);
+            let currentY = sortedNodes[0].position().y - (firstCardHeight / 2);
+            
+            // Position each card using measured height + padding
+            sortedNodes.forEach((node, index) => {
+                // Get this card's actual height
+                const measuredHeight = getMeasuredTextHeight(node);
+                const cardHeight = Math.max(100, measuredHeight + 10);
+                
+                // Position this card at its center Y
+                const centerY = currentY + (cardHeight / 2);
+                node.animate({
+                    position: { x: referenceX, y: centerY }
+                }, {
+                    duration: 300,
+                    easing: 'ease-out'
+                });
+                
+                // Calculate next Y position (top of next card)
+                if (index < sortedNodes.length - 1) {
+                    const padding = 40; // Space between cards
+                    currentY += cardHeight + padding;
+                }
+            });
+            
+            console.log(`Aligned ${selectedNodes.length} cards vertically with measured spacing`);
+        }
+        
+        function alignSelectedVerticalSimple() {
+            const selectedNodes = cy.$('node:selected');
+            if (selectedNodes.length < 2) return;
+            
+            // Get the leftmost card's X position as reference
+            let referenceX = selectedNodes[0].position().x;
+            selectedNodes.forEach(node => {
+                if (node.position().x < referenceX) {
+                    referenceX = node.position().x;
+                }
+            });
+            
+            // Align all cards to the same X position, keep original Y positions
+            selectedNodes.forEach(node => {
+                node.animate({
+                    position: { x: referenceX, y: node.position().y }
+                }, {
+                    duration: 300,
+                    easing: 'ease-out'
+                });
+            });
+            
+            console.log(`Aligned ${selectedNodes.length} cards vertically (simple)`);
+        }
+        
+        function alignSelectedHorizontal() {
+            const selectedNodes = cy.$('node:selected');
+            if (selectedNodes.length < 2) return;
+            
+            // Calculate the average Y position for better alignment
+            let totalY = 0;
+            selectedNodes.forEach(node => {
+                totalY += node.position().y;
+            });
+            const averageY = totalY / selectedNodes.length;
+            
+            // Align all cards to the average Y position (centers them)
+            selectedNodes.forEach(node => {
+                node.animate({
+                    position: { x: node.position().x, y: averageY }
+                }, {
+                    duration: 300,
+                    easing: 'ease-out'
+                });
+            });
+            
+            console.log(`Aligned ${selectedNodes.length} cards horizontally at center`);
+        }
+        
+        function arrangeSelectedInGrid() {
+            const selectedNodes = cy.$('node:selected');
+            if (selectedNodes.length < 2) return;
+            
+            // Calculate grid dimensions
+            const nodeCount = selectedNodes.length;
+            const cols = Math.ceil(Math.sqrt(nodeCount));
+            const rows = Math.ceil(nodeCount / cols);
+            
+            // Use mouse position or fallback to screen center
+            const arrangePos = getArrangementPosition();
+            const screenCenterX = arrangePos.x;
+            const screenCenterY = arrangePos.y;
+            
+            // Calculate grid starting position (top-left corner)
+            const spacing = 180; // Closer distance between cards for compact grid
+            const gridWidth = (cols - 1) * spacing;
+            const gridHeight = (rows - 1) * spacing;
+            const startX = screenCenterX - (gridWidth / 2);
+            const startY = screenCenterY - (gridHeight / 2);
+            
+            // Arrange nodes in grid with center alignment
+            selectedNodes.forEach((node, index) => {
+                const col = index % cols;
+                const row = Math.floor(index / cols);
+                
+                const newX = startX + (col * spacing);
+                const newY = startY + (row * spacing);
+                
+                node.animate({
+                    position: { x: newX, y: newY }
+                }, {
+                    duration: 400,
+                    easing: 'ease-out'
+                });
+            });
+            
+            console.log(`Arranged ${selectedNodes.length} cards in centered ${rows}×${cols} grid`);
+        }
+        
+        function arrangeSelectedInColumn() {
+            const selectedNodes = cy.$('node:selected');
+            if (selectedNodes.length < 2) return;
+            
+            // Use mouse position or fallback to screen center
+            const arrangePos = getArrangementPosition();
+            const centerX = arrangePos.x;
+            const centerY = arrangePos.y;
+            
+            // Calculate total height needed for all cards with spacing
+            let totalRequiredHeight = 0;
+            selectedNodes.forEach((node, index) => {
+                const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                totalRequiredHeight += cardHeight;
+                if (index < selectedNodes.length - 1) {
+                    totalRequiredHeight += 50; // padding between cards
+                }
+            });
+            
+            // Start positioning from arrangement center, working upwards
+            let currentY = centerY - (totalRequiredHeight / 2);
+            
+            selectedNodes.forEach((node, index) => {
+                // Get this card's actual height
+                const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                
+                // Position this card at its center
+                const cardCenterY = currentY + (cardHeight / 2);
+                node.animate({
+                    position: { x: centerX, y: cardCenterY }
+                }, {
+                    duration: 400,
+                    easing: 'ease-out'
+                });
+                
+                // Move to next card position
+                if (index < selectedNodes.length - 1) {
+                    const padding = 50;
+                    currentY += cardHeight + padding;
+                }
+            });
+            
+            console.log(`Arranged ${selectedNodes.length} cards in centered column`);
+        }
+        
+        function arrangeSelectedInRow() {
+            const selectedNodes = cy.$('node:selected');
+            if (selectedNodes.length < 2) return;
+            
+            // Use mouse position or fallback to screen center
+            const arrangePos = getArrangementPosition();
+            const centerX = arrangePos.x;
+            const centerY = arrangePos.y;
+            
+            // Remove the topY calculation since we're centering around screen center
+            
+            // Sort cards by current X position to maintain left-to-right order
+            const sortedNodes = selectedNodes.sort((a, b) => a.position().x - b.position().x);
+            
+            // Calculate total width needed for all cards with spacing
+            let totalRequiredWidth = 0;
+            sortedNodes.forEach((node, index) => {
+                const cardWidth = getCardWidth(node);
+                totalRequiredWidth += cardWidth;
+                if (index < sortedNodes.length - 1) {
+                    totalRequiredWidth += 80; // padding between cards
+                }
+            });
+            
+            // Start positioning from arrangement center, working leftwards
+            let currentX = centerX - (totalRequiredWidth / 2);
+            
+            sortedNodes.forEach((node, index) => {
+                // Get this card's actual width and height
+                const cardWidth = getCardWidth(node);
+                const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                
+                // Position this card with top-aligned positioning
+                const cardCenterX = currentX + (cardWidth / 2);
+                const cardCenterY = centerY + (cardHeight / 2); // Top-align: center Y based on card's height
+                
+                node.animate({
+                    position: { x: cardCenterX, y: cardCenterY }
+                }, {
+                    duration: 400,
+                    easing: 'ease-out'
+                });
+                
+                // Move to next card position
+                if (index < sortedNodes.length - 1) {
+                    const padding = 80;
+                    currentX += cardWidth + padding;
+                }
+            });
+            
+            console.log(`Arranged ${sortedNodes.length} cards in centered row`);
+        }
+        
+        // Helper function to calculate card width (same as used in node styling)
+        function getCardWidth(node) {
+            const title = node.data('title') || '';
+            const text = node.data('text') || '';
+            const baseWidth = 180;
+            const extraWidth = Math.min(120, (title + text).length * 0.9);
+            return baseWidth + extraWidth;
+        }
+        
+        function updateSelectionInfo() {
+            const selectedNodes = cy.$('node:selected');
+            const selectionInfo = document.getElementById('selectionInfo');
+            
+            if (selectedNodes.length === 0) {
+                selectionInfo.classList.remove('visible');
+                return;
+            }
+            
+            const count = selectedNodes.length;
+            const pinnedCount = selectedNodes.filter('.pinned').length;
+            const unpinnedCount = count - pinnedCount;
+            
+            let text = `${count} kort markerade`;
+            if (pinnedCount > 0 && unpinnedCount > 0) {
+                text += ` (${pinnedCount} pinnade, ${unpinnedCount} opinnde)`;
+            } else if (pinnedCount > 0) {
+                text += ` (alla pinnade)`;
+            } else {
+                text += ` (alla opinnde)`;
+            }
+            
+            text += '<br><small>';
+            if (count >= 2) {
+                text += '1=kolumn, 2=rad, 3=rutnät, V=fördela↕, Shift+V=linje↕, H=linje↔';
+            } else {
+                text += 'P=pin, U=unpin, Delete=ta bort, Esc=avmarkera';
+            }
+            text += '</small>';
+            
+            selectionInfo.innerHTML = text;
+            selectionInfo.classList.add('visible');
+        }
+        
+        // Layout functions
+        function applyLayout() {
+            const layoutSelect = document.getElementById('layoutSelect');
+            const selectedLayout = layoutSelect.value;
+            
+            let layoutOptions;
+            
+            switch(selectedLayout) {
+                case 'cola':
+                    layoutOptions = {
+                        name: 'cola',
+                        nodeSpacing: 80,
+                        edgeLengthVal: 200,
+                        animate: true,
+                        randomize: false,
+                        maxSimulationTime: 2000,
+                        ungrabifyWhileSimulating: false,
+                        fit: false, // Don't auto-fit to viewport
+                        padding: 50,
+                        nodeDimensionsIncludeLabels: true,
+                        // Collision detection to prevent overlaps
+                        avoidOverlap: true,
+                        handleDisconnected: true,
+                        convergenceThreshold: 0.01
+                    };
+                    break;
+                case 'cose':
+                    layoutOptions = {
+                        name: 'cose',
+                        idealEdgeLength: 150,
+                        nodeOverlap: 100,
+                        refresh: 20,
+                        fit: false,
+                        padding: 50,
+                        randomize: false,
+                        componentSpacing: 100,
+                        nodeRepulsion: 400000,
+                        edgeElasticity: 100,
+                        nestingFactor: 5,
+                        gravity: 80,
+                        numIter: 1000,
+                        animate: true
+                    };
+                    break;
+                case 'grid':
+                    // Use custom smart grid layout instead of Cytoscape's grid
+                    applySmartGridLayout();
+                    return;
+                default: // preset
+                    // Don't run layout for manual positioning
+                    return;
+            }
+            
+            const layout = cy.layout(layoutOptions);
+            layout.run();
+        }
+        
+        // Smart column layout - all cards in single column with top alignment
+        function arrangeAllInColumn() {
+            const allNodes = cy.nodes();
+            if (allNodes.length === 0) return;
+            
+            // Calculate center X position
+            let totalX = 0;
+            allNodes.forEach(node => {
+                totalX += node.position().x;
+            });
+            const centerX = totalX / allNodes.length;
+            
+            // Calculate total height needed and start from center
+            let totalRequiredHeight = 0;
+            allNodes.forEach((node, index) => {
+                const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                totalRequiredHeight += cardHeight;
+                if (index < allNodes.length - 1) {
+                    totalRequiredHeight += 30; // spacing between cards
+                }
+            });
+            
+            // Start positioning from center, working upwards
+            let currentY = -(totalRequiredHeight / 2);
+            
+            allNodes.forEach((node, index) => {
+                const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                const cardCenterY = currentY + (cardHeight / 2);
+                
+                node.animate({
+                    position: { x: centerX, y: cardCenterY }
+                }, {
+                    duration: 500,
+                    easing: 'ease-out'
+                });
+                
+                // Move to next card position
+                if (index < allNodes.length - 1) {
+                    currentY += cardHeight + 30;
+                }
+            });
+            
+            // Show feedback
+            const searchInfo = document.getElementById('searchInfo');
+            searchInfo.textContent = `Kolumn-layout applicerat: ${allNodes.length} kort i en kolumn`;
+            searchInfo.classList.add('visible');
+            setTimeout(() => {
+                searchInfo.classList.remove('visible');
+            }, 2000);
+        }
+        
+        // Smart grid layout using same spacing as arrangements
+        function applySmartGridLayout() {
+            const allNodes = cy.nodes();
+            if (allNodes.length === 0) return;
+            
+            // Calculate grid dimensions
+            const nodeCount = allNodes.length;
+            const cols = Math.ceil(Math.sqrt(nodeCount));
+            const rows = Math.ceil(nodeCount / cols);
+            
+            // Calculate center point of all nodes
+            let totalX = 0, totalY = 0;
+            allNodes.forEach(node => {
+                const pos = node.position();
+                totalX += pos.x;
+                totalY += pos.y;
+            });
+            const centerX = totalX / allNodes.length;
+            const centerY = totalY / allNodes.length;
+            
+            // Measure card dimensions for smart spacing (same as arrangements)
+            const ruler = document.getElementById('text-ruler');
+            let maxCardWidth = 280; // Default
+            let maxCardHeight = 120; // Default
+            
+            allNodes.forEach(node => {
+                const title = node.data('title') || '';
+                const text = node.data('text') || '';
+                const tags = node.data('tags') || [];
+                
+                // Measure text height
+                const combinedText = title + '\n\n' + text + '\n\n' + tags.map(tag => `#${tag}`).join(' ');
+                ruler.textContent = combinedText;
+                const measuredHeight = Math.max(120, ruler.offsetHeight + 40);
+                maxCardHeight = Math.max(maxCardHeight, measuredHeight);
+                
+                // Calculate width based on content
+                const baseWidth = 180;
+                const extraWidth = Math.min(120, (title + text).length * 0.9);
+                const cardWidth = baseWidth + extraWidth;
+                maxCardWidth = Math.max(maxCardWidth, cardWidth);
+            });
+            
+            // Add smart spacing
+            const horizontalSpacing = maxCardWidth + 40;
+            const verticalSpacing = maxCardHeight + 30;
+            
+            // Calculate grid starting position (centered)
+            const gridWidth = (cols - 1) * horizontalSpacing;
+            const gridHeight = (rows - 1) * verticalSpacing;
+            const startX = centerX - gridWidth / 2;
+            const startY = centerY - gridHeight / 2;
+            
+            // Position nodes in grid with top-aligned rows
+            const nodeArray = allNodes.toArray();
+            
+            // Group nodes by row and calculate each row's top position
+            for (let row = 0; row < rows; row++) {
+                const rowNodes = [];
+                const rowStartIndex = row * cols;
+                const rowEndIndex = Math.min((row + 1) * cols, nodeArray.length);
+                
+                // Get nodes for this row
+                for (let i = rowStartIndex; i < rowEndIndex; i++) {
+                    rowNodes.push(nodeArray[i]);
+                }
+                
+                // Find tallest card in this row to determine row height
+                let maxRowHeight = 0;
+                rowNodes.forEach(node => {
+                    const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                    maxRowHeight = Math.max(maxRowHeight, cardHeight);
+                });
+                
+                // Position each card in this row (top-aligned)
+                rowNodes.forEach((node, colIndex) => {
+                    const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                    
+                    const newX = startX + colIndex * horizontalSpacing;
+                    const rowBaseY = startY + row * verticalSpacing;
+                    // Align to top of row, then center the card within its space
+                    const newY = rowBaseY;
+                    
+                    node.animate({
+                        position: { x: newX, y: newY }
+                    }, {
+                        duration: 500,
+                        easing: 'ease-out'
+                    });
+                });
+            }
+            
+            // Show feedback
+            const searchInfo = document.getElementById('searchInfo');
+            searchInfo.textContent = `Grid-layout applicerat: ${cols}×${rows} rutnät med ${allNodes.length} kort`;
+            searchInfo.classList.add('visible');
+            setTimeout(() => {
+                searchInfo.classList.remove('visible');
+            }, 2000);
+        }
+        
+        // G+V: Grid where top row is top-aligned, other rows in columns below (like command 1)
+        function arrangeSelectedGridVerticalColumns() {
+            const selectedNodes = cy.$('node:selected');
+            if (selectedNodes.length < 2) return;
+            
+            // Calculate grid dimensions
+            const nodeCount = selectedNodes.length;
+            const cols = Math.ceil(Math.sqrt(nodeCount));
+            const rows = Math.ceil(nodeCount / cols);
+            
+            // Use mouse position or fallback to screen center
+            const arrangePos = getArrangementPosition();
+            const screenCenterX = arrangePos.x;
+            const screenCenterY = arrangePos.y;
+            
+            const horizontalSpacing = 320;
+            
+            const gridWidth = (cols - 1) * horizontalSpacing;
+            const startX = screenCenterX - gridWidth / 2;
+            const startY = screenCenterY - 100; // Start a bit above center
+            
+            const nodeArray = selectedNodes.toArray();
+            
+            // Arrange column by column (like command 1)
+            for (let col = 0; col < cols; col++) {
+                let currentY = startY;
+                
+                for (let row = 0; row < rows; row++) {
+                    const nodeIndex = row * cols + col;
+                    if (nodeIndex < nodeArray.length) {
+                        const node = nodeArray[nodeIndex];
+                        const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                        
+                        const newX = startX + col * horizontalSpacing;
+                        const cardCenterY = currentY + (cardHeight / 2);
+                        
+                        node.animate({
+                            position: { x: newX, y: cardCenterY }
+                        }, {
+                            duration: 400,
+                            easing: 'ease-out'
+                        });
+                        
+                        // Move to next position in this column
+                        if (row < rows - 1) {
+                            currentY += cardHeight + 50; // spacing between cards in column
+                        }
+                    }
+                }
+            }
+            
+            console.log(`G+V: Grid med kolumner (som kommando 1) - ${cols} kolumner för ${selectedNodes.length} kort`);
+        }
+        
+        // G+H: Grid where rows are top-aligned and packed tightly (no row overlap)
+        function arrangeSelectedGridHorizontalPacked() {
+            const selectedNodes = cy.$('node:selected');
+            if (selectedNodes.length < 2) return;
+            
+            // Use mouse position or fallback to screen center
+            const arrangePos = getArrangementPosition();
+            const screenCenterX = arrangePos.x;
+            const screenCenterY = arrangePos.y;
+            
+            const nodeCount = selectedNodes.length;
+            const cols = Math.ceil(Math.sqrt(nodeCount));
+            const rows = Math.ceil(nodeCount / cols);
+            
+            const horizontalSpacing = 320;
+            const rowPadding = 40; // Space between rows
+            
+            const gridWidth = (cols - 1) * horizontalSpacing;
+            const startX = screenCenterX - gridWidth / 2;
+            
+            const nodeArray = selectedNodes.toArray();
+            
+            // First pass: calculate the height of each row
+            const rowHeights = [];
+            for (let row = 0; row < rows; row++) {
+                let maxRowHeight = 0;
+                for (let col = 0; col < cols; col++) {
+                    const nodeIndex = row * cols + col;
+                    if (nodeIndex < nodeArray.length) {
+                        const node = nodeArray[nodeIndex];
+                        const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                        maxRowHeight = Math.max(maxRowHeight, cardHeight);
+                    }
+                }
+                rowHeights.push(maxRowHeight);
+            }
+            
+            // Calculate total height and start position
+            const totalHeight = rowHeights.reduce((sum, height) => sum + height, 0) + (rows - 1) * rowPadding;
+            let currentY = screenCenterY - totalHeight / 2;
+            
+            // Second pass: position cards row by row with tight packing
+            for (let row = 0; row < rows; row++) {
+                const rowHeight = rowHeights[row];
+                
+                for (let col = 0; col < cols; col++) {
+                    const nodeIndex = row * cols + col;
+                    if (nodeIndex < nodeArray.length) {
+                        const node = nodeArray[nodeIndex];
+                        const newX = startX + col * horizontalSpacing;
+                        
+                        // Position card at top of its row space
+                        const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                        const cardCenterY = currentY + (cardHeight / 2); // Top-aligned within row
+                        
+                        node.animate({
+                            position: { x: newX, y: cardCenterY }
+                        }, {
+                            duration: 400,
+                            easing: 'ease-out'
+                        });
+                    }
+                }
+                
+                // Move to next row position
+                currentY += rowHeight + rowPadding;
+            }
+            
+            console.log(`G+H: Grid med packade rader (ingen överlappning) - ${rows} rader × ${cols} kolumner för ${selectedNodes.length} kort`);
+        }
+        
+        // G+T: Grid where all rows are top-aligned (all cards in same row at same height)
+        function arrangeSelectedGridTopAligned() {
+            const selectedNodes = cy.$('node:selected');
+            if (selectedNodes.length < 2) return;
+            
+            // Use mouse position or fallback to screen center
+            const arrangePos = getArrangementPosition();
+            const screenCenterX = arrangePos.x;
+            const screenCenterY = arrangePos.y;
+            
+            const nodeCount = selectedNodes.length;
+            const cols = Math.ceil(Math.sqrt(nodeCount));
+            const rows = Math.ceil(nodeCount / cols);
+            
+            const horizontalSpacing = 320;
+            const verticalSpacing = 180;
+            
+            const gridWidth = (cols - 1) * horizontalSpacing;
+            const gridHeight = (rows - 1) * verticalSpacing;
+            const startX = screenCenterX - gridWidth / 2;
+            const startY = screenCenterY - gridHeight / 2;
+            
+            const nodeArray = selectedNodes.toArray();
+            
+            // Position cards row by row, top-aligned within each row
+            for (let row = 0; row < rows; row++) {
+                const rowTopY = startY + row * verticalSpacing;
+                
+                for (let col = 0; col < cols; col++) {
+                    const nodeIndex = row * cols + col;
+                    if (nodeIndex < nodeArray.length) {
+                        const node = nodeArray[nodeIndex];
+                        const newX = startX + col * horizontalSpacing;
+                        
+                        // Get card height and position based on top edge
+                        const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                        const cardCenterY = rowTopY + (cardHeight / 2); // Center card within its height
+                        
+                        node.animate({
+                            position: { x: newX, y: cardCenterY }
+                        }, {
+                            duration: 400,
+                            easing: 'ease-out'
+                        });
+                    }
+                }
+            }
+            
+            console.log(`G+T: Grid med top-alignade rader - ${rows} rader × ${cols} kolumner för ${selectedNodes.length} kort`);
+        }
+        
+        // Save board to localStorage
+        function saveBoard() {
+            const boardData = {
+                cards: cy.nodes().map(node => ({
+                    id: node.id(),
+                    title: node.data('title') || '',
+                    text: node.data('text') || '',
+                    tags: node.data('tags') || [],
+                    position: node.position(),
+                    pinned: node.hasClass('pinned') || false,
+                    // Preserve all metadata for advanced analysis
+                    export_timestamp: node.data('export_timestamp') || null,
+                    export_session: node.data('export_session') || null,
+                    export_source: node.data('export_source') || null,
+                    source_file: node.data('source_file') || null,
+                    page_number: node.data('page_number') || null,
+                    matched_terms: node.data('matched_terms') || null,
+                    card_index: node.data('card_index') || null
+                })),
+                viewport: {
+                    zoom: cy.zoom(),
+                    pan: cy.pan()
+                },
+                timestamp: new Date().toISOString(),
+                version: '1.0'
+            };
+            
+            localStorage.setItem('spatial-notes-board', JSON.stringify(boardData));
+            alert('Bräda sparad!');
+        }
+        
+        
+        // Load board from localStorage
+        function loadBoard() {
+            const savedData = localStorage.getItem('spatial-notes-board');
+            if (!savedData) {
+                alert('Ingen sparad bräda hittades!');
+                return;
+            }
+            
+            try {
+                const boardData = JSON.parse(savedData);
+                
+                // Clear existing nodes
+                cy.nodes().remove();
+                
+                // Add saved cards
+                boardData.cards.forEach(cardData => {
+                    const newNode = cy.add({
+                        data: {
+                            id: cardData.id,
+                            title: cardData.title,
+                            text: cardData.text,
+                            tags: cardData.tags || [],
+                            searchMatch: false,
+                            // Preserve metadata if present
+                            export_timestamp: cardData.export_timestamp || null,
+                            export_session: cardData.export_session || null,
+                            export_source: cardData.export_source || null,
+                            source_file: cardData.source_file || null,
+                            page_number: cardData.page_number || null,
+                            matched_terms: cardData.matched_terms || null,
+                            card_index: cardData.card_index || null
+                        },
+                        position: cardData.position
+                    });
+                    
+                    newNode.grabify();
+                });
+                
+                // Update card counter
+                cardIdCounter = Math.max(...boardData.cards.map(c => parseInt(c.id.replace('card', '')) || 0)) + 1;
+                
+                // Restore viewport (zoom and pan) if saved
+                if (boardData.viewport) {
+                    cy.zoom(boardData.viewport.zoom);
+                    cy.pan(boardData.viewport.pan);
+                }
+                
+                alert(`Laddade ${boardData.cards.length} kort!`);
+                
+            } catch (error) {
+                alert('Fel vid laddning av bräda: ' + error.message);
+            }
+        }
+        
+        // Save board as standalone HTML file
+        function saveAsHTMLFile() {
+            const currentCards = cy.nodes().map(node => ({
+                id: node.id(),
+                title: node.data('title') || '',
+                text: node.data('text') || '',
+                tags: node.data('tags') || [],
+                position: node.position(),
+                pinned: node.hasClass('pinned') || false
+            }));
+            
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+            const filename = prompt('Namn på HTML-fil:', `spatial-notes-${timestamp}`) || `spatial-notes-${timestamp}`;
+            
+            // Check if running locally (file://) - fetch won't work due to CORS
+            if (window.location.protocol === 'file:') {
+                alert('HTML-export fungerar inte när filen körs lokalt (file://) pga CORS-säkerhet.\n\nFör att använda HTML-export:\n1. Kör filen på en webbserver\n2. Eller använd "💾 Spara" istället (sparar till localStorage)');
+                return;
+            }
+            
+            // Read current HTML as template
+            fetch(window.location.href)
+                .then(response => response.text())
+                .then(currentHTML => {
+                    // Replace the initialCards array with current cards
+                    const cardArrayRegex = /const initialCards = \[[\s\S]*?\];/;
+                    const newCardsArray = `const initialCards = ${JSON.stringify(currentCards, null, 12)};`;
+                    
+                    let newHTML = currentHTML.replace(cardArrayRegex, newCardsArray);
+                    
+                    // Update title
+                    newHTML = newHTML.replace(/<title>.*?<\/title>/, `<title>Spatial Notes - ${filename}</title>`);
+                    
+                    // Add metadata comment
+                    const metadataComment = `<!-- Saved from Spatial Notes on ${new Date().toLocaleString('sv-SE')} with ${currentCards.length} cards -->`;
+                    newHTML = newHTML.replace('</head>', `    ${metadataComment}\n</head>`);
+                    
+                    // Create and download file
+                    const blob = new Blob([newHTML], { type: 'text/html;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename.endsWith('.html') ? filename : filename + '.html';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    // Show confirmation
+                    const searchInfo = document.getElementById('searchInfo');
+                    searchInfo.textContent = `HTML-fil sparad: ${a.download} (${currentCards.length} kort)`;
+                    searchInfo.classList.add('visible');
+                    setTimeout(() => {
+                        searchInfo.classList.remove('visible');
+                    }, 3000);
+                })
+                .catch(error => {
+                    console.error('Error creating HTML file:', error);
+                    alert('Fel vid skapande av HTML-fil: ' + error.message);
+                });
+        }
+        
+        // Export board to JSON file (WORKS LOCALLY - No CORS issues!)
+        function exportToJSON() {
+            try {
+                const exportData = {
+                    metadata: {
+                        exportDate: new Date().toISOString(),
+                        exportApp: 'Spatial Notes',
+                        version: '1.0',
+                        totalCards: cy.nodes().length
+                    },
+                    viewport: {
+                        zoom: cy.zoom(),
+                        pan: cy.pan()
+                    },
+                    cards: cy.nodes().map(node => ({
+                        id: node.id(),
+                        title: node.data('title') || '',
+                        text: node.data('text') || '',
+                        tags: node.data('tags') || [],
+                        hidden_tags: node.data('hidden_tags') || [],
+                        position: {
+                            x: Math.round(node.position().x),
+                            y: Math.round(node.position().y)
+                        },
+                        pinned: node.hasClass('pinned') || false,
+                        // Preserve all metadata for advanced analysis
+                        export_timestamp: node.data('export_timestamp') || null,
+                        export_session: node.data('export_session') || null,
+                        export_source: node.data('export_source') || null,
+                        source_file: node.data('source_file') || null,
+                        page_number: node.data('page_number') || null,
+                        matched_terms: node.data('matched_terms') || null,
+                        card_index: node.data('card_index') || null
+                    }))
+                };
+                
+                // Generate filename with timestamp
+                const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+                const filename = prompt('Namn på JSON-fil:', `spatial-notes-${timestamp}`) || `spatial-notes-${timestamp}`;
+                
+                if (!filename) return; // User cancelled
+                
+                // Create and download JSON file
+                const jsonString = JSON.stringify(exportData, null, 2);
+                const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename.endsWith('.json') ? filename : filename + '.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                // Show confirmation
+                const searchInfo = document.getElementById('searchInfo');
+                searchInfo.textContent = `📋 JSON-fil exporterad: ${a.download} (${exportData.cards.length} kort)`;
+                searchInfo.classList.add('visible');
+                setTimeout(() => {
+                    searchInfo.classList.remove('visible');
+                }, 3000);
+                
+                console.log(`JSON export completed: ${a.download} with ${exportData.cards.length} cards`);
+                
+            } catch (error) {
+                console.error('Error exporting JSON:', error);
+                alert('Fel vid JSON-export: ' + error.message);
+            }
+        }
+        
+        // Import board from JSON file (WORKS LOCALLY!)
+        function importFromJSON() {
+            // Create hidden file input
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.accept = '.json,application/json';
+            fileInput.style.display = 'none';
+            
+            fileInput.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const importData = JSON.parse(e.target.result);
+                        
+                        // Validate JSON structure
+                        if (!importData.cards || !Array.isArray(importData.cards)) {
+                            throw new Error('Ogiltig JSON-fil: Saknar kort-data');
+                        }
+                        
+                        // Ask user if they want to replace or add to existing cards
+                        const hasExistingCards = cy.nodes().length > 0;
+                        let replaceExisting = true;
+                        
+                        if (hasExistingCards) {
+                            replaceExisting = confirm(
+                                `Du har ${cy.nodes().length} befintliga kort.\n\n` +
+                                `Klicka OK för att ERSÄTTA alla kort\n` +
+                                `Klicka Avbryt för att LÄGGA TILL kort`
+                            );
+                        }
+                        
+                        // Clear existing cards if replacing
+                        if (replaceExisting) {
+                            cy.nodes().remove();
+                        }
+                        
+                        // Add imported cards
+                        let importedCount = 0;
+                        let duplicateCount = 0;
+                        
+                        importData.cards.forEach(cardData => {
+                            // Check for duplicate IDs if not replacing
+                            if (!replaceExisting && cy.getElementById(cardData.id).length > 0) {
+                                // Generate new unique ID for duplicate
+                                cardData.id = cardData.id + '_imported_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+                                duplicateCount++;
+                            }
+                            
+                            const newNode = cy.add({
+                                data: {
+                                    id: cardData.id,
+                                    title: cardData.title || '',
+                                    text: cardData.text || '',
+                                    tags: cardData.tags || [],
+                                    hidden_tags: cardData.hidden_tags || [],
+                                    searchMatch: false,
+                                    // Restore metadata
+                                    export_timestamp: cardData.export_timestamp || null,
+                                    export_session: cardData.export_session || null,
+                                    export_source: cardData.export_source || null,
+                                    source_file: cardData.source_file || null,
+                                    page_number: cardData.page_number || null,
+                                    matched_terms: cardData.matched_terms || null,
+                                    card_index: cardData.card_index || null
+                                },
+                                position: cardData.position || { x: Math.random() * 800 + 100, y: Math.random() * 600 + 100 }
+                            });
+                            
+                            // Restore pinned state
+                            if (cardData.pinned) {
+                                newNode.addClass('pinned');
+                            }
+                            
+                            newNode.grabify();
+                            importedCount++;
+                        });
+                        
+                        // Update card counter
+                        cardIdCounter = Math.max(cardIdCounter, ...cy.nodes().map(node => {
+                            const match = node.id().match(/\\d+/);
+                            return match ? parseInt(match[0]) : 0;
+                        })) + 1;
+                        
+                        // Restore viewport if available
+                        if (importData.viewport) {
+                            setTimeout(() => {
+                                cy.zoom(importData.viewport.zoom);
+                                cy.pan(importData.viewport.pan);
+                            }, 100);
+                        }
+                        
+                        // Show success message
+                        let message = `📁 JSON-import lyckades: ${importedCount} kort importerade`;
+                        if (duplicateCount > 0) {
+                            message += ` (${duplicateCount} dubbletter fick nya ID:n)`;
+                        }
+                        if (importData.metadata) {
+                            message += `\nExportdatum: ${new Date(importData.metadata.exportDate).toLocaleString('sv-SE')}`;
+                        }
+                        
+                        const searchInfo = document.getElementById('searchInfo');
+                        searchInfo.textContent = message;
+                        searchInfo.classList.add('visible');
+                        setTimeout(() => {
+                            searchInfo.classList.remove('visible');
+                        }, 4000);
+                        
+                        console.log(`JSON import completed: ${importedCount} cards imported`, importData.metadata);
+                        
+                    } catch (error) {
+                        console.error('Error importing JSON:', error);
+                        alert('Fel vid JSON-import: ' + error.message + '\n\nKontrollera att filen är en giltig Spatial Notes JSON-export.');
+                    }
+                };
+                
+                reader.readAsText(file);
+            });
+            
+            // Trigger file picker
+            document.body.appendChild(fileInput);
+            fileInput.click();
+            document.body.removeChild(fileInput);
+        }
+        
+        // Import cards from PDF-Extractor localStorage
+        function importFromExtractor() {
+            try {
+                // Debug: Show all localStorage keys
+                console.log('All localStorage keys:', Object.keys(localStorage));
+                
+                // Try different possible keys that PDF-extractor might use
+                // PDF-Extractor uses the same localStorage key as spatial notes
+                const extractorData = localStorage.getItem('spatial-notes-board');
+                console.log('Checking for PDF-Extractor data in spatial-notes-board key');
+                
+                if (!extractorData) {
+                    // Show debug info
+                    const allKeys = Object.keys(localStorage);
+                    alert(`Ingen data från PDF-Extractor hittades!\n\nDebug info:\nLocalStorage nycklar: ${allKeys.join(', ')}\n\nKör PDF-extractor först och exportera kort till Spatial Notes.`);
+                    return;
+                }
+                
+                const importedCards = JSON.parse(extractorData);
+                
+                if (!Array.isArray(importedCards) || importedCards.length === 0) {
+                    alert('PDF-Extractor data är tom eller ogiltig.');
+                    return;
+                }
+                
+                // Check if we have existing cards in spatial notes
+                const hasExistingCards = cy.nodes().length > 0;
+                const existingIds = new Set(cy.nodes().map(n => n.id()));
+                
+                // Filter out cards that already exist in spatial notes
+                const newCards = importedCards.filter(card => !existingIds.has(card.id));
+                
+                if (newCards.length === 0) {
+                    alert('Inga nya kort att importera från PDF-Extractor. Alla kort finns redan.');
+                    return;
+                }
+                
+                let replaceExisting = false;
+                
+                if (hasExistingCards) {
+                    replaceExisting = confirm(
+                        `PDF-Extractor har ${newCards.length} NYA kort att importera.\n` +
+                        `Du har ${cy.nodes().length} befintliga kort.\n\n` +
+                        `Klicka OK för att ERSÄTTA alla kort\n` +
+                        `Klicka Avbryt för att LÄGGA TILL endast de nya korten`
+                    );
+                }
+                
+                // Use only new cards if not replacing
+                if (!replaceExisting) {
+                    importedCards = newCards;
+                }
+                
+                // Clear existing cards if replacing
+                if (replaceExisting) {
+                    cy.nodes().remove();
+                }
+                
+                // Add imported cards with smart positioning
+                let importedCount = 0;
+                let duplicateCount = 0;
+                
+                importedCards.forEach((cardData, index) => {
+                    // Check for duplicate IDs if not replacing
+                    if (!replaceExisting && cy.getElementById(cardData.id).length > 0) {
+                        // Generate new unique ID for duplicate
+                        cardData.id = cardData.id + '_imported_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+                        duplicateCount++;
+                    }
+                    
+                    // Smart positioning: arrange in grid if no position provided
+                    let position = cardData.position;
+                    if (!position || (position.x === 0 && position.y === 0)) {
+                        const cols = Math.ceil(Math.sqrt(importedCards.length));
+                        const col = index % cols;
+                        const row = Math.floor(index / cols);
+                        position = {
+                            x: 200 + col * 320,
+                            y: 200 + row * 200
+                        };
+                    }
+                    
+                    const newNode = cy.add({
+                        data: {
+                            id: cardData.id,
+                            title: cardData.title || '',
+                            text: cardData.text || '',
+                            tags: cardData.tags || [],
+                            hidden_tags: cardData.hidden_tags || [],
+                            searchMatch: false,
+                            // Preserve PDF-extractor metadata
+                            export_timestamp: cardData.export_timestamp || null,
+                            export_session: cardData.export_session || null,
+                            export_source: cardData.export_source || 'pdf_extractor',
+                            source_file: cardData.source_file || null,
+                            page_number: cardData.page_number || null,
+                            matched_terms: cardData.matched_terms || null,
+                            card_index: cardData.card_index || null
+                        },
+                        position: position
+                    });
+                    
+                    newNode.grabify();
+                    importedCount++;
+                });
+                
+                // Update card counter
+                cardIdCounter = Math.max(cardIdCounter, ...cy.nodes().map(node => {
+                    const match = node.id().match(/\\d+/);
+                    return match ? parseInt(match[0]) : 0;
+                })) + 1;
+                
+                // Clear the PDF-extractor data so it doesn't import again
+                // localStorage.removeItem('pdf-extractor-export'); // Don't clear, let user decide
+                
+                // Show success message
+                let message = `📥 PDF-Extractor import lyckades: ${importedCount} kort importerade`;
+                if (duplicateCount > 0) {
+                    message += ` (${duplicateCount} dubbletter fick nya ID:n)`;
+                }
+                
+                const searchInfo = document.getElementById('searchInfo');
+                searchInfo.textContent = message;
+                searchInfo.classList.add('visible');
+                setTimeout(() => {
+                    searchInfo.classList.remove('visible');
+                }, 4000);
+                
+                console.log(`PDF-Extractor import completed: ${importedCount} cards imported`);
+                
+            } catch (error) {
+                console.error('Error importing from PDF-Extractor:', error);
+                alert('Fel vid import från PDF-Extractor: ' + error.message);
+            }
+        }
+        
+        // Clear board completely
+        function clearBoard() {
+            if (confirm('Är du säker på att du vill rensa hela brädan och localStorage?\n\nDetta kommer att:\n• Ta bort alla kort från brädan\n• Rensa sparad data i localStorage\n• Återställa till tom bräda\n\nDenna åtgärd kan inte ångras!')) {
+                // Clear all nodes from the board
+                cy.nodes().remove();
+                
+                // Clear localStorage
+                localStorage.removeItem('spatial-notes-board');
+                
+                // Reset card counter
+                cardIdCounter = 1;
+                
+                // Show confirmation
+                const searchInfo = document.getElementById('searchInfo');
+                searchInfo.textContent = 'Bräda och localStorage rensade! ✅';
+                searchInfo.classList.add('visible');
+                setTimeout(() => {
+                    searchInfo.classList.remove('visible');
+                }, 3000);
+                
+                console.log('Board and localStorage cleared completely');
+            }
+        }
+        
+        // Toggle metadata view for development and analysis
+        let showMetadata = false;
+        function toggleMetadataView() {
+            showMetadata = !showMetadata;
+            const btn = document.getElementById('metadataBtn');
+            
+            if (showMetadata) {
+                btn.textContent = '🔍 Dölj Metadata';
+                btn.style.backgroundColor = '#ff9800';
+                
+                // Show metadata in console and as overlays
+                console.log('=== SPATIAL NOTES METADATA ===');
+                cy.nodes().forEach(node => {
+                    const metadata = {
+                        id: node.id(),
+                        export_timestamp: node.data('export_timestamp'),
+                        export_session: node.data('export_session'),
+                        export_source: node.data('export_source'),
+                        source_file: node.data('source_file'),
+                        page_number: node.data('page_number'),
+                        matched_terms: node.data('matched_terms'),
+                        card_index: node.data('card_index')
+                    };
+                    console.log(`${node.id()}:`, metadata);
+                });
+                
+                // Add metadata styling
+                cy.style().selector('node').style({
+                    'border-color': function(node) {
+                        const session = node.data('export_session');
+                        if (!session) return '#ddd';
+                        // Color-code by export session
+                        const hash = session.split('').reduce((a, b) => {
+                            a = ((a << 5) - a) + b.charCodeAt(0);
+                            return a & a;
+                        }, 0);
+                        const color = `hsl(${Math.abs(hash) % 360}, 70%, 60%)`;
+                        return color;
+                    },
+                    'border-width': 3
+                }).update();
+                
+                // Show stats
+                const stats = analyzeMetadata();
+                alert(`Metadata aktiverad!\n\n${stats}\n\nKolla konsolen för detaljer.`);
+                
+            } else {
+                btn.textContent = '🔍 Metadata';
+                btn.style.backgroundColor = '#007acc';
+                
+                // Reset styling
+                cy.style().selector('node').style({
+                    'border-color': '#ddd',
+                    'border-width': 2
+                }).update();
+                
+                console.log('Metadata view disabled');
+            }
+        }
+        
+        function analyzeMetadata() {
+            const nodes = cy.nodes();
+            const sessions = new Set();
+            const sources = new Set();
+            let pdfCards = 0;
+            let manualCards = 0;
+            
+            nodes.forEach(node => {
+                const session = node.data('export_session');
+                const source = node.data('export_source');
+                
+                if (session) sessions.add(session);
+                if (source) sources.add(source);
+                
+                if (source === 'pdf_extractor') pdfCards++;
+                else manualCards++;
+            });
+            
+            return `Totalt: ${nodes.length} kort\n` +
+                   `PDF-kort: ${pdfCards}\n` +
+                   `Manuella kort: ${manualCards}\n` +
+                   `Export-sessioner: ${sessions.size}\n` +
+                   `Källor: ${sources.size}`;
+        }
+        
+        // Add new card
+        function addNewCard() {
+            const title = prompt('Titel (valfritt):') || '';
+            const text = prompt('Text:');
+            if (!text) return;
+            
+            const tagsInput = prompt('Tags (kommaseparerade, t.ex: tech, design, psychology):') || '';
+            const tags = tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag);
+            
+            cardIdCounter++;
+            const newId = 'card' + cardIdCounter;
+            
+            // Add to random position in viewport
+            const extent = cy.extent();
+            const x = extent.x1 + Math.random() * (extent.x2 - extent.x1);
+            const y = extent.y1 + Math.random() * (extent.y2 - extent.y1);
+            
+            const newNode = cy.add({
+                data: {
+                    id: newId,
+                    title: title,
+                    text: text,
+                    tags: tags,
+                    searchMatch: false
+                },
+                position: { x: x, y: y }
+            });
+            
+            // Make the new node draggable
+            newNode.grabify();
+        }
+        
+        // Edit card
+        function editCard(node) {
+            const currentTitle = node.data('title') || '';
+            const currentText = node.data('text');
+            const currentTags = node.data('tags') || [];
+            
+            const newTitle = prompt('Titel (valfritt):', currentTitle);
+            if (newTitle === null) return; // User cancelled
+            
+            const newText = prompt('Text:', currentText);
+            if (newText === null) return; // User cancelled
+            
+            const currentTagsString = currentTags.join(', ');
+            const newTagsInput = prompt('Tags (kommaseparerade):', currentTagsString);
+            if (newTagsInput === null) return; // User cancelled
+            
+            const newTags = newTagsInput.split(',').map(tag => tag.trim()).filter(tag => tag);
+            
+            // Update node data
+            node.data('title', newTitle);
+            node.data('text', newText);
+            node.data('tags', newTags);
+            
+            // Re-run search if active
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput.value.trim()) {
+                performSearch(searchInput.value);
+            }
+            
+            // Re-run tag filter if active
+            const tagFilterInput = document.getElementById('tagFilterInput');
+            if (tagFilterInput.value.trim()) {
+                performTagFilter(tagFilterInput.value);
+            }
+        }
+        
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            initCytoscape();
+            
+            // Auto-load from localStorage if data exists
+            setTimeout(() => {
+                const savedData = localStorage.getItem('spatial-notes-board');
+                if (savedData && cy.nodes().length === 5) { // Only if we have dummy data (5 sample cards)
+                    try {
+                        const boardData = JSON.parse(savedData);
+                        if (boardData.cards && boardData.cards.length > 5) { // More than just dummy data
+                            loadBoard();
+                            console.log('Auto-loaded data from localStorage with viewport restored');
+                        }
+                    } catch (e) {
+                        console.log('Error auto-loading:', e);
+                    }
+                }
+            }, 500);
+            
+            const searchInput = document.getElementById('searchInput');
+            let searchTimeout;
+            
+            searchInput.addEventListener('input', function() {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    performSearch(this.value);
+                }, 300);
+            });
+            
+            // Clear search when input is empty
+            searchInput.addEventListener('keyup', function() {
+                if (!this.value.trim()) {
+                    clearSearch();
+                }
+            });
+            
+            // Tag filter functionality
+            const tagFilterInput = document.getElementById('tagFilterInput');
+            let tagFilterTimeout;
+            
+            tagFilterInput.addEventListener('input', function() {
+                clearTimeout(tagFilterTimeout);
+                tagFilterTimeout = setTimeout(() => {
+                    performTagFilter(this.value);
+                }, 300);
+            });
+            
+            tagFilterInput.addEventListener('keyup', function() {
+                if (!this.value.trim()) {
+                    clearTagFilter();
+                }
+            });
+            
+            // Keyboard shortcuts
+            document.addEventListener('keydown', function(e) {
+                // Skip keyboard shortcuts if user is typing in an input field
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
+                    return;
+                }
+                
+                // Ctrl+N för nytt kort
+                if (e.ctrlKey && e.key === 'n') {
+                    e.preventDefault();
+                    addNewCard();
+                }
+                
+                // Ctrl+S för spara
+                if (e.ctrlKey && e.key === 's') {
+                    e.preventDefault();
+                    saveBoard();
+                }
+                
+                // Ctrl+O för ladda
+                if (e.ctrlKey && e.key === 'o') {
+                    e.preventDefault();
+                    loadBoard();
+                }
+                
+                // Multi-selection shortcuts
+                // P för pin selected cards
+                if (e.key === 'p' && !e.ctrlKey && !e.altKey) {
+                    e.preventDefault();
+                    pinSelectedCards();
+                }
+                
+                // U för unpin selected cards
+                if (e.key === 'u' && !e.ctrlKey && !e.altKey) {
+                    e.preventDefault();
+                    unpinSelectedCards();
+                }
+                
+                // Delete för ta bort markerade kort
+                if (e.key === 'Delete') {
+                    e.preventDefault();
+                    deleteSelectedCards();
+                }
+                
+                // Ctrl+A för markera alla opinnde kort (pinnade kort påverkas inte)
+                if (e.ctrlKey && e.key === 'a') {
+                    e.preventDefault();
+                    cy.nodes().not('.pinned').select();
+                }
+                
+                // Escape för rensa sökning och avmarkera alla kort
+                if (e.key === 'Escape') {
+                    clearSearch(); // Rensar både sökning och avmarkerar kort
+                }
+                
+                // L för Cola layout (hålla isär kort)
+                if (e.key === 'l' && !e.ctrlKey && !e.altKey) {
+                    e.preventDefault();
+                    document.getElementById('layoutSelect').value = 'cola';
+                    applyLayout();
+                }
+                
+                // Track keys for combination detection
+                window.keysPressed = window.keysPressed || new Set();
+                window.keysPressed.add(e.key.toLowerCase());
+                
+                // Handle G+V, G+H, G+T combinations (grid variants for selected cards)
+                if (window.keysPressed.has('g') && window.keysPressed.has('v')) {
+                    e.preventDefault();
+                    arrangeSelectedGridVerticalColumns();
+                    return;
+                }
+                if (window.keysPressed.has('g') && window.keysPressed.has('h')) {
+                    e.preventDefault();
+                    arrangeSelectedGridHorizontalPacked();
+                    return;
+                }
+                if (window.keysPressed.has('g') && window.keysPressed.has('t')) {
+                    e.preventDefault();
+                    console.log('G+T pressed, mouse position:', lastMousePosition);
+                    arrangeSelectedGridTopAligned();
+                    return;
+                }
+                
+                // V för vertikal kolumn (markerade kort) - only if G is not pressed
+                if (e.key === 'v' && !e.ctrlKey && !e.altKey && !window.keysPressed.has('g')) {
+                    e.preventDefault();
+                    arrangeSelectedInColumn();
+                    return;
+                }
+                
+                // H för horisontell rad top-aligned (markerade kort)  
+                if (e.key === 'h' && !e.ctrlKey && !e.altKey && !window.keysPressed.has('g')) {
+                    e.preventDefault();
+                    arrangeSelectedInRow();
+                }
+                
+                // C för cluster/grid (markerade kort)
+                if (e.key === 'c' && !e.ctrlKey && !e.altKey) {
+                    e.preventDefault();
+                    arrangeSelectedInGrid();
+                }
+                
+                // Arrangement shortcuts for selected cards
+                // 1 för kolumn (vertical column)
+                if (e.key === '1' && !e.ctrlKey && !e.altKey) {
+                    e.preventDefault();
+                    arrangeSelectedInColumn();
+                }
+                
+                // 2 för rad (horizontal row)
+                if (e.key === '2' && !e.ctrlKey && !e.altKey) {
+                    e.preventDefault();
+                    arrangeSelectedInRow();
+                }
+                
+                // 3 för rutnät (grid)
+                if (e.key === '3' && !e.ctrlKey && !e.altKey) {
+                    e.preventDefault();
+                    arrangeSelectedInGrid();
+                }
+                
+                
+                
+            });
+            
+            // Clear pressed keys on keyup for combination detection
+            document.addEventListener('keyup', function(e) {
+                if (window.keysPressed) {
+                    window.keysPressed.delete(e.key.toLowerCase());
+                }
+            });
+        });
+    </script>
+
+</body>
+</html>
