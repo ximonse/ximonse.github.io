@@ -500,7 +500,16 @@
         }
         
         // Sample data - strukturerade kort med titel och text
-        const initialCards = [];
+        const initialCards = [
+            {
+                id: 'welcome-card',
+                title: 'Välkommen till Spatial Notes! 📝',
+                text: 'Detta är en visuell anteckningsapp där du kan skriva och arrangera dina tankar i 2D-rum.\n\n⚠️ BETA-VERSION: Spara och ladda ner dina anteckningar efter varje pass!\n\n📁 SPARA/LADDA:\n• Spara lokalt: Ctrl+S (eller knappen "💾 Spara")\n• Ladda ner HTML: "📥 Ladda ner" (för backup)\n• Ladda fil: "📂 Ladda"\n\n⌨️ KORTKOMMANDON:\n• H = Horisontell rad\n• G+V = Vertikala kolumner\n• G+H = Packade rader\n• G+T = Top-aligned grid\n• C = Kopiera markerade kort\n• Ctrl+Z/Y = Ångra/Gör om\n\n💡 TIPS: Prova olika arrangerings-kommandon! Markera kort och tryck H eller G+V. Experimentera!',
+                tags: ['välkommen', 'instruktioner', 'hjälp'],
+                x: 0,
+                y: 0
+            }
+        ];
         
 
         // Initialize Cytoscape
