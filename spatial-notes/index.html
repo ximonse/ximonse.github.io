@@ -228,6 +228,53 @@
             border: 2px dashed rgba(33, 150, 243, 0.6) !important;
             border-radius: 4px !important;
         }
+        
+        /* Mobile controls - floating buttons */
+        .mobile-controls {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: none; /* Hidden by default */
+            flex-direction: column;
+            gap: 10px;
+            z-index: 1000;
+        }
+        
+        .mobile-btn {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: none;
+            background: #007acc;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,122,204,0.3);
+            transition: all 0.2s ease;
+        }
+        
+        .mobile-btn:hover {
+            background: #0056b3;
+            transform: scale(1.1);
+        }
+        
+        .mobile-btn:active {
+            transform: scale(0.95);
+        }
+        
+        /* Show mobile controls on touch devices */
+        @media (hover: none) and (pointer: coarse) {
+            .mobile-controls {
+                display: flex !important;
+            }
+        }
+        
+        /* Alternative: Show on small screens */
+        @media (max-width: 768px) {
+            .mobile-controls {
+                display: flex !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -247,6 +294,12 @@
             </select>
         </div>
         <button class="add-card-btn" onclick="addNewCard()">+ Nytt kort</button>
+        
+        <!-- Mobile controls (hidden on desktop) -->
+        <div class="mobile-controls">
+            <button class="mobile-btn zoom-out-btn" onclick="zoomOutToCenter()" title="Zooma ut centralt">🔍−</button>
+            <button class="mobile-btn new-card-btn" onclick="addNewCard()" title="Nytt kort">➕</button>
+        </div>
         <div class="menu-dropdown">
             <button class="menu-button">
                 ⚙️ Meny
@@ -277,9 +330,63 @@
         let cy;
         let cardIdCounter = 45;
         let searchActive = false;
+        let copiedCards = []; // Store copied cards for arrangement commands
         
         // Mouse position tracking
         let lastMousePosition = { x: null, y: null };
+        
+        // MINIMAL UNDO/REDO SYSTEM - Define early so functions can use it
+        let undoStack = [];
+        let redoStack = [];
+        const MAX_UNDO_STEPS = 20;
+        
+        // Save current state for undo
+        function saveState() {
+            try {
+                const state = {
+                    timestamp: Date.now(),
+                    cards: cy.nodes().map(node => ({
+                        id: node.id(),
+                        position: { x: node.position().x, y: node.position().y },
+                        selected: node.selected()
+                    }))
+                };
+                
+                undoStack.push(state);
+                if (undoStack.length > MAX_UNDO_STEPS) {
+                    undoStack.shift(); // Remove oldest
+                }
+                redoStack = []; // Clear redo when new action
+                console.log('State saved, undo stack size:', undoStack.length);
+            } catch (error) {
+                console.warn('Failed to save state:', error);
+            }
+        }
+        
+        // Restore state for undo/redo
+        function restoreState(state) {
+            if (!state || !state.cards) return false;
+            
+            try {
+                cy.nodes().unselect();
+                
+                state.cards.forEach(cardState => {
+                    const node = cy.getElementById(cardState.id);
+                    if (node.length > 0) {
+                        node.position(cardState.position);
+                        if (cardState.selected) {
+                            node.select();
+                        }
+                    }
+                });
+                
+                console.log('State restored');
+                return true;
+            } catch (error) {
+                console.warn('Failed to restore state:', error);
+                return false;
+            }
+        }
         
         // Get arrangement position based on mouse or fallback to screen center
         function getArrangementPosition() {
@@ -393,13 +500,7 @@
         }
         
         // Sample data - strukturerade kort med titel och text
-        const initialCards = [
-            { id: 'card1', title: 'Machine Learning', text: '**Djupinlärning** revolutionerar allt från *bildigenkänning* till språkförståelse. ML är framtiden för AI.', tags: ['tech', 'ai', 'future'] },
-            { id: 'card2', title: 'JavaScript', text: 'Ett **mångsidigt** programmeringsspråk som kan användas för:\n- Frontend\n- Backend\n- Mobilappar', tags: ['tech', 'programming', 'web'] },
-            { id: 'card3', title: 'Spatial Design', text: 'Handlar om att organisera information i **2D eller 3D rum** istället för linjära listor.', tags: ['design', 'ux', 'spatial'] },
-            { id: 'card4', title: 'Cytoscape.js', text: 'Ett *kraftfullt* bibliotek för att skapa interaktiva **grafer och nätverk**.', tags: ['tech', 'library', 'visualization'] },
-            { id: 'card5', title: 'UX Design', text: 'Användargränssnitt ska vara **intuitiva**. Bra UX gör komplex funktionalitet *enkel* att använda.', tags: ['design', 'ux', 'usability'] }
-        ];
+        const initialCards = [];
         
 
         // Initialize Cytoscape
@@ -439,6 +540,12 @@
                             'width': function(node) {
                                 const title = node.data('title') || '';
                                 const text = node.data('text') || '';
+                                const isManualCard = node.data('isManualCard') || false;
+                                
+                                if (isManualCard) {
+                                    // Fixed width for manual cards to match other cards
+                                    return 300; // Same as imported cards
+                                }
                                 
                                 // Calculate width based on content length (your original logic)
                                 const baseWidth = 180;
@@ -446,9 +553,17 @@
                                 return baseWidth + extraWidth;
                             },
                             'height': function(node) {
-                                // Use the ruler to get exact height
+                                const isManualCard = node.data('isManualCard') || false;
+                                
+                                if (isManualCard) {
+                                    // Same padding logic as other cards, but with double padding
+                                    const measuredHeight = getMeasuredTextHeight(node);
+                                    return Math.max(140, measuredHeight + 40); // Double padding for larger text
+                                }
+                                
+                                // Use the ruler to get exact height for other cards
                                 const measuredHeight = getMeasuredTextHeight(node);
-                                return Math.max(100, measuredHeight + 10); // Fixed padding för att testa
+                                return Math.max(100, measuredHeight + 10); // Standard padding
                             },
                             'shape': 'round-rectangle',
                             'cursor': 'grab',
@@ -456,6 +571,8 @@
                                 const title = node.data('title') || '';
                                 const text = node.data('text') || '';
                                 const tags = node.data('tags') || [];
+                                const isManualCard = node.data('isManualCard') || false;
+                                
                                 
                                 // Simple markdown conversion for display
                                 let displayText = text;
@@ -482,13 +599,21 @@
                                     }
                                 }
                                 
-                                const mainText = title ? `${title.toUpperCase()}\n\n${displayText}` : displayText;
+                                // For manually created cards, show ONLY text (no title processing)
+                                // For imported cards, show title in caps + text
+                                const mainText = (isManualCard || !title) ? displayText : `${title.toUpperCase()}\n\n${displayText}`;
                                 return mainText + tagDisplay;
                             },
                             'text-wrap': 'wrap',
                             'text-max-width': function(node) {
                                 const title = node.data('title') || '';
                                 const text = node.data('text') || '';
+                                const isManualCard = node.data('isManualCard') || false;
+                                
+                                if (isManualCard) {
+                                    return 285; // Fixed width minus padding for manual cards
+                                }
+                                
                                 const nodeWidth = 180 + Math.min(120, (title + text).length * 0.9);
                                 return nodeWidth - 15;
                             },
@@ -496,7 +621,12 @@
                             'text-halign': 'center',
                             'font-size': function(node) {
                                 const title = node.data('title') || '';
-                                return title ? 18 : 16; // Larger font for nodes with titles
+                                const isManualCard = node.data('isManualCard') || false;
+                                
+                                if (isManualCard) {
+                                    return 23; // Larger font for manually created cards
+                                }
+                                return title ? 18 : 16; // Normal size for imported cards
                             },
                             'font-family': '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
                             'color': '#333'
@@ -505,10 +635,10 @@
                     {
                         selector: 'node.search-match',
                         style: {
-                            'background-color': '#bbdefb',
-                            'border-color': '#1976d2',
-                            'border-width': 4,
-                            'box-shadow': '0 0 15px rgba(25, 118, 210, 0.6)'
+                            'background-color': '#fff9c4',
+                            'border-color': '#f57f17',
+                            'border-width': 2,
+                            'box-shadow': '0 0 10px rgba(245, 127, 23, 0.4)'
                         }
                     },
                     {
@@ -542,21 +672,20 @@
                     name: 'preset'
                 },
                 
-                // Enable panning and zooming  
+                // Enable panning and zooming
                 zoomingEnabled: true,
                 userZoomingEnabled: true,
-                wheelSensitivity: 0.1,
+                wheelSensitivity: 0.3,
+                minZoom: 0.1,
+                maxZoom: 3,
                 panningEnabled: false,  // Start with panning disabled
-                userPanningEnabled: false,
+                userPanningEnabled: true,  // Keep user controls available
                 boxSelectionEnabled: true,
-                selectionType: 'additive',
+                selectionType: 'additive',  // Allow multiple selection
                 
                 // Configure user interaction
                 autoungrabify: false,
-                autounselectify: false,
-                
-                // Custom zoom sensitivity (slower zoom)
-                wheelSensitivity: 0.3
+                autounselectify: false
             });
             
             // Make nodes draggable
@@ -602,28 +731,30 @@
                 // console.log('Mouse moved to:', evt.clientX, evt.clientY);
             });
             
-            // Control panning vs box selection based on Ctrl key
+            // Starta med panorering på, så att zoom fungerar direkt
+            cy.panningEnabled(true);
+
+            // Hantera Ctrl+drag för att växla mellan panorering och markeringsruta
             cy.on('mousedown', function(evt) {
-                const originalEvent = evt.originalEvent;
-                if (originalEvent.ctrlKey) {
-                    // Ctrl+Left = enable panning, disable box selection
-                    cy.panningEnabled(true);
-                    cy.userPanningEnabled(true);
+                if (evt.originalEvent.ctrlKey) {
+                    // Med Ctrl nedtryckt: aktivera panorering, inaktivera markeringsruta
                     cy.boxSelectionEnabled(false);
+                    cy.panningEnabled(true);
                 } else {
-                    // Left = enable box selection, disable panning
-                    cy.panningEnabled(false);
-                    cy.userPanningEnabled(false);
+                    // Utan Ctrl: inaktivera panorering, aktivera markeringsruta
                     cy.boxSelectionEnabled(true);
+                    cy.panningEnabled(false);
                 }
             });
-            
-            // Reset to default state on mouse up
+
             cy.on('mouseup', function(evt) {
-                cy.panningEnabled(false);
-                cy.userPanningEnabled(false);
+                // Återställ alltid till att panorering är på, så att zoom fungerar igen
+                cy.panningEnabled(true);
                 cy.boxSelectionEnabled(true);
             });
+            
+            // Background click events temporarily disabled to test zoom
+            // TODO: Re-enable with zoom preservation
             
             // Disable context menu on right click
             cy.container().addEventListener('contextmenu', function(evt) {
@@ -653,7 +784,7 @@
                 if (matches) {
                     node.addClass('search-match');
                     node.data('searchMatch', true);
-                    node.select(); // Markera kortet som selekterat
+                    // Don't select directly - let ESC convert to selected
                     matchCount++;
                 } else {
                     node.removeClass('search-match');
@@ -778,7 +909,7 @@
         
         // Multi-selection functions
         function pinSelectedCards() {
-            const selectedNodes = cy.$('node:selected');
+            const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
             selectedNodes.forEach(node => {
                 if (!node.hasClass('pinned')) {
                     pinCard(node);
@@ -791,7 +922,7 @@
         }
         
         function unpinSelectedCards() {
-            const selectedNodes = cy.$('node:selected');
+            const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
             selectedNodes.forEach(node => {
                 if (node.hasClass('pinned')) {
                     unpinCard(node);
@@ -804,7 +935,7 @@
         }
         
         function deleteSelectedCards() {
-            const selectedNodes = cy.$('node:selected');
+            const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
             if (selectedNodes.length > 0) {
                 const count = selectedNodes.length;
                 selectedNodes.remove();
@@ -815,7 +946,7 @@
         
         // Alignment functions for selected cards
         function alignSelectedVertical() {
-            const selectedNodes = cy.$('node:selected');
+            const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
             if (selectedNodes.length < 2) return;
             
             // Get the leftmost card's X position as reference (fixed reference point)
@@ -859,7 +990,7 @@
         }
         
         function alignSelectedVerticalSimple() {
-            const selectedNodes = cy.$('node:selected');
+            const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
             if (selectedNodes.length < 2) return;
             
             // Get the leftmost card's X position as reference
@@ -884,7 +1015,7 @@
         }
         
         function alignSelectedHorizontal() {
-            const selectedNodes = cy.$('node:selected');
+            const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
             if (selectedNodes.length < 2) return;
             
             // Calculate the average Y position for better alignment
@@ -908,8 +1039,19 @@
         }
         
         function arrangeSelectedInGrid() {
-            const selectedNodes = cy.$('node:selected');
+            // If we have copied cards, create and arrange them. Otherwise, arrange selected nodes.
+            if (copiedCards.length > 0) {
+                arrangeCopiedCardsInGrid();
+                return;
+            }
+            
+            const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
             if (selectedNodes.length < 2) return;
+            
+            // Save state for undo before arranging
+            console.log('About to save state before grid arrangement');
+            saveState();
+            console.log('State saved, proceeding with arrangement');
             
             // Calculate grid dimensions
             const nodeCount = selectedNodes.length;
@@ -948,7 +1090,13 @@
         }
         
         function arrangeSelectedInColumn() {
-            const selectedNodes = cy.$('node:selected');
+            // If we have copied cards, create and arrange them. Otherwise, arrange selected nodes.
+            if (copiedCards.length > 0) {
+                arrangeCopiedCardsInColumn();
+                return;
+            }
+            
+            const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
             if (selectedNodes.length < 2) return;
             
             // Use mouse position or fallback to screen center
@@ -993,8 +1141,19 @@
         }
         
         function arrangeSelectedInRow() {
-            const selectedNodes = cy.$('node:selected');
+            // If we have copied cards, create and arrange them. Otherwise, arrange selected nodes.
+            if (copiedCards.length > 0) {
+                arrangeCopiedCardsInRow();
+                return;
+            }
+            
+            const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
             if (selectedNodes.length < 2) return;
+            
+            // Save state for undo before arranging
+            console.log('H command: About to save state for undo');
+            saveState();
+            console.log('H command: State saved, proceeding with arrangement');
             
             // Use mouse position or fallback to screen center
             const arrangePos = getArrangementPosition();
@@ -1055,7 +1214,7 @@
         }
         
         function updateSelectionInfo() {
-            const selectedNodes = cy.$('node:selected');
+            const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
             const selectionInfo = document.getElementById('selectionInfo');
             
             if (selectedNodes.length === 0) {
@@ -1299,8 +1458,17 @@
         
         // G+V: Grid where top row is top-aligned, other rows in columns below (like command 1)
         function arrangeSelectedGridVerticalColumns() {
-            const selectedNodes = cy.$('node:selected');
+            // If we have copied cards, create and arrange them. Otherwise, arrange selected nodes.
+            if (copiedCards.length > 0) {
+                arrangeCopiedCardsGridVerticalColumns();
+                return;
+            }
+            
+            const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
             if (selectedNodes.length < 2) return;
+            
+            // Save state for undo before arranging
+            saveState();
             
             // Calculate grid dimensions
             const nodeCount = selectedNodes.length;
@@ -1353,8 +1521,17 @@
         
         // G+H: Grid where rows are top-aligned and packed tightly (no row overlap)
         function arrangeSelectedGridHorizontalPacked() {
-            const selectedNodes = cy.$('node:selected');
+            // If we have copied cards, create and arrange them. Otherwise, arrange selected nodes.
+            if (copiedCards.length > 0) {
+                arrangeCopiedCardsGridHorizontalPacked();
+                return;
+            }
+            
+            const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
             if (selectedNodes.length < 2) return;
+            
+            // Save state for undo before arranging
+            saveState();
             
             // Use mouse position or fallback to screen center
             const arrangePos = getArrangementPosition();
@@ -1424,8 +1601,17 @@
         
         // G+T: Grid where all rows are top-aligned (all cards in same row at same height)
         function arrangeSelectedGridTopAligned() {
-            const selectedNodes = cy.$('node:selected');
+            // If we have copied cards, create and arrange them. Otherwise, arrange selected nodes.
+            if (copiedCards.length > 0) {
+                arrangeCopiedCardsGridTopAligned();
+                return;
+            }
+            
+            const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
             if (selectedNodes.length < 2) return;
+            
+            // Save state for undo before arranging
+            saveState();
             
             // Use mouse position or fallback to screen center
             const arrangePos = getArrangementPosition();
@@ -2065,21 +2251,642 @@
         
         // Add new card
         function addNewCard() {
-            const title = prompt('Titel (valfritt):') || '';
-            const text = prompt('Text:');
-            if (!text) return;
+            // Create overlay for multiline text input
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.7); z-index: 10000;
+                display: flex; justify-content: center; align-items: center;
+            `;
             
-            const tagsInput = prompt('Tags (kommaseparerade, t.ex: tech, design, psychology):') || '';
-            const tags = tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag);
+            const dialog = document.createElement('div');
+            dialog.style.cssText = `
+                background: white; padding: 20px; border-radius: 10px;
+                max-width: 500px; width: 90%; max-height: 80vh;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                box-sizing: border-box;
+            `;
             
-            cardIdCounter++;
-            const newId = 'card' + cardIdCounter;
+            dialog.innerHTML = `
+                <h3 style="margin-top: 0; color: #333; font-size: 18px;">Nytt kort</h3>
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #555;">Text:</label>
+                    <textarea id="newCardText" placeholder="Skriv text här... (radbrytningar bevaras)"
+                        style="width: 100%; height: 200px; font-family: inherit; font-size: 14px; 
+                               border: 1px solid #ccc; border-radius: 4px; padding: 8px;
+                               box-sizing: border-box; resize: vertical;"></textarea>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #555;">Tags (valfritt):</label>
+                    <input type="text" id="newCardTags" placeholder="tech, psychology, design..."
+                        style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;
+                               box-sizing: border-box; font-size: 14px;">
+                </div>
+                <div style="text-align: right;">
+                    <button id="cancelCard" style="background: #666; color: white; border: none; 
+                                                 padding: 10px 20px; border-radius: 4px; margin-right: 10px;
+                                                 cursor: pointer; font-size: 14px;">Avbryt</button>
+                    <button id="saveCard" style="background: #007acc; color: white; border: none; 
+                                                padding: 10px 20px; border-radius: 4px; cursor: pointer;
+                                                font-size: 14px;">Spara kort</button>
+                </div>
+                <div style="margin-top: 10px; font-size: 12px; color: #666;">
+                    <strong>Tips:</strong> Enter = ny rad, Ctrl+Enter = spara, Esc = avbryt
+                </div>
+            `;
             
-            // Add to random position in viewport
-            const extent = cy.extent();
-            const x = extent.x1 + Math.random() * (extent.x2 - extent.x1);
-            const y = extent.y1 + Math.random() * (extent.y2 - extent.y1);
+            overlay.appendChild(dialog);
+            document.body.appendChild(overlay);
             
+            // Focus on textarea
+            const textarea = document.getElementById('newCardText');
+            textarea.focus();
+            
+            // Handle save
+            document.getElementById('saveCard').onclick = function() {
+                const text = textarea.value.trim();
+                if (!text) {
+                    alert('Text krävs för att skapa kort');
+                    return;
+                }
+                
+                const tagsInput = document.getElementById('newCardTags').value || '';
+                const tags = tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag);
+                
+                cardIdCounter++;
+                const newId = 'card' + cardIdCounter;
+                
+                // Position card based on device type
+                let x, y;
+                const isMobile = window.innerWidth <= 768 || ('ontouchstart' in window);
+                
+                if (isMobile) {
+                    // Mobile: center of screen
+                    const extent = cy.extent();
+                    x = (extent.x1 + extent.x2) / 2;
+                    y = (extent.y1 + extent.y2) / 2;
+                } else {
+                    // Desktop: at mouse position (or fallback to center)
+                    const arrangePos = getArrangementPosition();
+                    x = arrangePos.x;
+                    y = arrangePos.y;
+                }
+                
+                const newNode = cy.add({
+                    data: {
+                        id: newId,
+                        title: null, // Explicitly null to avoid any title processing
+                        text: text, // Keep line breaks as-is
+                        tags: tags,
+                        searchMatch: false,
+                        isManualCard: true // Flag to identify manually created cards
+                    },
+                    position: { x: x, y: y }
+                });
+                
+                newNode.grabify();
+                
+                // Force refresh of node styling
+                cy.style().update();
+                
+                document.body.removeChild(overlay);
+            };
+            
+            // Handle cancel
+            document.getElementById('cancelCard').onclick = function() {
+                document.body.removeChild(overlay);
+            };
+            
+            // Handle Enter to save (Ctrl+Enter or Shift+Enter for new lines)
+            textarea.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && e.ctrlKey) {
+                    document.getElementById('saveCard').click();
+                }
+                else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    document.body.removeChild(overlay);
+                }
+                // Regular Enter and Shift+Enter allow normal newline behavior
+            });
+        }
+        
+        // Zoom out to center (mobile function)
+        function zoomOutToCenter() {
+            cy.fit(null, 50); // Fit all nodes with 50px padding
+            cy.center(); // Center the view
+        }
+        
+        // Copy selected cards
+        function copySelectedCards() {
+            const selectedNodes = cy.nodes(':selected');
+            if (selectedNodes.length === 0) {
+                alert('Inga kort markerade för kopiering');
+                return;
+            }
+            
+            // Save state for undo before copying (copies will be created when arranged)
+            saveState();
+            
+            // Generate timestamp for copy tagging
+            const now = new Date();
+            const timestamp = now.toISOString().slice(0, 19).replace(/[-T:]/g, '').slice(0, 13); // YYYYMMDD_HHmm format
+            
+            copiedCards = [];
+            
+            selectedNodes.forEach((node, index) => {
+                const originalData = {
+                    title: node.data('title') || '',
+                    text: node.data('text') || '',
+                    tags: [...(node.data('tags') || [])], // Clone array
+                    // Copy all metadata too
+                    export_timestamp: node.data('export_timestamp'),
+                    export_session: node.data('export_session'),
+                    export_source: node.data('export_source'),
+                    source_file: node.data('source_file'),
+                    page_number: node.data('page_number'),
+                    matched_terms: node.data('matched_terms'),
+                    card_index: node.data('card_index')
+                };
+                
+                // Add copy metadata
+                const copyTag = `copy_${timestamp}_${index + 1}`;
+                originalData.tags.push(copyTag);
+                originalData.copyOf = node.id();
+                originalData.isCopy = true;
+                originalData.copyTimestamp = now.toISOString();
+                
+                copiedCards.push(originalData);
+            });
+            
+            console.log(`Copied ${copiedCards.length} cards with timestamp ${timestamp}`);
+        }
+        
+        // Arrange copied cards in row at mouse position
+        function arrangeCopiedCardsInRow() {
+            if (copiedCards.length === 0) return;
+            
+            const arrangePos = getArrangementPosition();
+            const centerX = arrangePos.x;
+            const centerY = arrangePos.y;
+            
+            // Create the copied cards
+            const newNodes = [];
+            copiedCards.forEach((cardData, index) => {
+                const newId = `card${cardIdCounter++}`;
+                
+                const newNode = cy.add({
+                    data: {
+                        id: newId,
+                        title: cardData.title,
+                        text: cardData.text,
+                        tags: cardData.tags,
+                        searchMatch: false,
+                        // Copy metadata
+                        export_timestamp: cardData.export_timestamp,
+                        export_session: cardData.export_session,
+                        export_source: cardData.export_source,
+                        source_file: cardData.source_file,
+                        page_number: cardData.page_number,
+                        matched_terms: cardData.matched_terms,
+                        card_index: cardData.card_index,
+                        // New copy metadata
+                        copyOf: cardData.copyOf,
+                        isCopy: cardData.isCopy,
+                        copyTimestamp: cardData.copyTimestamp
+                    },
+                    position: { x: centerX, y: centerY } // Will be repositioned below
+                });
+                
+                newNode.grabify();
+                newNodes.push(newNode);
+            });
+            
+            // Now arrange them in a row
+            const spacing = 80; // Same spacing as original
+            let totalRequiredWidth = 0;
+            newNodes.forEach((node, index) => {
+                const cardWidth = getCardWidth(node);
+                totalRequiredWidth += cardWidth;
+                if (index < newNodes.length - 1) {
+                    totalRequiredWidth += spacing;
+                }
+            });
+            
+            let currentX = centerX - (totalRequiredWidth / 2);
+            newNodes.forEach(node => {
+                const cardWidth = getCardWidth(node);
+                const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                
+                // Position with top-aligned positioning (same as original)
+                const cardCenterX = currentX + (cardWidth / 2);
+                const cardCenterY = centerY + (cardHeight / 2); // Top-align: center Y based on card's height
+                
+                node.position({ x: cardCenterX, y: cardCenterY });
+                currentX += cardWidth + spacing;
+            });
+            
+            // Clear copied cards and select the new ones
+            copiedCards = [];
+            cy.nodes().unselect();
+            newNodes.forEach(node => node.select());
+            
+            console.log(`Created and arranged ${newNodes.length} copied cards in row`);
+        }
+        
+        // Arrange copied cards in column at mouse position
+        function arrangeCopiedCardsInColumn() {
+            if (copiedCards.length === 0) return;
+            
+            const arrangePos = getArrangementPosition();
+            const centerX = arrangePos.x;
+            const centerY = arrangePos.y;
+            
+            // Create the copied cards
+            const newNodes = [];
+            copiedCards.forEach((cardData, index) => {
+                const newId = `card${cardIdCounter++}`;
+                
+                const newNode = cy.add({
+                    data: {
+                        id: newId,
+                        title: cardData.title,
+                        text: cardData.text,
+                        tags: cardData.tags,
+                        searchMatch: false,
+                        // Copy metadata
+                        export_timestamp: cardData.export_timestamp,
+                        export_session: cardData.export_session,
+                        export_source: cardData.export_source,
+                        source_file: cardData.source_file,
+                        page_number: cardData.page_number,
+                        matched_terms: cardData.matched_terms,
+                        card_index: cardData.card_index,
+                        // New copy metadata
+                        copyOf: cardData.copyOf,
+                        isCopy: cardData.isCopy,
+                        copyTimestamp: cardData.copyTimestamp
+                    },
+                    position: { x: centerX, y: centerY } // Will be repositioned below
+                });
+                
+                newNode.grabify();
+                newNodes.push(newNode);
+            });
+            
+            // Now arrange them in a column (same logic as original)
+            const spacing = 50; // Same spacing as original
+            let totalRequiredHeight = 0;
+            newNodes.forEach((node, index) => {
+                const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                totalRequiredHeight += cardHeight;
+                if (index < newNodes.length - 1) {
+                    totalRequiredHeight += spacing;
+                }
+            });
+            
+            let currentY = centerY - (totalRequiredHeight / 2);
+            newNodes.forEach(node => {
+                const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                const cardCenterY = currentY + (cardHeight / 2);
+                node.position({ x: centerX, y: cardCenterY });
+                currentY += cardHeight + spacing;
+            });
+            
+            // Clear copied cards and select the new ones
+            copiedCards = [];
+            cy.nodes().unselect();
+            newNodes.forEach(node => node.select());
+            
+            console.log(`Created and arranged ${newNodes.length} copied cards in column`);
+        }
+        
+        // Arrange copied cards in grid at mouse position
+        function arrangeCopiedCardsInGrid() {
+            if (copiedCards.length === 0) return;
+            
+            const arrangePos = getArrangementPosition();
+            const screenCenterX = arrangePos.x;
+            const screenCenterY = arrangePos.y;
+            
+            // Calculate grid dimensions
+            const nodeCount = copiedCards.length;
+            const cols = Math.ceil(Math.sqrt(nodeCount));
+            const rows = Math.ceil(nodeCount / cols);
+            
+            // Create the copied cards
+            const newNodes = [];
+            copiedCards.forEach((cardData, index) => {
+                const newId = `card${cardIdCounter++}`;
+                
+                const newNode = cy.add({
+                    data: {
+                        id: newId,
+                        title: cardData.title,
+                        text: cardData.text,
+                        tags: cardData.tags,
+                        searchMatch: false,
+                        // Copy metadata
+                        export_timestamp: cardData.export_timestamp,
+                        export_session: cardData.export_session,
+                        export_source: cardData.export_source,
+                        source_file: cardData.source_file,
+                        page_number: cardData.page_number,
+                        matched_terms: cardData.matched_terms,
+                        card_index: cardData.card_index,
+                        // New copy metadata
+                        copyOf: cardData.copyOf,
+                        isCopy: cardData.isCopy,
+                        copyTimestamp: cardData.copyTimestamp
+                    },
+                    position: { x: screenCenterX, y: screenCenterY } // Will be repositioned below
+                });
+                
+                newNode.grabify();
+                newNodes.push(newNode);
+            });
+            
+            // Arrange in grid
+            const cardWidth = 300;
+            const cardHeight = 200;
+            const horizontalSpacing = 350;
+            const verticalSpacing = 250;
+            
+            const gridWidth = (cols - 1) * horizontalSpacing;
+            const gridHeight = (rows - 1) * verticalSpacing;
+            
+            const startX = screenCenterX - (gridWidth / 2);
+            const startY = screenCenterY - (gridHeight / 2);
+            
+            newNodes.forEach((node, index) => {
+                const row = Math.floor(index / cols);
+                const col = index % cols;
+                
+                const x = startX + (col * horizontalSpacing);
+                const y = startY + (row * verticalSpacing);
+                
+                node.position({ x: x, y: y });
+            });
+            
+            // Clear copied cards and select the new ones
+            copiedCards = [];
+            cy.nodes().unselect();
+            newNodes.forEach(node => node.select());
+            
+            console.log(`Created and arranged ${newNodes.length} copied cards in ${rows}×${cols} grid`);
+        }
+        
+        // G+V: Copy cards in vertical columns layout
+        function arrangeCopiedCardsGridVerticalColumns() {
+            if (copiedCards.length === 0) return;
+            
+            const arrangePos = getArrangementPosition();
+            const screenCenterX = arrangePos.x;
+            const screenCenterY = arrangePos.y;
+            
+            // Calculate grid dimensions  
+            const nodeCount = copiedCards.length;
+            const cols = Math.ceil(Math.sqrt(nodeCount));
+            const rows = Math.ceil(nodeCount / cols);
+            
+            // Create the copied cards
+            const newNodes = [];
+            copiedCards.forEach((cardData, index) => {
+                const newId = `card${cardIdCounter++}`;
+                
+                const newNode = cy.add({
+                    data: {
+                        id: newId,
+                        title: cardData.title,
+                        text: cardData.text,
+                        tags: cardData.tags,
+                        searchMatch: false,
+                        // Copy metadata
+                        export_timestamp: cardData.export_timestamp,
+                        export_session: cardData.export_session,
+                        export_source: cardData.export_source,
+                        source_file: cardData.source_file,
+                        page_number: cardData.page_number,
+                        matched_terms: cardData.matched_terms,
+                        card_index: cardData.card_index,
+                        // New copy metadata
+                        copyOf: cardData.copyOf,
+                        isCopy: cardData.isCopy,
+                        copyTimestamp: cardData.copyTimestamp
+                    },
+                    position: { x: screenCenterX, y: screenCenterY }
+                });
+                
+                newNode.grabify();
+                newNodes.push(newNode);
+            });
+            
+            // Arrange in vertical columns (exact same logic as original)
+            const horizontalSpacing = 320;
+            const gridWidth = (cols - 1) * horizontalSpacing;
+            const startX = screenCenterX - gridWidth / 2;
+            const startY = screenCenterY - 100; // Start a bit above center
+            
+            // Arrange column by column (like original)
+            for (let col = 0; col < cols; col++) {
+                let currentY = startY;
+                
+                for (let row = 0; row < rows; row++) {
+                    const nodeIndex = row * cols + col;
+                    if (nodeIndex < newNodes.length) {
+                        const node = newNodes[nodeIndex];
+                        const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                        
+                        const newX = startX + col * horizontalSpacing;
+                        const cardCenterY = currentY + (cardHeight / 2);
+                        
+                        node.position({ x: newX, y: cardCenterY });
+                        currentY += cardHeight + 50; // 50px spacing between cards
+                    }
+                }
+            }
+            
+            // Clear copied cards and select the new ones
+            copiedCards = [];
+            cy.nodes().unselect();
+            newNodes.forEach(node => node.select());
+            
+            console.log(`G+V: Created ${newNodes.length} copied cards in ${cols} columns`);
+        }
+        
+        // G+H: Copy cards in horizontal packed layout
+        function arrangeCopiedCardsGridHorizontalPacked() {
+            if (copiedCards.length === 0) return;
+            
+            const arrangePos = getArrangementPosition();
+            const screenCenterX = arrangePos.x;
+            const screenCenterY = arrangePos.y;
+            
+            // Create the copied cards
+            const newNodes = [];
+            copiedCards.forEach((cardData, index) => {
+                const newId = `card${cardIdCounter++}`;
+                
+                const newNode = cy.add({
+                    data: {
+                        id: newId,
+                        title: cardData.title,
+                        text: cardData.text,
+                        tags: cardData.tags,
+                        searchMatch: false,
+                        // Copy metadata
+                        export_timestamp: cardData.export_timestamp,
+                        export_session: cardData.export_session,
+                        export_source: cardData.export_source,
+                        source_file: cardData.source_file,
+                        page_number: cardData.page_number,
+                        matched_terms: cardData.matched_terms,
+                        card_index: cardData.card_index,
+                        // New copy metadata
+                        copyOf: cardData.copyOf,
+                        isCopy: cardData.isCopy,
+                        copyTimestamp: cardData.copyTimestamp
+                    },
+                    position: { x: screenCenterX, y: screenCenterY }
+                });
+                
+                newNode.grabify();
+                newNodes.push(newNode);
+            });
+            
+            // Arrange in horizontal packed rows (exact same logic as original)
+            const nodeCount = newNodes.length;
+            const cols = Math.ceil(Math.sqrt(nodeCount));
+            const rows = Math.ceil(nodeCount / cols);
+            
+            const horizontalSpacing = 320;
+            const rowPadding = 40; // Space between rows
+            
+            const gridWidth = (cols - 1) * horizontalSpacing;
+            const startX = screenCenterX - gridWidth / 2;
+            
+            // First pass: calculate the height of each row
+            const rowHeights = [];
+            for (let row = 0; row < rows; row++) {
+                let maxRowHeight = 0;
+                for (let col = 0; col < cols; col++) {
+                    const nodeIndex = row * cols + col;
+                    if (nodeIndex < newNodes.length) {
+                        const node = newNodes[nodeIndex];
+                        const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                        maxRowHeight = Math.max(maxRowHeight, cardHeight);
+                    }
+                }
+                rowHeights.push(maxRowHeight);
+            }
+            
+            // Calculate total height and start position
+            const totalHeight = rowHeights.reduce((sum, height) => sum + height, 0) + (rows - 1) * rowPadding;
+            let currentY = screenCenterY - totalHeight / 2;
+            
+            // Second pass: position cards row by row with tight packing
+            for (let row = 0; row < rows; row++) {
+                const rowHeight = rowHeights[row];
+                
+                for (let col = 0; col < cols; col++) {
+                    const nodeIndex = row * cols + col;
+                    if (nodeIndex < newNodes.length) {
+                        const node = newNodes[nodeIndex];
+                        const newX = startX + col * horizontalSpacing;
+                        
+                        // Position card at top of its row space
+                        const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                        const cardCenterY = currentY + (cardHeight / 2); // Top-aligned within row
+                        
+                        node.position({ x: newX, y: cardCenterY });
+                    }
+                }
+                
+                currentY += rowHeight + rowPadding; // Move to next row
+            }
+            
+            // Clear copied cards and select the new ones
+            copiedCards = [];
+            cy.nodes().unselect();
+            newNodes.forEach(node => node.select());
+            
+            console.log(`G+H: Created ${newNodes.length} copied cards in ${rows} packed rows`);
+        }
+        
+        // Form dialog for structured card creation
+        function showFormDialog(x, y) {
+            // Create modal overlay
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.5); z-index: 2000;
+                display: flex; align-items: center; justify-content: center;
+            `;
+            
+            // Create form dialog
+            const dialog = document.createElement('div');
+            dialog.style.cssText = `
+                background: white; padding: 20px; border-radius: 8px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3); width: 400px;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            `;
+            
+            dialog.innerHTML = `
+                <h3 style="margin: 0 0 15px 0; color: #333;">Skapa nytt kort</h3>
+                <div style="margin-bottom: 10px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold;">Titel (valfritt):</label>
+                    <input type="text" id="formTitle" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                </div>
+                <div style="margin-bottom: 10px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold;">Text:</label>
+                    <textarea id="formText" rows="4" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; resize: vertical;"></textarea>
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold;">Tags (kommaseparerade):</label>
+                    <input type="text" id="formTags" placeholder="tech, ai, design" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                </div>
+                <div style="text-align: right;">
+                    <button id="formCancel" style="margin-right: 10px; padding: 8px 16px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">Avbryt</button>
+                    <button id="formSave" style="padding: 8px 16px; border: none; background: #007AFF; color: white; border-radius: 4px; cursor: pointer;">Skapa kort</button>
+                </div>
+            `;
+            
+            overlay.appendChild(dialog);
+            document.body.appendChild(overlay);
+            
+            // Focus first field
+            document.getElementById('formTitle').focus();
+            
+            // Event handlers
+            document.getElementById('formCancel').onclick = () => {
+                document.body.removeChild(overlay);
+            };
+            
+            document.getElementById('formSave').onclick = () => {
+                createCardFromForm(x, y);
+                document.body.removeChild(overlay);
+            };
+            
+            // ESC to cancel - must capture on document for focus issues
+            function handleEscape(e) {
+                if (e.key === 'Escape') {
+                    document.body.removeChild(overlay);
+                    document.removeEventListener('keydown', handleEscape);
+                }
+            }
+            document.addEventListener('keydown', handleEscape);
+        }
+        
+        // Create card from form data
+        function createCardFromForm(x, y) {
+            const title = document.getElementById('formTitle').value.trim();
+            const text = document.getElementById('formText').value.trim();
+            const tagsInput = document.getElementById('formTags').value.trim();
+            
+            if (!text) return; // Need at least some text
+            
+            const tags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(t => t) : [];
+            
+            const newId = `card${cardIdCounter++}`;
             const newNode = cy.add({
                 data: {
                     id: newId,
@@ -2091,12 +2898,462 @@
                 position: { x: x, y: y }
             });
             
-            // Make the new node draggable
             newNode.grabify();
+            console.log(`Created card via form: ${title || 'Untitled'}`);
+        }
+        
+        // Code syntax dialog for quick card creation
+        function showCodeDialog(x, y) {
+            // Create modal overlay
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.5); z-index: 2000;
+                display: flex; align-items: center; justify-content: center;
+            `;
+            
+            // Create code dialog
+            const dialog = document.createElement('div');
+            dialog.style.cssText = `
+                background: white; padding: 20px; border-radius: 8px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3); width: 500px;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            `;
+            
+            dialog.innerHTML = `
+                <h3 style="margin: 0 0 10px 0; color: #333;">Snabbformat</h3>
+                <p style="margin: 0 0 15px 0; color: #666; font-size: 14px;">
+                    #Titel<br>Innehåll här (Shift+Enter för ny rad)<br>#tag1 #tag2
+                    <br><strong>Enter</strong>=Spara, <strong>Esc</strong>=Avbryt
+                </p>
+                <textarea id="codeInput" placeholder="#Titel här
+Skriv ditt innehåll här...
+#tag1 #tag2" 
+                    style="width: 100%; height: 120px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; 
+                           font-family: 'SF Mono', Consolas, monospace; font-size: 14px; resize: vertical;"></textarea>
+            `;
+            
+            overlay.appendChild(dialog);
+            document.body.appendChild(overlay);
+            
+            const textarea = document.getElementById('codeInput');
+            textarea.focus();
+            
+            // Keyboard shortcuts
+            textarea.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    createCardFromCode(x, y, textarea.value);
+                    document.body.removeChild(overlay);
+                }
+                else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    document.body.removeChild(overlay);
+                }
+                // Shift+Enter allows normal newline (no preventDefault)
+            });
+            
+            // Click outside to cancel
+            overlay.addEventListener('click', function(e) {
+                if (e.target === overlay) {
+                    document.body.removeChild(overlay);
+                }
+            });
+        }
+        
+        // Parse code syntax and create card
+        function createCardFromCode(x, y, input) {
+            if (!input.trim()) return;
+            
+            const lines = input.trim().split('\n');
+            let title = '';
+            let text = '';
+            let tags = [];
+            
+            let inContent = false;
+            
+            for (let line of lines) {
+                line = line.trim();
+                if (!line) continue;
+                
+                if (line.startsWith('#') && !inContent) {
+                    // First # line is title, rest are tags
+                    if (!title) {
+                        title = line.substring(1).trim();
+                        inContent = true;
+                    } else {
+                        // Tags line - extract all #tag words
+                        const tagMatches = line.match(/#\w+/g);
+                        if (tagMatches) {
+                            tags.push(...tagMatches.map(t => t.substring(1)));
+                        }
+                    }
+                } else if (line.startsWith('#') && inContent) {
+                    // Tags in content
+                    const tagMatches = line.match(/#\w+/g);
+                    if (tagMatches) {
+                        tags.push(...tagMatches.map(t => t.substring(1)));
+                    }
+                } else {
+                    // Content line
+                    if (text) text += '\n';
+                    text += line;
+                    inContent = true;
+                }
+            }
+            
+            // If no title found, use first line of text
+            if (!title && text) {
+                const firstLine = text.split('\n')[0];
+                if (firstLine.length < 50) {
+                    title = firstLine;
+                    text = text.substring(firstLine.length).trim();
+                }
+            }
+            
+            if (!text && !title) return; // Need something
+            
+            const newId = `card${cardIdCounter++}`;
+            const newNode = cy.add({
+                data: {
+                    id: newId,
+                    title: title,
+                    text: text || title, // Use title as text if no content
+                    tags: [...new Set(tags)], // Remove duplicates
+                    searchMatch: false
+                },
+                position: { x: x, y: y }
+            });
+            
+            newNode.grabify();
+            console.log(`Created card via code syntax: ${title || 'Untitled'}`);
+        }
+        
+        // G+T: Copy cards in top-aligned grid
+        function arrangeCopiedCardsGridTopAligned() {
+            if (copiedCards.length === 0) return;
+            
+            const arrangePos = getArrangementPosition();
+            const screenCenterX = arrangePos.x;
+            const screenCenterY = arrangePos.y;
+            
+            // Create the copied cards
+            const newNodes = [];
+            copiedCards.forEach((cardData, index) => {
+                const newId = `card${cardIdCounter++}`;
+                
+                const newNode = cy.add({
+                    data: {
+                        id: newId,
+                        title: cardData.title,
+                        text: cardData.text,
+                        tags: cardData.tags,
+                        searchMatch: false,
+                        // Copy metadata
+                        export_timestamp: cardData.export_timestamp,
+                        export_session: cardData.export_session,
+                        export_source: cardData.export_source,
+                        source_file: cardData.source_file,
+                        page_number: cardData.page_number,
+                        matched_terms: cardData.matched_terms,
+                        card_index: cardData.card_index,
+                        // New copy metadata
+                        copyOf: cardData.copyOf,
+                        isCopy: cardData.isCopy,
+                        copyTimestamp: cardData.copyTimestamp
+                    },
+                    position: { x: screenCenterX, y: screenCenterY }
+                });
+                
+                newNode.grabify();
+                newNodes.push(newNode);
+            });
+            
+            // Arrange in top-aligned grid (same logic as original)
+            const nodeCount = newNodes.length;
+            const cols = Math.ceil(Math.sqrt(nodeCount));
+            const rows = Math.ceil(nodeCount / cols);
+            
+            const horizontalSpacing = 320;
+            const rowSpacing = 200;
+            
+            const gridWidth = (cols - 1) * horizontalSpacing;
+            const gridHeight = (rows - 1) * rowSpacing;
+            
+            const startX = screenCenterX - gridWidth / 2;
+            const startY = screenCenterY - gridHeight / 2;
+            
+            newNodes.forEach((node, index) => {
+                const row = Math.floor(index / cols);
+                const col = index % cols;
+                
+                const x = startX + col * horizontalSpacing;
+                const y = startY + row * rowSpacing; // Top-aligned - same Y for same row
+                
+                node.position({ x: x, y: y });
+            });
+            
+            // Clear copied cards and select the new ones
+            copiedCards = [];
+            cy.nodes().unselect();
+            newNodes.forEach(node => node.select());
+            
+            console.log(`G+T: Created ${newNodes.length} copied cards in top-aligned ${rows}×${cols} grid`);
+        }
+        
+        // Quick note dialog for Alt+N
+        function showQuickNoteDialog() {
+            // Create modal overlay
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.5); z-index: 2000;
+                display: flex; align-items: center; justify-content: center;
+            `;
+            
+            // Create quick note dialog
+            const dialog = document.createElement('div');
+            dialog.style.cssText = `
+                background: white; padding: 20px; border-radius: 8px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3); width: 500px;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            `;
+            
+            dialog.innerHTML = `
+                <h3 style="margin: 0 0 10px 0; color: #333;">Snabb Anteckning</h3>
+                <p style="margin: 0 0 15px 0; color: #666; font-size: 14px;">
+                    Första raden = Titel<br>
+                    Resten = Innehåll (Shift+Enter för ny rad)<br>
+                    #taggar hittas automatiskt överallt<br>
+                    <strong>Enter</strong>=Spara, <strong>Esc</strong>=Avbryt
+                </p>
+                <textarea id="quickNoteInput" placeholder="Min titel här
+Här skriver jag mitt innehåll...
+Kan ha #taggar överallt.
+#extra #taggar #här" 
+                    style="width: 100%; height: 120px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; 
+                           font-family: 'SF Mono', Consolas, monospace; font-size: 14px; resize: vertical;"></textarea>
+            `;
+            
+            overlay.appendChild(dialog);
+            document.body.appendChild(overlay);
+            
+            const textarea = document.getElementById('quickNoteInput');
+            textarea.focus();
+            
+            // Keyboard shortcuts - same as code dialog
+            textarea.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    createCardFromQuickNote(textarea.value);
+                    document.body.removeChild(overlay);
+                }
+                else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    document.body.removeChild(overlay);
+                }
+                // Shift+Enter allows normal newline
+            });
+            
+            // Click outside to cancel
+            overlay.addEventListener('click', function(e) {
+                if (e.target === overlay) {
+                    document.body.removeChild(overlay);
+                }
+            });
+            
+            // ESC handling for focus issues
+            function handleEscape(e) {
+                if (e.key === 'Escape') {
+                    document.body.removeChild(overlay);
+                    document.removeEventListener('keydown', handleEscape);
+                }
+            }
+            document.addEventListener('keydown', handleEscape);
+        }
+        
+        // Parse quick note and create card
+        function createCardFromQuickNote(input) {
+            if (!input.trim()) return;
+            
+            const lines = input.trim().split('\n');
+            if (lines.length === 0) return;
+            
+            // First line is always title
+            const title = lines[0].trim();
+            
+            // Rest is content (skip first line)
+            let contentLines = lines.slice(1);
+            
+            // Check if last line contains only tags (and has at least one #tag)
+            let extraTags = [];
+            if (contentLines.length > 0) {
+                const lastLine = contentLines[contentLines.length - 1].trim();
+                const hasOnlyTags = /^(#\w+\s*)+$/.test(lastLine); // Only #tags and whitespace
+                
+                if (hasOnlyTags && lastLine.includes('#')) {
+                    // Extract tags from last line and remove it from content
+                    const tagMatches = lastLine.match(/#\w+/g);
+                    if (tagMatches) {
+                        extraTags = tagMatches.map(t => t.substring(1));
+                    }
+                    contentLines = contentLines.slice(0, -1); // Remove last line from content
+                }
+            }
+            
+            // Join remaining content lines
+            const text = contentLines.join('\n').trim();
+            
+            // Find all #tags in title and content
+            let allTags = [...extraTags];
+            const allText = (title + ' ' + text);
+            const tagMatches = allText.match(/#\w+/g);
+            if (tagMatches) {
+                allTags.push(...tagMatches.map(t => t.substring(1)));
+            }
+            
+            // Remove duplicates and filter out empty tags
+            const uniqueTags = [...new Set(allTags)].filter(tag => tag.length > 0);
+            
+            // Use screen center as position (no mouse position for keyboard shortcut)
+            const viewport = cy.extent();
+            const centerX = (viewport.x1 + viewport.x2) / 2;
+            const centerY = (viewport.y1 + viewport.y2) / 2;
+            
+            const newId = `card${cardIdCounter++}`;
+            const newNode = cy.add({
+                data: {
+                    id: newId,
+                    title: title,
+                    text: text || title, // Use title as text if no content
+                    tags: uniqueTags,
+                    searchMatch: false
+                },
+                position: { x: centerX, y: centerY }
+            });
+            
+            newNode.grabify();
+            console.log(`Created quick note: "${title}" with ${uniqueTags.length} tags`);
         }
         
         // Edit card
         function editCard(node) {
+            const isManualCard = node.data('isManualCard') || false;
+            
+            // Use textarea popup for manual cards, old prompts for imported cards
+            if (isManualCard) {
+                editManualCard(node);
+            } else {
+                editImportedCard(node);
+            }
+        }
+        
+        // Edit manually created cards with textarea popup
+        function editManualCard(node) {
+            const currentText = node.data('text') || '';
+            const currentTags = node.data('tags') || [];
+            
+            // Create overlay for editing
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.7); z-index: 10000;
+                display: flex; justify-content: center; align-items: center;
+            `;
+            
+            const dialog = document.createElement('div');
+            dialog.style.cssText = `
+                background: white; padding: 20px; border-radius: 10px;
+                max-width: 500px; width: 90%; max-height: 80vh;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                box-sizing: border-box;
+            `;
+            
+            dialog.innerHTML = `
+                <h3 style="margin-top: 0; color: #333; font-size: 18px;">Redigera kort</h3>
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #555;">Text:</label>
+                    <textarea id="editCardText" 
+                        style="width: 100%; height: 200px; font-family: inherit; font-size: 14px; 
+                               border: 1px solid #ccc; border-radius: 4px; padding: 8px;
+                               box-sizing: border-box; resize: vertical;">${currentText}</textarea>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #555;">Tags (valfritt):</label>
+                    <input type="text" id="editCardTags" value="${currentTags.join(', ')}"
+                        style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;
+                               box-sizing: border-box; font-size: 14px;">
+                </div>
+                <div style="text-align: right;">
+                    <button id="cancelEdit" style="background: #666; color: white; border: none; 
+                                                 padding: 10px 20px; border-radius: 4px; margin-right: 10px;
+                                                 cursor: pointer; font-size: 14px;">Avbryt</button>
+                    <button id="saveEdit" style="background: #007acc; color: white; border: none; 
+                                                padding: 10px 20px; border-radius: 4px; cursor: pointer;
+                                                font-size: 14px;">Spara ändringar</button>
+                </div>
+                <div style="margin-top: 10px; font-size: 12px; color: #666;">
+                    <strong>Tips:</strong> Enter = ny rad, Ctrl+Enter = spara, Esc = avbryt
+                </div>
+            `;
+            
+            overlay.appendChild(dialog);
+            document.body.appendChild(overlay);
+            
+            // Focus on textarea and select all text
+            const textarea = document.getElementById('editCardText');
+            textarea.focus();
+            textarea.select();
+            
+            // Handle save
+            document.getElementById('saveEdit').onclick = function() {
+                const newText = textarea.value.trim();
+                if (!newText) {
+                    alert('Text krävs');
+                    return;
+                }
+                
+                const tagsInput = document.getElementById('editCardTags').value || '';
+                const newTags = tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag);
+                
+                // Update node data
+                node.data('text', newText);
+                node.data('tags', newTags);
+                
+                // Re-run search if active
+                const searchInput = document.getElementById('searchInput');
+                if (searchInput.value.trim()) {
+                    performSearch(searchInput.value);
+                }
+                
+                // Re-run tag filter if active
+                const tagFilterInput = document.getElementById('tagFilterInput');
+                if (tagFilterInput.value.trim()) {
+                    performTagFilter(tagFilterInput.value);
+                }
+                
+                document.body.removeChild(overlay);
+            };
+            
+            // Handle cancel
+            document.getElementById('cancelEdit').onclick = function() {
+                document.body.removeChild(overlay);
+            };
+            
+            // Handle keyboard shortcuts
+            textarea.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && e.ctrlKey) {
+                    document.getElementById('saveEdit').click();
+                }
+                else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    document.body.removeChild(overlay);
+                }
+            });
+        }
+        
+        // Edit imported cards with old prompt system
+        function editImportedCard(node) {
             const currentTitle = node.data('title') || '';
             const currentText = node.data('text');
             const currentTags = node.data('tags') || [];
@@ -2118,6 +3375,11 @@
             node.data('text', newText);
             node.data('tags', newTags);
             
+            refreshSearchAndFilter();
+        }
+        
+        // Helper function to refresh search and filter
+        function refreshSearchAndFilter() {
             // Re-run search if active
             const searchInput = document.getElementById('searchInput');
             if (searchInput.value.trim()) {
@@ -2138,18 +3400,49 @@
             // Auto-load from localStorage if data exists
             setTimeout(() => {
                 const savedData = localStorage.getItem('spatial-notes-board');
-                if (savedData && cy.nodes().length === 5) { // Only if we have dummy data (5 sample cards)
+                if (savedData) {
                     try {
                         const boardData = JSON.parse(savedData);
-                        if (boardData.cards && boardData.cards.length > 5) { // More than just dummy data
-                            loadBoard();
-                            console.log('Auto-loaded data from localStorage with viewport restored');
+                        if (boardData.cards && boardData.cards.length > 0) {
+                            // Silent load without alert
+                            cy.nodes().remove();
+                            boardData.cards.forEach(cardData => {
+                                const newNode = cy.add({
+                                    data: {
+                                        id: cardData.id,
+                                        title: cardData.title,
+                                        text: cardData.text,
+                                        tags: cardData.tags || [],
+                                        searchMatch: false,
+                                        export_timestamp: cardData.export_timestamp || null,
+                                        export_session: cardData.export_session || null,
+                                        export_source: cardData.export_source || null,
+                                        source_file: cardData.source_file || null,
+                                        page_number: cardData.page_number || null,
+                                        matched_terms: cardData.matched_terms || null,
+                                        card_index: cardData.card_index || null
+                                    },
+                                    position: cardData.position
+                                });
+                                newNode.grabify();
+                            });
+                            
+                            // Update card counter
+                            cardIdCounter = Math.max(...boardData.cards.map(c => parseInt(c.id.replace('card', '')) || 0)) + 1;
+                            
+                            // Restore viewport if saved
+                            if (boardData.viewport) {
+                                cy.zoom(boardData.viewport.zoom);
+                                cy.pan(boardData.viewport.pan);
+                            }
+                            
+                            console.log(`Auto-loaded ${boardData.cards.length} cards from localStorage`);
                         }
                     } catch (e) {
                         console.log('Error auto-loading:', e);
                     }
                 }
-            }, 500);
+            }, 100);
             
             const searchInput = document.getElementById('searchInput');
             let searchTimeout;
@@ -2165,6 +3458,32 @@
             searchInput.addEventListener('keyup', function() {
                 if (!this.value.trim()) {
                     clearSearch();
+                }
+            });
+            
+            // Handle Enter key to convert search matches to selected cards
+            searchInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    const searchMatches = cy.$('.search-match');
+                    console.log('Enter in search box, found matches by class:', searchMatches.length);
+                    if (searchMatches.length > 0) {
+                        // Convert search matches to selected cards
+                        searchMatches.select();
+                        console.log('Selected search matches, now clearing search visual');
+                        
+                        // Clear search visuals but keep cards selected
+                        searchActive = false;
+                        cy.nodes().removeClass('search-match');
+                        cy.nodes().data('searchMatch', false);
+                        // Don't unselect cards like clearSearch() does
+                        
+                        const searchInfo = document.getElementById('searchInfo');
+                        searchInfo.classList.remove('visible');
+                        
+                        // Blur the search input so keyboard shortcuts work
+                        this.blur();
+                        e.preventDefault();
+                    }
                 }
             });
             
@@ -2192,19 +3511,79 @@
                     return;
                 }
                 
-                // Ctrl+N för nytt kort
-                if (e.ctrlKey && e.key === 'n') {
+                // Enkla kortkommandon (bara om inte i input-fält)
+                
+                // N för ny anteckning (vår nya textarea-version)
+                if (e.key === 'n' && !e.ctrlKey && !e.altKey) {
                     e.preventDefault();
                     addNewCard();
                 }
                 
-                // Ctrl+S för spara
+                // C för kopiera markerade kort
+                if (e.key === 'c' && !e.ctrlKey && !e.altKey) {
+                    e.preventDefault();
+                    copySelectedCards();
+                }
+                
+                // (Delete-tangenten hanteras längre ner)
+                
+                // S för spara
+                if (e.key === 's' && !e.ctrlKey && !e.altKey) {
+                    e.preventDefault();
+                    saveBoard();
+                }
+                
+                // L för ladda sparad bräda
+                if (e.key === 'l' && !e.ctrlKey && !e.altKey) {
+                    e.preventDefault();
+                    loadBoard();
+                }
+                
+                // Ctrl+S för spara (behåll som backup)
                 if (e.ctrlKey && e.key === 's') {
                     e.preventDefault();
                     saveBoard();
                 }
                 
-                // Ctrl+O för ladda
+                // Ctrl+Z för undo - MINIMAL IMPLEMENTATION
+                if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (undoStack.length > 0) {
+                        const currentState = {
+                            cards: cy.nodes().map(node => ({
+                                id: node.id(),
+                                position: { x: node.position().x, y: node.position().y },
+                                selected: node.selected()
+                            }))
+                        };
+                        redoStack.push(currentState);
+                        
+                        const previousState = undoStack.pop();
+                        restoreState(previousState);
+                        console.log('Undo performed');
+                    }
+                }
+                
+                // Ctrl+Y för redo - MINIMAL IMPLEMENTATION  
+                if (e.ctrlKey && e.key === 'y') {
+                    e.preventDefault();
+                    if (redoStack.length > 0) {
+                        const currentState = {
+                            cards: cy.nodes().map(node => ({
+                                id: node.id(),
+                                position: { x: node.position().x, y: node.position().y },
+                                selected: node.selected()
+                            }))
+                        };
+                        undoStack.push(currentState);
+                        
+                        const nextState = redoStack.pop();
+                        restoreState(nextState);
+                        console.log('Redo performed');
+                    }
+                }
+                
+                // Ctrl+O för ladda (behåll som backup)
                 if (e.ctrlKey && e.key === 'o') {
                     e.preventDefault();
                     loadBoard();
@@ -2235,9 +3614,27 @@
                     cy.nodes().not('.pinned').select();
                 }
                 
+                // Enter för att konvertera sökträffar till markerade kort
+                if (e.key === 'Enter') {
+                    const searchMatches = cy.$('node[searchMatch="true"]');
+                    console.log('Enter pressed, found search matches:', searchMatches.length);
+                    if (searchMatches.length > 0) {
+                        // Konvertera sökträffar till riktigt markerade kort
+                        searchMatches.select();
+                        console.log('Selected search matches, now clearing search');
+                        // Rensa sökmarkering men behåll som markerade
+                        clearSearch();
+                        e.preventDefault();
+                    }
+                }
+                
                 // Escape för rensa sökning och avmarkera alla kort
                 if (e.key === 'Escape') {
-                    clearSearch(); // Rensar både sökning och avmarkerar kort
+                    if (cy.$('node[searchMatch="true"]').length > 0) {
+                        clearSearch(); // Rensa sökning
+                    } else {
+                        cy.nodes().unselect(); // Avmarkera alla kort
+                    }
                 }
                 
                 // L för Cola layout (hålla isär kort)
@@ -2282,8 +3679,8 @@
                     arrangeSelectedInRow();
                 }
                 
-                // C för cluster/grid (markerade kort)
-                if (e.key === 'c' && !e.ctrlKey && !e.altKey) {
+                // Q för kluster/grid (markerade kort)
+                if (e.key === 'q' && !e.ctrlKey && !e.altKey) {
                     e.preventDefault();
                     arrangeSelectedInGrid();
                 }
@@ -2317,6 +3714,7 @@
                     window.keysPressed.delete(e.key.toLowerCase());
                 }
             });
+            
         });
     </script>
 
