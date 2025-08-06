@@ -502,12 +502,52 @@
         // Sample data - strukturerade kort med titel och text
         const initialCards = [
             {
-                id: 'welcome-card',
+                id: 'welcome-1',
                 title: 'Välkommen till Spatial Notes! 📝',
-                text: 'Detta är en visuell anteckningsapp där du kan skriva och arrangera dina tankar i 2D-rum.\n\n⚠️ BETA-VERSION: Spara och ladda ner dina anteckningar efter varje pass!\n\n📁 SPARA/LADDA:\n• Spara lokalt: Ctrl+S (eller knappen "💾 Spara")\n• Ladda ner HTML: "📥 Ladda ner" (för backup)\n• Ladda fil: "📂 Ladda"\n\n⌨️ KORTKOMMANDON:\n• H = Horisontell rad\n• G+V = Vertikala kolumner\n• G+H = Packade rader\n• G+T = Top-aligned grid\n• C = Kopiera markerade kort\n• Ctrl+Z/Y = Ångra/Gör om\n\n💡 TIPS: Prova olika arrangerings-kommandon! Markera kort och tryck H eller G+V. Experimentera!',
-                tags: ['välkommen', 'instruktioner', 'hjälp'],
+                text: 'Visuell anteckningsapp där du organiserar tankar i 2D-rum.\n\n⚠️ BETA-VERSION: Allt funkar inte hundra. Spara ofta!\n\nHälsningar Ximon 👋\nMail: spatial-notes@ximon.se\n(räkna inte med svar 😉)',
+                tags: ['välkommen'],
+                x: -400,
+                y: -200
+            },
+            {
+                id: 'welcome-2', 
+                title: 'Grundläggande 🎯',
+                text: '✨ SKAPA KORT: Klicka "Nytt kort" eller dubbelklicka i tom yta\n🗑️ TA BORT: Välj kort → Delete-tangent\n👆 MARKERA: Klicka kort (håll Ctrl för flera) eller dra-markera\n🎯 FLYTTA: Dra kort eller hela brädet\n↩️ ÅNGRA/GÖR OM: Ctrl+Z / Ctrl+Y',
+                tags: ['grunderna'],
                 x: 0,
-                y: 0
+                y: -200
+            },
+            {
+                id: 'welcome-3',
+                title: 'Arrangera Kort 📐',
+                text: 'Markera flera kort, tryck sedan:\n\n• H = Horisontell rad\n• G+V = Vertikala kolumner (grid)\n• G+H = Packade horisontella rader\n• G+T = Top-aligned grid\n\nKorten arrangeras runt muspekaren! 🎯',
+                tags: ['arrangemang'],
+                x: 400,
+                y: -200
+            },
+            {
+                id: 'welcome-4',
+                title: 'Pinna Kort 📌',
+                text: '📌 PINNA: Högerklicka kort → "Pinna kort"\n🔓 UNPINNA: Högerklicka → "Ta bort pinning"\n\n✨ FÖRDELAR:\n• Pinnae kort stannar på plats\n• Kopiera kort och pinna originalen\n• Flytta kopior medan original är säkra\n• Perfekt för att organisera idéer!',
+                tags: ['pinning'],
+                x: -400,
+                y: 100
+            },
+            {
+                id: 'welcome-5',
+                title: 'Next Level: Kopiera + Arrangera 🚀',
+                text: '1. Markera kort du vill kopiera\n2. Tryck C för att kopiera\n3. Använd arrangeringskommandon:\n   • G+H = Horisontell rad\n   • G+V = Vertikala kolumner\n   • G+T = Top-aligned grid\n\nKopiorna arrangeras runt muspekaren! 🎯',
+                tags: ['kopiera', 'avancerat'],
+                x: 0,
+                y: 100
+            },
+            {
+                id: 'welcome-6',
+                title: 'The Shit: Sök + Arrangera 🔍',
+                text: '1. 🔍 SÖK: Skriv i sökrutan för att hitta kort\n2. 👀 MARKERA: Tryck Enter för att välja alla sökresultat\n3. 📐 ARRANGERA: Använd H, G+V, G+H, G+T för att arrangera\n4. 📋 KOPIERA: Eller tryck C och arrangera kopior!\n\nDu kan också söka → kopiera → arrangera. Epic! 🎉',
+                tags: ['sökning', 'expert'],
+                x: 400,
+                y: 100
             }
         ];
         
