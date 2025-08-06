@@ -984,32 +984,51 @@
         }
         
         function deleteSelectedCards() {
+            // Get all selected nodes (including search matches)
             const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
+            console.log(`Delete attempt on ${selectedNodes.length} selected nodes`);
             
-            // Filter out pinned cards - they cannot be deleted
-            const unpinnedNodes = selectedNodes.filter('node:not(.pinned)');
-            const pinnedNodes = selectedNodes.filter('node.pinned');
+            if (selectedNodes.length === 0) return;
             
+            // Double-check: Filter out ALL pinned cards using both class and data
+            const unpinnedNodes = selectedNodes.filter(function(node) {
+                const hasClass = node.hasClass('pinned');
+                const hasData = node.data('pinned');
+                const isPinned = hasClass || hasData;
+                
+                console.log(`Node ${node.id()}: hasClass=${hasClass}, hasData=${hasData}, isPinned=${isPinned}`);
+                return !isPinned;
+            });
+            
+            const pinnedNodes = selectedNodes.filter(function(node) {
+                const hasClass = node.hasClass('pinned');
+                const hasData = node.data('pinned');
+                return hasClass || hasData;
+            });
+            
+            console.log(`Unpinned to delete: ${unpinnedNodes.length}, Pinned to skip: ${pinnedNodes.length}`);
+            
+            // Only delete unpinned nodes
             if (unpinnedNodes.length > 0) {
                 const count = unpinnedNodes.length;
                 unpinnedNodes.remove();
-                console.log(`Deleted ${count} cards`);
+                console.log(`Successfully deleted ${count} unpinned cards`);
                 updateSelectionInfo(); // Update after deletion
             }
             
             // Show message if user tried to delete pinned cards
             if (pinnedNodes.length > 0) {
                 const pinnedCount = pinnedNodes.length;
-                console.log(`Skipped ${pinnedCount} pinned cards - unpin them first to delete`);
+                console.log(`PROTECTED: Skipped ${pinnedCount} pinned cards - unpin them first to delete`);
                 
                 // Show a brief visual feedback
                 const searchInfo = document.getElementById('searchInfo');
                 if (searchInfo) {
-                    searchInfo.textContent = `${pinnedCount} pinnade kort hoppades över - ta bort pinning först`;
+                    searchInfo.textContent = `🔒 ${pinnedCount} pinnade kort skyddade - ta bort pinning först`;
                     searchInfo.classList.add('visible');
                     setTimeout(() => {
                         searchInfo.classList.remove('visible');
-                    }, 3000);
+                    }, 4000);
                 }
             }
         }
