@@ -574,8 +574,8 @@
                         card_index: card.card_index || null
                     },
                     position: {
-                        x: 200 + (index % 3) * 300,
-                        y: 200 + Math.floor(index / 3) * 200
+                        x: card.x || (200 + (index % 3) * 300),
+                        y: card.y || (200 + Math.floor(index / 3) * 200)
                     }
                 })),
                 
