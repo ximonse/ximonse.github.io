@@ -990,7 +990,7 @@
             
             if (selectedNodes.length === 0) return;
             
-            // Double-check: Filter out ALL pinned cards using both class and data
+            // Filter out ALL pinned cards using proper filtering
             const unpinnedNodes = selectedNodes.filter(function(node) {
                 const hasClass = node.hasClass('pinned');
                 const hasData = node.data('pinned');
