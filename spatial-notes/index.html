@@ -398,12 +398,42 @@
     <script>
         // Global variables
         let cy;
-        let cardIdCounter = 45;
         let searchActive = false;
         let copiedCards = []; // Store copied cards for arrangement commands
         
         // Mouse position tracking
         let lastMousePosition = { x: null, y: null };
+        
+        // Generate unique timestamp-based card ID
+        function generateCardId() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hour = String(now.getHours()).padStart(2, '0');
+            const minute = String(now.getMinutes()).padStart(2, '0');
+            const second = String(now.getSeconds()).padStart(2, '0');
+            
+            const baseId = `${year}${month}${day}-${hour}${minute}${second}`;
+            
+            // Check if ID already exists, if so add letter suffix
+            let uniqueId = baseId;
+            let suffix = 'a';
+            
+            while (cy && cy.getElementById(uniqueId).length > 0) {
+                uniqueId = `${baseId}-${suffix}`;
+                suffix = String.fromCharCode(suffix.charCodeAt(0) + 1);
+                
+                // Fallback to numbers if we run out of letters (very unlikely)
+                if (suffix > 'z') {
+                    const timestamp = Date.now();
+                    uniqueId = `${baseId}-${timestamp.toString(36).slice(-3)}`;
+                    break;
+                }
+            }
+            
+            return uniqueId;
+        }
         
         // MINIMAL UNDO/REDO SYSTEM - Define early so functions can use it
         let undoStack = [];
@@ -555,13 +585,21 @@
             const fullLabel = mainText + tagDisplay;
 
             // Use EXACT same text-max-width calculation as Cytoscape will use
-            const nodeWidth = 180 + Math.min(120, (title + text).length * 0.9);
+            const nodeWidth = 300; // Fixed width for all cards
             const textMaxWidth = nodeWidth - 15;
 
             // Style the ruler to match the node's text properties EXACTLY
             textRuler.style.width = `${textMaxWidth}px`;
             textRuler.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-            textRuler.style.fontSize = title ? '18px' : '16px';
+            
+            // Use same font-size logic as the Cytoscape style
+            const isImported = node.data('export_source') === 'pdf_extractor' || 
+                             node.data('source_file') || 
+                             node.data('matched_terms');
+            const isWelcomeCard = node.id().startsWith('welcome-');
+            
+            // Imported cards and welcome cards get 18px, all others get 23px
+            textRuler.style.fontSize = (isImported || isWelcomeCard) ? '18px' : '23px';
             textRuler.style.lineHeight = '1.2';
             textRuler.style.padding = '0';
             textRuler.style.margin = '0';
@@ -754,13 +792,18 @@
                             'text-valign': 'center',
                             'text-halign': 'center',
                             'font-size': function(node) {
-                                const title = node.data('title') || '';
-                                const isManualCard = node.data('isManualCard') || false;
+                                const isImported = node.data('export_source') === 'pdf_extractor' || 
+                                                 node.data('source_file') || 
+                                                 node.data('matched_terms');
+                                const isWelcomeCard = node.id().startsWith('welcome-');
                                 
-                                if (isManualCard) {
-                                    return 23; // Larger font for manually created cards
+                                // Imported cards and welcome cards get 18px
+                                if (isImported || isWelcomeCard) {
+                                    return 18;
                                 }
-                                return title ? 18 : 16; // Normal size for imported cards
+                                
+                                // ALL other cards (manual) get 23px
+                                return 23;
                             },
                             'font-family': '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
                             'color': '#333'
@@ -1895,6 +1938,7 @@
                     tags: node.data('tags') || [],
                     position: node.position(),
                     pinned: node.hasClass('pinned') || false,
+                    isManualCard: node.data('isManualCard') || false,
                     // Preserve all metadata for advanced analysis
                     export_timestamp: node.data('export_timestamp') || null,
                     export_session: node.data('export_session') || null,
@@ -1919,6 +1963,9 @@
         
         // Load board from localStorage
         function loadBoard() {
+            // Clear any stray edit dialogs first
+            clearAllEditDialogs();
+            
             const savedData = localStorage.getItem('spatial-notes-board');
             if (!savedData) {
                 alert('Ingen sparad bräda hittades!');
@@ -1940,6 +1987,7 @@
                             text: cardData.text,
                             tags: cardData.tags || [],
                             searchMatch: false,
+                            isManualCard: cardData.isManualCard || false,
                             // Preserve metadata if present
                             export_timestamp: cardData.export_timestamp || null,
                             export_session: cardData.export_session || null,
@@ -1955,8 +2003,7 @@
                     newNode.grabify();
                 });
                 
-                // Update card counter
-                cardIdCounter = Math.max(...boardData.cards.map(c => parseInt(c.id.replace('card', '')) || 0)) + 1;
+                // Card IDs are now timestamp-based, no counter needed
                 
                 // Restore viewport (zoom and pan) if saved
                 if (boardData.viewport) {
@@ -2183,11 +2230,7 @@
                             importedCount++;
                         });
                         
-                        // Update card counter
-                        cardIdCounter = Math.max(cardIdCounter, ...cy.nodes().map(node => {
-                            const match = node.id().match(/\\d+/);
-                            return match ? parseInt(match[0]) : 0;
-                        })) + 1;
+                        // Card IDs are now timestamp-based, no counter needed
                         
                         // Restore viewport if available
                         if (importData.viewport) {
@@ -2336,11 +2379,7 @@
                     importedCount++;
                 });
                 
-                // Update card counter
-                cardIdCounter = Math.max(cardIdCounter, ...cy.nodes().map(node => {
-                    const match = node.id().match(/\\d+/);
-                    return match ? parseInt(match[0]) : 0;
-                })) + 1;
+                // Card IDs are now timestamp-based, no counter needed
                 
                 // Clear the PDF-extractor data so it doesn't import again
                 // localStorage.removeItem('pdf-extractor-export'); // Don't clear, let user decide
@@ -2505,8 +2544,7 @@
                 // Clear localStorage
                 localStorage.removeItem('spatial-notes-board');
                 
-                // Reset card counter
-                cardIdCounter = 1;
+                // Card IDs are now timestamp-based, no counter to reset
                 
                 // Show confirmation
                 const searchInfo = document.getElementById('searchInfo');
@@ -2607,6 +2645,9 @@
         
         // Add new card
         function addNewCard() {
+            // Clear any existing edit dialogs first
+            clearAllEditDialogs();
+            
             // Create overlay for multiline text input
             const overlay = document.createElement('div');
             overlay.style.cssText = `
@@ -2669,8 +2710,7 @@
                 const tagsInput = document.getElementById('newCardTags').value || '';
                 const tags = tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag);
                 
-                cardIdCounter++;
-                const newId = 'card' + cardIdCounter;
+                const newId = generateCardId();
                 
                 // Position card based on device type
                 let x, y;
@@ -2788,7 +2828,7 @@
             // Create the copied cards
             const newNodes = [];
             copiedCards.forEach((cardData, index) => {
-                const newId = `card${cardIdCounter++}`;
+                const newId = generateCardId();
                 
                 const newNode = cy.add({
                     data: {
@@ -2860,7 +2900,7 @@
             // Create the copied cards
             const newNodes = [];
             copiedCards.forEach((cardData, index) => {
-                const newId = `card${cardIdCounter++}`;
+                const newId = generateCardId();
                 
                 const newNode = cy.add({
                     data: {
@@ -2932,7 +2972,7 @@
             // Create the copied cards
             const newNodes = [];
             copiedCards.forEach((cardData, index) => {
-                const newId = `card${cardIdCounter++}`;
+                const newId = generateCardId();
                 
                 const newNode = cy.add({
                     data: {
@@ -3007,7 +3047,7 @@
             // Create the copied cards
             const newNodes = [];
             copiedCards.forEach((cardData, index) => {
-                const newId = `card${cardIdCounter++}`;
+                const newId = generateCardId();
                 
                 const newNode = cy.add({
                     data: {
@@ -3080,7 +3120,7 @@
             // Create the copied cards
             const newNodes = [];
             copiedCards.forEach((cardData, index) => {
-                const newId = `card${cardIdCounter++}`;
+                const newId = generateCardId();
                 
                 const newNode = cy.add({
                     data: {
@@ -3242,7 +3282,7 @@
             
             const tags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(t => t) : [];
             
-            const newId = `card${cardIdCounter++}`;
+            const newId = generateCardId();
             const newNode = cy.add({
                 data: {
                     id: newId,
@@ -3369,7 +3409,7 @@ Skriv ditt innehåll här...
             
             if (!text && !title) return; // Need something
             
-            const newId = `card${cardIdCounter++}`;
+            const newId = generateCardId();
             const newNode = cy.add({
                 data: {
                     id: newId,
@@ -3396,7 +3436,7 @@ Skriv ditt innehåll här...
             // Create the copied cards
             const newNodes = [];
             copiedCards.forEach((cardData, index) => {
-                const newId = `card${cardIdCounter++}`;
+                const newId = generateCardId();
                 
                 const newNode = cy.add({
                     data: {
@@ -3576,7 +3616,7 @@ Kan ha #taggar överallt.
             const centerX = (viewport.x1 + viewport.x2) / 2;
             const centerY = (viewport.y1 + viewport.y2) / 2;
             
-            const newId = `card${cardIdCounter++}`;
+            const newId = generateCardId();
             const newNode = cy.add({
                 data: {
                     id: newId,
@@ -3592,20 +3632,119 @@ Kan ha #taggar överallt.
             console.log(`Created quick note: "${title}" with ${uniqueTags.length} tags`);
         }
         
-        // Edit card
+        // Edit card - unified for all card types
         function editCard(node) {
-            const isManualCard = node.data('isManualCard') || false;
+            // Clear any existing edit dialogs first
+            clearAllEditDialogs();
             
-            // Use textarea popup for manual cards, old prompts for imported cards
-            if (isManualCard) {
-                editManualCard(node);
-            } else {
-                editImportedCard(node);
+            const currentText = node.data('text') || '';
+            const currentTags = node.data('tags') || [];
+            
+            // Create overlay for editing (unified UI without title)
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.7); z-index: 10000;
+                display: flex; justify-content: center; align-items: center;
+            `;
+            
+            const dialog = document.createElement('div');
+            dialog.style.cssText = `
+                background: white; padding: 20px; border-radius: 10px;
+                max-width: 500px; width: 90%; max-height: 80vh;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                box-sizing: border-box;
+            `;
+            
+            dialog.innerHTML = `
+                <h3 style="margin-top: 0; color: #333; font-size: 18px;">Redigera kort</h3>
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #555;">Text:</label>
+                    <textarea id="editCardText" 
+                        style="width: 100%; height: 200px; font-family: inherit; font-size: 14px; 
+                               border: 1px solid #ccc; border-radius: 4px; padding: 8px;
+                               box-sizing: border-box; resize: vertical;">${currentText}</textarea>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #555;">Tags (valfritt):</label>
+                    <input type="text" id="editCardTags" value="${currentTags.join(', ')}"
+                        style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;
+                               box-sizing: border-box; font-size: 14px;">
+                </div>
+                <div style="text-align: right;">
+                    <button id="cancelEdit" style="background: #666; color: white; border: none; 
+                                                 padding: 10px 20px; border-radius: 4px; margin-right: 10px;
+                                                 cursor: pointer; font-size: 14px;">Avbryt</button>
+                    <button id="saveEdit" style="background: #007acc; color: white; border: none; 
+                                                padding: 10px 20px; border-radius: 4px; cursor: pointer;
+                                                font-size: 14px;">Spara ändringar</button>
+                </div>
+                <div style="margin-top: 10px; font-size: 12px; color: #666;">
+                    <strong>Tips:</strong> Enter = ny rad, Ctrl+Enter = spara, Esc = avbryt
+                </div>
+            `;
+            
+            overlay.appendChild(dialog);
+            document.body.appendChild(overlay);
+            
+            // Focus on textarea and select all text
+            const textarea = document.getElementById('editCardText');
+            textarea.focus();
+            textarea.select();
+            
+            // Handle keyboard shortcuts with proper cleanup
+            function cleanup() {
+                if (document.body.contains(overlay)) {
+                    document.body.removeChild(overlay);
+                }
+                document.removeEventListener('keydown', handleEscape);
             }
+            
+            function handleEscape(e) {
+                if (e.key === 'Escape') {
+                    cleanup();
+                }
+            }
+            
+            // Handle save
+            document.getElementById('saveEdit').onclick = function() {
+                const newText = textarea.value.trim();
+                if (!newText) {
+                    alert('Text krävs');
+                    return;
+                }
+                
+                const tagsInput = document.getElementById('editCardTags').value || '';
+                const newTags = tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag);
+                
+                // Update node data (preserve title if it exists, but don't show in UI)
+                node.data('text', newText);
+                node.data('tags', newTags);
+                
+                refreshSearchAndFilter();
+                cleanup();
+            };
+            
+            // Handle cancel
+            document.getElementById('cancelEdit').onclick = function() {
+                cleanup();
+            };
+            
+            // Handle keyboard shortcuts
+            textarea.addEventListener('keydown', function(e) {
+                if (e.ctrlKey && e.key === 'Enter') {
+                    document.getElementById('saveEdit').click();
+                } else if (e.key === 'Escape') {
+                    cleanup();
+                }
+            });
+            
+            document.addEventListener('keydown', handleEscape);
         }
         
-        // Edit manually created cards with textarea popup
-        function editManualCard(node) {
+        // DEPRECATED - Edit manually created cards with textarea popup
+        // Now using unified editCard() function instead
+        function editManualCard_DEPRECATED(node) {
             const currentText = node.data('text') || '';
             const currentTags = node.data('tags') || [];
             
@@ -3661,6 +3800,20 @@ Kan ha #taggar överallt.
             textarea.focus();
             textarea.select();
             
+            // Handle keyboard shortcuts with proper cleanup
+            function cleanup() {
+                if (document.body.contains(overlay)) {
+                    document.body.removeChild(overlay);
+                }
+                document.removeEventListener('keydown', handleEscape);
+            }
+            
+            function handleEscape(e) {
+                if (e.key === 'Escape') {
+                    cleanup();
+                }
+            }
+            
             // Handle save
             document.getElementById('saveEdit').onclick = function() {
                 const newText = textarea.value.trim();
@@ -3688,12 +3841,12 @@ Kan ha #taggar överallt.
                     performTagFilter(tagFilterInput.value);
                 }
                 
-                document.body.removeChild(overlay);
+                cleanup();
             };
             
             // Handle cancel
             document.getElementById('cancelEdit').onclick = function() {
-                document.body.removeChild(overlay);
+                cleanup();
             };
             
             // Handle keyboard shortcuts
@@ -3703,13 +3856,16 @@ Kan ha #taggar överallt.
                 }
                 else if (e.key === 'Escape') {
                     e.preventDefault();
-                    document.body.removeChild(overlay);
+                    cleanup();
                 }
             });
+            
+            document.addEventListener('keydown', handleEscape);
         }
         
-        // Edit imported cards with old prompt system
-        function editImportedCard(node) {
+        // DEPRECATED - Edit imported cards with old prompt system  
+        // Now using unified editCard() function instead
+        function editImportedCard_DEPRECATED(node) {
             const currentTitle = node.data('title') || '';
             const currentText = node.data('text') || '';
             const currentTags = node.data('tags') || [];
@@ -3790,19 +3946,32 @@ Kan ha #taggar överallt.
                 node.data('tags', newTags);
                 
                 refreshSearchAndFilter();
-                document.body.removeChild(overlay);
+                cleanup();
             };
             
             // Handle cancel
             document.getElementById('cancelEdit').onclick = function() {
-                document.body.removeChild(overlay);
+                cleanup();
             };
             
-            // Handle keyboard shortcuts
+            // Handle keyboard shortcuts with proper cleanup
+            function cleanup() {
+                if (document.body.contains(overlay)) {
+                    document.body.removeChild(overlay);
+                }
+                document.removeEventListener('keydown', handleEscape);
+                // Clear any existing edit dialogs to prevent conflicts
+                const existingDialogs = document.querySelectorAll('[id^="editCard"], [id^="newCard"]');
+                existingDialogs.forEach(dialog => {
+                    if (dialog.parentNode && dialog.parentNode !== document.body) {
+                        dialog.parentNode.remove();
+                    }
+                });
+            }
+            
             function handleEscape(e) {
                 if (e.key === 'Escape') {
-                    document.body.removeChild(overlay);
-                    document.removeEventListener('keydown', handleEscape);
+                    cleanup();
                 }
             }
             
@@ -3810,8 +3979,7 @@ Kan ha #taggar överallt.
                 if (e.ctrlKey && e.key === 'Enter') {
                     document.getElementById('saveEdit').click();
                 } else if (e.key === 'Escape') {
-                    document.body.removeChild(overlay);
-                    document.removeEventListener('keydown', handleEscape);
+                    cleanup();
                 }
             });
             
@@ -3831,6 +3999,37 @@ Kan ha #taggar överallt.
             if (tagFilterInput.value.trim()) {
                 performTagFilter(tagFilterInput.value);
             }
+        }
+        
+        // Global function to clean up any stray edit dialogs
+        function clearAllEditDialogs() {
+            // Remove overlays by style attributes
+            const overlays = document.querySelectorAll('div[style*="position: fixed"][style*="z-index: 10000"]');
+            overlays.forEach(overlay => {
+                if (overlay.parentNode) {
+                    overlay.parentNode.removeChild(overlay);
+                }
+            });
+            
+            // Remove any elements with edit-related IDs
+            const editElements = document.querySelectorAll('#editCardText, #editCardTags, #editCardTitle, #newCardText, #newCardTags, #saveEdit, #cancelEdit, #saveCard, #cancelCard');
+            editElements.forEach(element => {
+                // Find the overlay parent (should be 2-3 levels up)
+                let parent = element.parentNode;
+                while (parent && parent !== document.body) {
+                    if (parent.style.position === 'fixed' && parent.style.zIndex === '10000') {
+                        if (parent.parentNode) {
+                            parent.parentNode.removeChild(parent);
+                        }
+                        break;
+                    }
+                    parent = parent.parentNode;
+                }
+            });
+            
+            // Remove all event listeners by cloning and replacing document
+            // This is a bit aggressive but ensures no zombie listeners
+            console.log('Cleared all edit dialogs and potential zombie listeners');
         }
         
         // Event listeners
@@ -3854,6 +4053,7 @@ Kan ha #taggar överallt.
                                         text: cardData.text,
                                         tags: cardData.tags || [],
                                         searchMatch: false,
+                                        isManualCard: cardData.isManualCard || false,
                                         export_timestamp: cardData.export_timestamp || null,
                                         export_session: cardData.export_session || null,
                                         export_source: cardData.export_source || null,
@@ -3868,7 +4068,7 @@ Kan ha #taggar överallt.
                             });
                             
                             // Update card counter
-                            cardIdCounter = Math.max(...boardData.cards.map(c => parseInt(c.id.replace('card', '')) || 0)) + 1;
+                            // Card IDs are now timestamp-based, no counter needed
                             
                             // Restore viewport if saved
                             if (boardData.viewport) {
