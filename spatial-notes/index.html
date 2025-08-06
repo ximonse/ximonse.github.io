@@ -275,6 +275,47 @@
                 display: flex !important;
             }
         }
+        
+        /* Desktop zoom-out button */
+        .desktop-zoom-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: #007acc;
+            color: white;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            z-index: 1000;
+            transition: all 0.2s ease;
+        }
+        
+        .desktop-zoom-btn:hover {
+            background: #005999;
+            transform: scale(1.1);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.3);
+        }
+        
+        .desktop-zoom-btn:active {
+            transform: scale(0.95);
+        }
+        
+        /* Hide desktop button on mobile (where mobile-controls are shown) */
+        @media (hover: none) and (pointer: coarse) {
+            .desktop-zoom-btn {
+                display: none !important;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .desktop-zoom-btn {
+                display: none !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -316,6 +357,29 @@
                 <button onclick="clearBoard()">🗑️ Rensa</button>
             </div>
         </div>
+        
+        <!-- Keyboard commands dropdown -->
+        <div class="menu-dropdown">
+            <button class="menu-button">
+                ⌨️
+                <span>▼</span>
+            </button>
+            <div class="dropdown-content">
+                <button onclick="executeCommand('H')">H</button>
+                <button onclick="executeCommand('G+V')">G+V</button>
+                <button onclick="executeCommand('G+H')">G+H</button>
+                <button onclick="executeCommand('G+T')">G+T</button>
+                <button onclick="executeCommand('Q')">Q</button>
+                <button onclick="executeCommand('C')">C</button>
+                <button onclick="executeCommand('Pin')">📌 Pin</button>
+                <button onclick="executeCommand('Unpin')">🔓 Unpin</button>
+                <button onclick="executeCommand('Delete')">🗑️ Delete</button>
+                <button onclick="executeCommand('Ctrl+Z')">Ctrl+Z</button>
+                <button onclick="executeCommand('Ctrl+Y')">Ctrl+Y</button>
+                <button onclick="executeCommand('Ctrl+A')">Ctrl+A</button>
+                <button onclick="executeCommand('Ctrl+S')">Ctrl+S</button>
+            </div>
+        </div>
     </div>
     
     <div class="search-results-info" id="searchInfo"></div>
@@ -323,6 +387,9 @@
     
     <!-- The invisible ruler -->
     <div id="text-ruler"></div>
+    
+    <!-- Desktop zoom-out button -->
+    <button class="desktop-zoom-btn" onclick="zoomOutToCenter()" title="Zooma ut för att visa alla kort">🔍</button>
     
     <div id="cy"></div>
 
@@ -348,8 +415,10 @@
                     timestamp: Date.now(),
                     cards: cy.nodes().map(node => ({
                         id: node.id(),
+                        data: node.data(),
                         position: { x: node.position().x, y: node.position().y },
-                        selected: node.selected()
+                        selected: node.selected(),
+                        classes: node.classes().join(' ')
                     }))
                 };
                 
@@ -369,15 +438,27 @@
             if (!state || !state.cards) return false;
             
             try {
-                cy.nodes().unselect();
+                // Clear current state
+                cy.nodes().remove();
                 
+                // Recreate all cards from saved state
                 state.cards.forEach(cardState => {
-                    const node = cy.getElementById(cardState.id);
-                    if (node.length > 0) {
-                        node.position(cardState.position);
-                        if (cardState.selected) {
-                            node.select();
-                        }
+                    const newNode = cy.add({
+                        data: cardState.data,
+                        position: cardState.position
+                    });
+                    
+                    // Restore classes (like 'pinned')
+                    if (cardState.classes) {
+                        newNode.addClass(cardState.classes);
+                    }
+                    
+                    // Make draggable
+                    newNode.grabify();
+                    
+                    // Restore selection
+                    if (cardState.selected) {
+                        newNode.select();
                     }
                 });
                 
@@ -741,6 +822,11 @@
             // Make nodes draggable
             cy.nodes().grabify();
             
+            // Save state before dragging starts (for undo support)
+            cy.on('grab', 'node', function(evt) {
+                saveState();
+            });
+            
             // Double-click to edit card
             cy.on('dblclick', 'node', function(evt) {
                 editCard(evt.target);
@@ -990,6 +1076,9 @@
             console.log(`Delete attempt on ${selectedNodes.length} selected nodes`);
             
             if (selectedNodes.length === 0) return;
+            
+            // Save state for undo before deleting
+            saveState();
             
             // Filter out ALL pinned cards using proper filtering
             const unpinnedNodes = selectedNodes.filter(function(node) {
@@ -2231,6 +2320,114 @@
         }
         
         // Clear board completely
+        function clusterSelectedCards() {
+            const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
+            if (selectedNodes.length < 2) return;
+            
+            // Save state for undo
+            saveState();
+            
+            // Get center position (mouse or screen center)
+            const arrangePos = getArrangementPosition();
+            const centerX = arrangePos.x;
+            const centerY = arrangePos.y;
+            
+            // Small cluster radius
+            const radius = 50;
+            
+            // Arrange in tight circle
+            selectedNodes.forEach((node, index) => {
+                const angle = (index / selectedNodes.length) * 2 * Math.PI;
+                const x = centerX + Math.cos(angle) * radius;
+                const y = centerY + Math.sin(angle) * radius;
+                
+                node.animate({
+                    position: { x: x, y: y }
+                }, {
+                    duration: 300,
+                    easing: 'ease-out'
+                });
+            });
+            
+            console.log(`Q: Klustrade ${selectedNodes.length} kort`);
+        }
+
+        function executeCommand(command) {
+            const selectedNodes = cy.$('node:selected');
+            
+            switch(command) {
+                case 'H':
+                    arrangeSelectedInRow();
+                    break;
+                case 'G+V':
+                    arrangeSelectedGridVerticalColumns();
+                    break;
+                case 'G+H':
+                    arrangeSelectedGridHorizontalPacked();
+                    break;
+                case 'G+T':
+                    arrangeSelectedGridTopAligned();
+                    break;
+                case 'Q':
+                    clusterSelectedCards();
+                    break;
+                case 'C':
+                    copySelectedCards();
+                    break;
+                case 'Pin':
+                    selectedNodes.forEach(node => {
+                        pinCard(node);
+                    });
+                    break;
+                case 'Unpin':
+                    selectedNodes.forEach(node => {
+                        unpinCard(node);
+                    });
+                    break;
+                case 'Delete':
+                    deleteSelectedCards();
+                    break;
+                case 'Ctrl+Z':
+                    // Trigger undo
+                    if (undoStack.length > 0) {
+                        const currentState = {
+                            cards: cy.nodes().map(node => ({
+                                id: node.id(),
+                                position: { x: node.position().x, y: node.position().y },
+                                selected: node.selected()
+                            }))
+                        };
+                        redoStack.push(currentState);
+                        
+                        const previousState = undoStack.pop();
+                        restoreState(previousState);
+                    }
+                    break;
+                case 'Ctrl+Y':
+                    // Trigger redo
+                    if (redoStack.length > 0) {
+                        const currentState = {
+                            cards: cy.nodes().map(node => ({
+                                id: node.id(),
+                                position: { x: node.position().x, y: node.position().y },
+                                selected: node.selected()
+                            }))
+                        };
+                        undoStack.push(currentState);
+                        
+                        const nextState = redoStack.pop();
+                        restoreState(nextState);
+                    }
+                    break;
+                case 'Ctrl+A':
+                    cy.nodes().not('.pinned').select();
+                    break;
+                case 'Ctrl+S':
+                    saveBoard();
+                    break;
+            }
+        }
+
         function debugDumpPositions() {
             console.log('\n=== KORT POSITIONER DEBUG ===');
             cy.nodes().forEach(node => {
