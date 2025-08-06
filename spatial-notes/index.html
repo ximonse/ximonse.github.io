@@ -497,15 +497,27 @@
                 return { x: modelX, y: modelY };
             }
             
-            // Fallback to screen center
-            const viewport = cy.extent();
-            console.log('Using fallback screen center:', {
-                x: (viewport.x1 + viewport.x2) / 2,
-                y: (viewport.y1 + viewport.y2) / 2
+            // Fallback to visible viewport center (better for mobile)
+            const viewportCenter = cy.pan();
+            const zoom = cy.zoom();
+            const containerWidth = cy.width();
+            const containerHeight = cy.height();
+            
+            // Calculate center of visible viewport in model coordinates  
+            const visibleCenterX = (-viewportCenter.x + containerWidth/2) / zoom;
+            const visibleCenterY = (-viewportCenter.y + containerHeight/2) / zoom;
+            
+            console.log('Using visible viewport center:', {
+                x: visibleCenterX,
+                y: visibleCenterY,
+                pan: viewportCenter,
+                zoom: zoom,
+                container: {w: containerWidth, h: containerHeight}
             });
+            
             return {
-                x: (viewport.x1 + viewport.x2) / 2,
-                y: (viewport.y1 + viewport.y2) / 2
+                x: visibleCenterX,
+                y: visibleCenterY
             };
         }
         
@@ -869,6 +881,26 @@
             
             // Starta med panorering på, så att zoom fungerar direkt
             cy.panningEnabled(true);
+            
+            // Auto-center on mobile devices after initial load
+            if (window.matchMedia && window.matchMedia("(max-width: 768px)").matches) {
+                setTimeout(() => {
+                    cy.fit(null, 50); // Fit all nodes with 50px padding
+                    cy.center(); // Center the view
+                    console.log('Mobile auto-center applied');
+                }, 500); // Small delay to ensure nodes are rendered
+            }
+            
+            // Re-center when orientation changes on mobile
+            window.addEventListener('orientationchange', function() {
+                if (window.matchMedia && window.matchMedia("(max-width: 768px)").matches) {
+                    setTimeout(() => {
+                        cy.fit(null, 50);
+                        cy.center();
+                        console.log('Mobile orientation-change auto-center applied');
+                    }, 300);
+                }
+            });
 
             // Hantera Ctrl+drag för att växla mellan panorering och markeringsruta
             cy.on('mousedown', function(evt) {
