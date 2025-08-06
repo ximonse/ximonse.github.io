@@ -3711,27 +3711,111 @@ Kan ha #taggar överallt.
         // Edit imported cards with old prompt system
         function editImportedCard(node) {
             const currentTitle = node.data('title') || '';
-            const currentText = node.data('text');
+            const currentText = node.data('text') || '';
             const currentTags = node.data('tags') || [];
             
-            const newTitle = prompt('Titel (valfritt):', currentTitle);
-            if (newTitle === null) return; // User cancelled
+            // Create overlay for editing (same as addNewCard and editManualCard)
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.7); z-index: 10000;
+                display: flex; justify-content: center; align-items: center;
+            `;
             
-            const newText = prompt('Text:', currentText);
-            if (newText === null) return; // User cancelled
+            const dialog = document.createElement('div');
+            dialog.style.cssText = `
+                background: white; padding: 20px; border-radius: 10px;
+                max-width: 500px; width: 90%; max-height: 80vh;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                box-sizing: border-box;
+            `;
             
-            const currentTagsString = currentTags.join(', ');
-            const newTagsInput = prompt('Tags (kommaseparerade):', currentTagsString);
-            if (newTagsInput === null) return; // User cancelled
+            dialog.innerHTML = `
+                <h3 style="margin-top: 0; color: #333; font-size: 18px;">Redigera kort</h3>
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #555;">Titel (valfritt):</label>
+                    <input type="text" id="editCardTitle" value="${currentTitle}"
+                        style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;
+                               box-sizing: border-box; font-size: 14px; margin-bottom: 10px;">
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #555;">Text:</label>
+                    <textarea id="editCardText" 
+                        style="width: 100%; height: 200px; font-family: inherit; font-size: 14px; 
+                               border: 1px solid #ccc; border-radius: 4px; padding: 8px;
+                               box-sizing: border-box; resize: vertical;">${currentText}</textarea>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #555;">Tags (valfritt):</label>
+                    <input type="text" id="editCardTags" value="${currentTags.join(', ')}"
+                        style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;
+                               box-sizing: border-box; font-size: 14px;">
+                </div>
+                <div style="text-align: right;">
+                    <button id="cancelEdit" style="background: #666; color: white; border: none; 
+                                                 padding: 10px 20px; border-radius: 4px; margin-right: 10px;
+                                                 cursor: pointer; font-size: 14px;">Avbryt</button>
+                    <button id="saveEdit" style="background: #007acc; color: white; border: none; 
+                                                padding: 10px 20px; border-radius: 4px; cursor: pointer;
+                                                font-size: 14px;">Spara ändringar</button>
+                </div>
+                <div style="margin-top: 10px; font-size: 12px; color: #666;">
+                    <strong>Tips:</strong> Enter = ny rad, Ctrl+Enter = spara, Esc = avbryt
+                </div>
+            `;
             
-            const newTags = newTagsInput.split(',').map(tag => tag.trim()).filter(tag => tag);
+            overlay.appendChild(dialog);
+            document.body.appendChild(overlay);
             
-            // Update node data
-            node.data('title', newTitle);
-            node.data('text', newText);
-            node.data('tags', newTags);
+            // Focus on textarea and select all text
+            const textarea = document.getElementById('editCardText');
+            textarea.focus();
+            textarea.select();
             
-            refreshSearchAndFilter();
+            // Handle save
+            document.getElementById('saveEdit').onclick = function() {
+                const newTitle = document.getElementById('editCardTitle').value.trim();
+                const newText = textarea.value.trim();
+                if (!newText) {
+                    alert('Text krävs');
+                    return;
+                }
+                
+                const tagsInput = document.getElementById('editCardTags').value || '';
+                const newTags = tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag);
+                
+                // Update node data
+                node.data('title', newTitle);
+                node.data('text', newText);
+                node.data('tags', newTags);
+                
+                refreshSearchAndFilter();
+                document.body.removeChild(overlay);
+            };
+            
+            // Handle cancel
+            document.getElementById('cancelEdit').onclick = function() {
+                document.body.removeChild(overlay);
+            };
+            
+            // Handle keyboard shortcuts
+            function handleEscape(e) {
+                if (e.key === 'Escape') {
+                    document.body.removeChild(overlay);
+                    document.removeEventListener('keydown', handleEscape);
+                }
+            }
+            
+            textarea.addEventListener('keydown', function(e) {
+                if (e.ctrlKey && e.key === 'Enter') {
+                    document.getElementById('saveEdit').click();
+                } else if (e.key === 'Escape') {
+                    document.body.removeChild(overlay);
+                    document.removeEventListener('keydown', handleEscape);
+                }
+            });
+            
+            document.addEventListener('keydown', handleEscape);
         }
         
         // Helper function to refresh search and filter
@@ -4110,9 +4194,10 @@ Kan ha #taggar överallt.
                     // Toggle this dropdown
                     dropdown.classList.toggle('active');
                 });
+                
             });
             
-            // Close dropdowns when clicking outside
+            // Close dropdowns when clicking outside or on cytoscape canvas
             document.addEventListener('click', function(e) {
                 if (!e.target.closest('.menu-dropdown')) {
                     document.querySelectorAll('.menu-dropdown').forEach(dropdown => {
