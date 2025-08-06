@@ -153,7 +153,8 @@
             background-color: #f5f5f5;
         }
         
-        .menu-dropdown:hover .dropdown-content {
+        .menu-dropdown:hover .dropdown-content,
+        .menu-dropdown.active .dropdown-content {
             display: block;
         }
         
@@ -366,6 +367,7 @@
             </button>
             <div class="dropdown-content">
                 <button onclick="executeCommand('H')">H</button>
+                <button onclick="executeCommand('V')">V</button>
                 <button onclick="executeCommand('G+V')">G+V</button>
                 <button onclick="executeCommand('G+H')">G+H</button>
                 <button onclick="executeCommand('G+T')">G+T</button>
@@ -681,19 +683,8 @@
                             'border-width': 2,
                             'border-color': '#ddd',
                             'width': function(node) {
-                                const title = node.data('title') || '';
-                                const text = node.data('text') || '';
-                                const isManualCard = node.data('isManualCard') || false;
-                                
-                                if (isManualCard) {
-                                    // Fixed width for manual cards to match other cards
-                                    return 300; // Same as imported cards
-                                }
-                                
-                                // Calculate width based on content length (your original logic)
-                                const baseWidth = 180;
-                                const extraWidth = Math.min(120, (title + text).length * 0.9);
-                                return baseWidth + extraWidth;
+                                // Fixed width for all cards to ensure consistency
+                                return 300;
                             },
                             'height': function(node) {
                                 const isManualCard = node.data('isManualCard') || false;
@@ -858,6 +849,30 @@
             cy.on('dblclick', 'node', function(evt) {
                 const node = evt.target;
                 editCard(node);
+            });
+            
+            // Touch and hold to edit card on mobile
+            let touchTimer = null;
+            let touchedNode = null;
+            
+            cy.on('touchstart', 'node', function(evt) {
+                touchedNode = evt.target;
+                touchTimer = setTimeout(() => {
+                    if (touchedNode) {
+                        editCard(touchedNode);
+                        touchedNode = null;
+                    }
+                }, 1000); // 1 second hold
+            });
+            
+            cy.on('touchend touchmove', 'node', function(evt) {
+                if (touchTimer) {
+                    clearTimeout(touchTimer);
+                    touchTimer = null;
+                }
+                if (evt.type === 'touchend') {
+                    touchedNode = null;
+                }
             });
             
             // Update selection info when selection changes
@@ -2405,6 +2420,9 @@
                     break;
                 case 'C':
                     copySelectedCards();
+                    break;
+                case 'V':
+                    arrangeSelectedInColumn();
                     break;
                 case 'Pin':
                     selectedNodes.forEach(node => {
@@ -4072,6 +4090,34 @@ Kan ha #taggar överallt.
             document.addEventListener('keyup', function(e) {
                 if (window.keysPressed) {
                     window.keysPressed.delete(e.key.toLowerCase());
+                }
+            });
+            
+            // Handle mobile dropdown menus (touch/click to activate)
+            document.querySelectorAll('.menu-dropdown').forEach(dropdown => {
+                const button = dropdown.querySelector('.menu-button');
+                
+                button.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    
+                    // Close all other dropdowns
+                    document.querySelectorAll('.menu-dropdown').forEach(otherDropdown => {
+                        if (otherDropdown !== dropdown) {
+                            otherDropdown.classList.remove('active');
+                        }
+                    });
+                    
+                    // Toggle this dropdown
+                    dropdown.classList.toggle('active');
+                });
+            });
+            
+            // Close dropdowns when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('.menu-dropdown')) {
+                    document.querySelectorAll('.menu-dropdown').forEach(dropdown => {
+                        dropdown.classList.remove('active');
+                    });
                 }
             });
             
