@@ -184,6 +184,8 @@
             opacity: 0;
             transition: opacity 0.3s;
             z-index: 999;
+            cursor: pointer;
+            user-select: none;
         }
         
         .search-results-info.visible {
@@ -228,6 +230,446 @@
             background-color: rgba(33, 150, 243, 0.1) !important;
             border: 2px dashed rgba(33, 150, 243, 0.6) !important;
             border-radius: 4px !important;
+        }
+        
+        /* Dark Theme CSS */
+        body.dark-theme {
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+        
+        .dark-theme .toolbar {
+            background: #2d2d2d;
+            border-bottom: 1px solid #444;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .dark-theme .tag-filter-input,
+        .dark-theme .layout-selector select {
+            background: rgba(45, 45, 45, 0.95);
+            border: 1px solid #555;
+            color: #e0e0e0;
+        }
+        
+        .dark-theme .search-input {
+            background: #2d2d2d;
+            border: 2px solid #555;
+            color: #e0e0e0;
+        }
+        
+        .dark-theme .search-input:focus {
+            border-color: #4da6ff;
+        }
+        
+        .dark-theme .add-card-btn {
+            background: #4da6ff;
+            color: #1a1a1a;
+        }
+        
+        .dark-theme .add-card-btn:hover {
+            background: #66b3ff;
+        }
+        
+        .dark-theme .menu-button {
+            background: #4da6ff;
+            color: #1a1a1a;
+        }
+        
+        .dark-theme .menu-button:hover {
+            background: #66b3ff;
+        }
+        
+        .dark-theme .dropdown-content {
+            background-color: #2d2d2d;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.4);
+            border: 1px solid #555;
+        }
+        
+        .dark-theme .dropdown-content button {
+            color: #e0e0e0;
+        }
+        
+        .dark-theme .dropdown-content button:hover {
+            background-color: #3a3a3a;
+        }
+        
+        .dark-theme .search-results-info {
+            background: rgba(77, 166, 255, 0.9);
+            color: #1a1a1a;
+        }
+        
+        .dark-theme .selection-info {
+            background: rgba(102, 179, 255, 0.9);
+            color: #1a1a1a;
+        }
+        
+        .dark-theme .mobile-btn {
+            background: #4da6ff;
+            color: #1a1a1a;
+        }
+        
+        /* Dark theme för Cytoscape korten */
+        body.dark-theme #cy {
+            background: linear-gradient(45deg, #2d2d2d 25%, transparent 25%), 
+                        linear-gradient(-45deg, #2d2d2d 25%, transparent 25%), 
+                        linear-gradient(45deg, transparent 75%, #2d2d2d 75%), 
+                        linear-gradient(-45deg, transparent 75%, #2d2d2d 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            background-color: #1a1a1a;
+        }
+        
+        /* Sepia Theme CSS */
+        body.sepia-theme {
+            background: #f4f1e8;
+            color: #5d4e37;
+        }
+        
+        .sepia-theme .toolbar {
+            background: #e8d7c3;
+            border-bottom: 1px solid #c8a882;
+            box-shadow: 0 2px 4px rgba(139,117,86,0.3);
+        }
+        
+        .sepia-theme .tag-filter-input,
+        .sepia-theme .layout-selector select {
+            background: rgba(232, 215, 195, 0.95);
+            border: 1px solid #c8a882;
+            color: #5d4e37;
+        }
+        
+        .sepia-theme .search-input {
+            background: #f4f1e8;
+            border: 2px solid #c8a882;
+            color: #5d4e37;
+        }
+        
+        .sepia-theme .search-input:focus {
+            border-color: #8b7556;
+        }
+        
+        .sepia-theme .add-card-btn {
+            background: #8b7556;
+            color: #f4f1e8;
+        }
+        
+        .sepia-theme .add-card-btn:hover {
+            background: #6d5a44;
+        }
+        
+        .sepia-theme .menu-button {
+            background: #8b7556;
+            color: #f4f1e8;
+        }
+        
+        .sepia-theme .menu-button:hover {
+            background: #6d5a44;
+        }
+        
+        .sepia-theme .dropdown-content {
+            background-color: #e8d7c3;
+            box-shadow: 0px 8px 16px 0px rgba(139,117,86,0.4);
+            border: 1px solid #c8a882;
+        }
+        
+        .sepia-theme .dropdown-content button {
+            color: #5d4e37;
+        }
+        
+        .sepia-theme .dropdown-content button:hover {
+            background-color: #d4c3a7;
+        }
+        
+        .sepia-theme .search-results-info {
+            background: rgba(139, 117, 86, 0.9);
+            color: #f4f1e8;
+        }
+        
+        .sepia-theme .selection-info {
+            background: rgba(160, 130, 98, 0.9);
+            color: #f4f1e8;
+        }
+        
+        .sepia-theme .mobile-btn {
+            background: #8b7556;
+            color: #f4f1e8;
+        }
+        
+        /* Sepia theme för Cytoscape korten */
+        body.sepia-theme #cy {
+            background: linear-gradient(45deg, #e8d7c3 25%, transparent 25%), 
+                        linear-gradient(-45deg, #e8d7c3 25%, transparent 25%), 
+                        linear-gradient(45deg, transparent 75%, #e8d7c3 75%), 
+                        linear-gradient(-45deg, transparent 75%, #e8d7c3 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            background-color: #f4f1e8;
+        }
+        
+        /* Dark Theme - Enhanced selection visibility */
+        .dark-theme .cy {
+            /* Override default Cytoscape styling for better dark theme contrast */
+        }
+        
+        /* Card Colors - Light Theme */
+        .light-theme .card-color-1 { background-color: #ffebee !important; } /* Soft Red */
+        .light-theme .card-color-2 { background-color: #e3f2fd !important; } /* Soft Blue */
+        .light-theme .card-color-3 { background-color: #e8f5e8 !important; } /* Soft Green */
+        .light-theme .card-color-4 { background-color: #fff3e0 !important; } /* Soft Orange */
+        .light-theme .card-color-5 { background-color: #f3e5f5 !important; } /* Soft Purple */
+        
+        /* Card Colors - Dark Theme */
+        .dark-theme .card-color-1 { background-color: #4a2c2a !important; } /* Dark Red */
+        .dark-theme .card-color-2 { background-color: #1e3a5f !important; } /* Dark Blue */
+        .dark-theme .card-color-3 { background-color: #2d4a2d !important; } /* Dark Green */
+        .dark-theme .card-color-4 { background-color: #4a3429 !important; } /* Dark Orange */
+        .dark-theme .card-color-5 { background-color: #3d2a4a !important; } /* Dark Purple */
+        
+        /* Card Colors - Sepia Theme */
+        .sepia-theme .card-color-1 { background-color: #f4e6d7 !important; } /* Sepia Red */
+        .sepia-theme .card-color-2 { background-color: #e6d7c3 !important; } /* Sepia Blue */
+        .sepia-theme .card-color-3 { background-color: #e8e6d7 !important; } /* Sepia Green */
+        .sepia-theme .card-color-4 { background-color: #f0e6d2 !important; } /* Sepia Orange */
+        .sepia-theme .card-color-5 { background-color: #ede6d7 !important; } /* Sepia Purple */
+        
+        /* Color Picker Popup */
+        .color-picker-popup {
+            position: fixed;
+            background: white;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            z-index: 2000;
+        }
+        
+        .dark-theme .color-picker-popup {
+            background: #2d2d2d;
+            border-color: #555;
+            color: #e0e0e0;
+        }
+        
+        .sepia-theme .color-picker-popup {
+            background: #e8d7c3;
+            border-color: #c8a882;
+            color: #5d4e37;
+        }
+        
+        .color-picker-grid {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin: 10px 0;
+        }
+        
+        .color-picker-dot {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            border: 2px solid #333;
+            cursor: pointer;
+            transition: transform 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            color: #333;
+        }
+        
+        .color-picker-dot:hover {
+            transform: scale(1.1);
+        }
+        
+        /* Dark theme adjustments for dot text */
+        .dark-theme .color-picker-dot {
+            color: #fff !important;
+            border-color: #666;
+        }
+        
+        /* Sepia theme adjustments for dot text */
+        .sepia-theme .color-picker-dot {
+            color: #5d4e37 !important;
+            border-color: #8B7355;
+        }
+        
+        /* Ensure numbers are visible with stronger contrast */
+        .color-picker-dot {
+            text-shadow: 0 0 3px rgba(0,0,0,0.7);
+        }
+        
+        .dark-theme .color-picker-dot {
+            text-shadow: 0 0 3px rgba(0,0,0,0.9);
+        }
+        
+        /* Color picker dot colors - Light theme */
+        .color-picker-dot.card-color-1 { background-color: #e8f5e8; } /* Grön */
+        .color-picker-dot.card-color-2 { background-color: #fff3e0; } /* Orange */
+        .color-picker-dot.card-color-3 { background-color: #ffebee; } /* Röd */
+        .color-picker-dot.card-color-4 { background-color: #fffde7; } /* Gul */
+        .color-picker-dot.card-color-5 { background-color: #f1f8e9; } /* Gröngul */
+        .color-picker-dot.card-color-6 { background-color: #e3f2fd; } /* Blå */
+        
+        /* Dark theme color picker dots */
+        .dark-theme .color-picker-dot.card-color-1 { background-color: #2d4a2d; } /* Mörk Grön */
+        .dark-theme .color-picker-dot.card-color-2 { background-color: #4a3d2a; } /* Mörk Orange */
+        .dark-theme .color-picker-dot.card-color-3 { background-color: #4a2c2a; } /* Mörk Röd */
+        .dark-theme .color-picker-dot.card-color-4 { background-color: #4a4a2a; } /* Mörk Gul */
+        .dark-theme .color-picker-dot.card-color-5 { background-color: #3a4a2d; } /* Mörk Gröngul */
+        .dark-theme .color-picker-dot.card-color-6 { background-color: #1e3a5f; } /* Mörk Blå */
+        
+        /* Sepia theme color picker dots */
+        .sepia-theme .color-picker-dot.card-color-1 { background-color: #e8e6d7; } /* Sepia Grön */
+        .sepia-theme .color-picker-dot.card-color-2 { background-color: #f0e6d2; } /* Sepia Orange */
+        .sepia-theme .color-picker-dot.card-color-3 { background-color: #f4e6d7; } /* Sepia Röd */
+        .sepia-theme .color-picker-dot.card-color-4 { background-color: #f5f2e6; } /* Sepia Gul */
+        .sepia-theme .color-picker-dot.card-color-5 { background-color: #eae6d7; } /* Sepia Gröngul */
+        .sepia-theme .color-picker-dot.card-color-6 { background-color: #e6d7c3; } /* Sepia Blå */
+        
+        .color-picker-title {
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .color-picker-cancel {
+            text-align: center;
+            margin-top: 10px;
+            padding: 5px 10px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .dark-theme .color-picker-cancel {
+            background: #555;
+            color: #e0e0e0;
+        }
+        
+        .sepia-theme .color-picker-cancel {
+            background: #d7c8a8;
+            color: #5d4e37;
+        }
+        
+        .color-picker-title {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .color-picker-grid {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        
+        .color-dot {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid #ddd;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+        
+        .color-dot:hover {
+            transform: scale(1.1);
+            border-color: #333;
+        }
+        
+        .dark-theme .color-dot {
+            border-color: #555;
+        }
+        
+        .dark-theme .color-dot:hover {
+            border-color: #bbb;
+        }
+        
+        .sepia-theme .color-dot {
+            border-color: #c8a882;
+        }
+        
+        .sepia-theme .color-dot:hover {
+            border-color: #8b7556;
+        }
+        
+        .color-picker-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+        }
+        
+        .color-picker-btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .color-picker-btn.remove {
+            background: #ff6b6b;
+            color: white;
+        }
+        
+        .color-picker-btn.cancel {
+            background: #6c757d;
+            color: white;
+        }
+        
+        /* Context Menu */
+        .context-menu {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            min-width: 150px;
+            overflow: hidden;
+        }
+        
+        .dark-theme .context-menu {
+            background: #2d2d2d;
+            border-color: #555;
+        }
+        
+        .sepia-theme .context-menu {
+            background: #e8d7c3;
+            border-color: #c8a882;
+        }
+        
+        .context-menu-item {
+            padding: 10px 15px;
+            cursor: pointer;
+            font-size: 14px;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background-color 0.2s;
+        }
+        
+        .context-menu-item:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .context-menu-item:last-child {
+            border-bottom: none;
+        }
+        
+        .dark-theme .context-menu-item {
+            color: #e0e0e0;
+            border-bottom-color: #444;
+        }
+        
+        .dark-theme .context-menu-item:hover {
+            background-color: #3a3a3a;
+        }
+        
+        .sepia-theme .context-menu-item {
+            color: #5d4e37;
+            border-bottom-color: #d4c3a7;
+        }
+        
+        .sepia-theme .context-menu-item:hover {
+            background-color: #d4c3a7;
         }
         
         /* Mobile controls - floating buttons */
@@ -355,6 +797,7 @@
                 <button onclick="importFromExtractor()">📥 Från PDF-Extractor</button>
                 <button onclick="toggleMetadataView()" id="metadataBtn">🔍 Metadata</button>
                 <button onclick="debugDumpPositions()">🐛 Debug Positioner</button>
+                <button onclick="toggleDarkTheme()" id="themeBtn">🌙 Mörkt Tema</button>
                 <button onclick="clearBoard()">🗑️ Rensa</button>
             </div>
         </div>
@@ -373,6 +816,7 @@
                 <button onclick="executeCommand('G+T')">G+T</button>
                 <button onclick="executeCommand('Q')">Q</button>
                 <button onclick="executeCommand('C')">C</button>
+                <button onclick="executeCommand('T')">🎨 T</button>
                 <button onclick="executeCommand('Pin')">📌 Pin</button>
                 <button onclick="executeCommand('Unpin')">🔓 Unpin</button>
                 <button onclick="executeCommand('Delete')">🗑️ Delete</button>
@@ -878,14 +1322,11 @@
                 editCard(evt.target);
             });
             
-            // Right-click to pin/unpin card
+            // Right-click context menu
             cy.on('cxttap', 'node', function(evt) {
+                evt.preventDefault();
                 const node = evt.target;
-                if (node.hasClass('pinned')) {
-                    unpinCard(node);
-                } else {
-                    pinCard(node);
-                }
+                showContextMenu(evt.originalEvent || evt, node);
             });
             
             // Double-click to edit card
@@ -1003,7 +1444,9 @@
             cy.nodes().forEach(node => {
                 const title = (node.data('title') || '').toLowerCase();
                 const text = (node.data('text') || '').toLowerCase();
-                const searchableText = title + ' ' + text; // Search in both title and text
+                const tags = (node.data('tags') || []).join(' ').toLowerCase();
+                const hiddenTags = (node.data('hidden_tags') || []).join(' ').toLowerCase();
+                const searchableText = title + ' ' + text + ' ' + tags + ' ' + hiddenTags; // Search in title, text, tags, and hidden_tags
                 
                 const matches = evaluateBooleanQuery(query.toLowerCase(), searchableText);
                 
@@ -1080,6 +1523,195 @@
         function unpinCard(node) {
             node.removeClass('pinned');
             node.data('pinned', false);
+        }
+        
+        // Context Menu System
+        function showContextMenu(event, node) {
+            // Remove any existing context menu
+            hideContextMenu();
+            
+            // Get mouse position
+            const x = event.clientX || event.pageX;
+            const y = event.clientY || event.pageY;
+            
+            // Create context menu
+            const menu = document.createElement('div');
+            menu.className = 'context-menu';
+            menu.style.position = 'fixed';
+            menu.style.left = x + 'px';
+            menu.style.top = y + 'px';
+            menu.style.zIndex = '3000';
+            
+            // Pin/Unpin option
+            const isPinned = node.hasClass('pinned');
+            const pinOption = document.createElement('div');
+            pinOption.className = 'context-menu-item';
+            pinOption.innerHTML = isPinned ? '📌 Ta bort pinning' : '📌 Pinna kort';
+            pinOption.onclick = () => {
+                if (isPinned) {
+                    unpinCard(node);
+                } else {
+                    pinCard(node);
+                }
+                hideContextMenu();
+            };
+            menu.appendChild(pinOption);
+            
+            // Color option
+            const colorOption = document.createElement('div');
+            colorOption.className = 'context-menu-item';
+            colorOption.innerHTML = '🎨 Färga kort';
+            colorOption.onclick = () => {
+                hideContextMenu();
+                // If the right-clicked node is selected, color all selected nodes
+                // Otherwise, color just the right-clicked node
+                const selectedNodes = cy.$('node:selected');
+                const nodesToColor = node.selected() && selectedNodes.length > 1 ? selectedNodes : [node];
+                showColorPicker(event, nodesToColor);
+            };
+            menu.appendChild(colorOption);
+            
+            // Remove color option (if card has color)
+            if (node.data('cardColor')) {
+                const removeColorOption = document.createElement('div');
+                removeColorOption.className = 'context-menu-item';
+                removeColorOption.innerHTML = '❌ Ta bort färg';
+                removeColorOption.onclick = () => {
+                    // If the right-clicked node is selected, remove color from all selected nodes
+                    // Otherwise, remove color from just the right-clicked node
+                    const selectedNodes = cy.$('node:selected');
+                    const nodesToProcess = node.selected() && selectedNodes.length > 1 ? selectedNodes : [node];
+                    nodesToProcess.forEach(n => removeCardColor(n));
+                    hideContextMenu();
+                };
+                menu.appendChild(removeColorOption);
+            }
+            
+            document.body.appendChild(menu);
+            
+            // Close menu on click elsewhere
+            setTimeout(() => {
+                document.addEventListener('click', hideContextMenu, { once: true });
+            }, 0);
+        }
+        
+        function hideContextMenu() {
+            const existingMenu = document.querySelector('.context-menu');
+            if (existingMenu) {
+                existingMenu.remove();
+            }
+        }
+        
+        // Color picker system
+        function showColorPicker(event, nodes) {
+            console.log('showColorPicker called with', nodes.length, 'nodes');
+            
+            // Remove any existing color picker
+            hideColorPicker();
+            
+            // Get mouse position or use event position
+            const x = event.clientX || event.pageX || window.innerWidth / 2;
+            const y = event.clientY || event.pageY || window.innerHeight / 2;
+            console.log('Color picker position:', x, y);
+            
+            // Create color picker popup
+            const picker = document.createElement('div');
+            picker.className = 'color-picker-popup';
+            picker.style.position = 'fixed';
+            picker.style.left = x + 'px';
+            picker.style.top = y + 'px';
+            picker.style.zIndex = '4000';
+            
+            // Add title
+            const title = document.createElement('div');
+            title.className = 'color-picker-title';
+            title.textContent = `Välj färg för ${nodes.length} kort`;
+            picker.appendChild(title);
+            
+            // Create color grid
+            const colorGrid = document.createElement('div');
+            colorGrid.className = 'color-picker-grid';
+            
+            // Add the 6 color options
+            for (let i = 1; i <= 6; i++) {
+                const colorDot = document.createElement('div');
+                colorDot.className = `color-picker-dot card-color-${i}`;
+                colorDot.textContent = i; // Add number inside the dot
+                colorDot.style.lineHeight = '26px'; // Center vertically
+                colorDot.style.textAlign = 'center'; // Center horizontally
+                colorDot.style.fontSize = '14px';
+                colorDot.style.fontWeight = 'bold';
+                colorDot.style.color = '#333';
+                colorDot.style.textShadow = '0 0 3px rgba(255,255,255,0.8)';
+                colorDot.onclick = () => {
+                    console.log(`Clicked color ${i}, applying to ${nodes.length} cards`);
+                    // Apply color to all nodes
+                    nodes.forEach(node => {
+                        console.log(`Setting color card-color-${i} on node:`, node.id());
+                        node.data('cardColor', `card-color-${i}`);
+                        // Update cytoscape styling immediately
+                        const colorValue = getCardColorValue(`card-color-${i}`, getCurrentTheme());
+                        console.log(`Color value:`, colorValue);
+                        node.style('background-color', colorValue);
+                    });
+                    hideColorPicker();
+                    console.log(`Applied color ${i} to ${nodes.length} cards`);
+                };
+                colorGrid.appendChild(colorDot);
+            }
+            
+            picker.appendChild(colorGrid);
+            
+            // Add cancel button
+            const cancelBtn = document.createElement('div');
+            cancelBtn.className = 'color-picker-cancel';
+            cancelBtn.textContent = 'Avbryt';
+            cancelBtn.onclick = hideColorPicker;
+            picker.appendChild(cancelBtn);
+            
+            console.log('Adding picker to body:', picker);
+            document.body.appendChild(picker);
+            console.log('Picker added, should be visible now');
+            
+            // Close picker on click elsewhere
+            setTimeout(() => {
+                currentClickHandler = function(e) {
+                    if (!picker.contains(e.target)) {
+                        hideColorPicker();
+                    }
+                };
+                document.addEventListener('click', currentClickHandler);
+            }, 100);
+        }
+        
+        let currentClickHandler = null;
+        
+        function hideColorPicker() {
+            const existingPicker = document.querySelector('.color-picker-popup');
+            if (existingPicker) {
+                existingPicker.remove();
+            }
+            // Remove the click handler if it exists
+            if (currentClickHandler) {
+                document.removeEventListener('click', currentClickHandler);
+                currentClickHandler = null;
+            }
+            console.log('Color picker hidden and event listeners cleaned up');
+        }
+        
+        function removeCardColor(node) {
+            node.removeData('cardColor');
+            // Reset to default theme color
+            const theme = getCurrentTheme();
+            const defaultColor = theme === 'dark' ? '#2a2a2a' : (theme === 'sepia' ? '#f5f5dc' : '#ffffff');
+            node.style('background-color', defaultColor);
+            console.log('Removed color from card:', node.id());
+        }
+        
+        function getCurrentTheme() {
+            if (document.body.classList.contains('dark-theme')) return 'dark';
+            if (document.body.classList.contains('sepia-theme')) return 'sepia';
+            return 'light';
         }
         
         
@@ -1936,9 +2568,11 @@
                     title: node.data('title') || '',
                     text: node.data('text') || '',
                     tags: node.data('tags') || [],
+                    hidden_tags: node.data('hidden_tags') || [],
                     position: node.position(),
                     pinned: node.hasClass('pinned') || false,
                     isManualCard: node.data('isManualCard') || false,
+                    cardColor: node.data('cardColor') || null,
                     // Preserve all metadata for advanced analysis
                     export_timestamp: node.data('export_timestamp') || null,
                     export_session: node.data('export_session') || null,
@@ -1957,7 +2591,13 @@
             };
             
             localStorage.setItem('spatial-notes-board', JSON.stringify(boardData));
-            alert('Bräda sparad!');
+            // Show saved message in status indicator
+            const searchInfo = document.getElementById('searchInfo');
+            searchInfo.textContent = 'Sparad ✓';
+            searchInfo.classList.add('visible');
+            setTimeout(() => {
+                searchInfo.classList.remove('visible');
+            }, 2000);
         }
         
         
@@ -1986,8 +2626,10 @@
                             title: cardData.title,
                             text: cardData.text,
                             tags: cardData.tags || [],
+                            hidden_tags: cardData.hidden_tags || [],
                             searchMatch: false,
                             isManualCard: cardData.isManualCard || false,
+                            cardColor: cardData.cardColor || null,
                             // Preserve metadata if present
                             export_timestamp: cardData.export_timestamp || null,
                             export_session: cardData.export_session || null,
@@ -2000,6 +2642,16 @@
                         position: cardData.position
                     });
                     
+                    // Restore pinned state
+                    if (cardData.pinned) {
+                        newNode.addClass('pinned');
+                    }
+                    
+                    // Restore card color
+                    if (cardData.cardColor) {
+                        newNode.style('background-color', getCardColorValue(cardData.cardColor, getCurrentTheme()));
+                    }
+                    
                     newNode.grabify();
                 });
                 
@@ -2011,7 +2663,7 @@
                     cy.pan(boardData.viewport.pan);
                 }
                 
-                alert(`Laddade ${boardData.cards.length} kort!`);
+                // Removed annoying "Laddade X kort!" alert - user can see the cards loaded
                 
             } catch (error) {
                 alert('Fel vid laddning av bräda: ' + error.message);
@@ -2172,34 +2824,32 @@
                             throw new Error('Ogiltig JSON-fil: Saknar kort-data');
                         }
                         
-                        // Ask user if they want to replace or add to existing cards
-                        const hasExistingCards = cy.nodes().length > 0;
-                        let replaceExisting = true;
-                        
-                        if (hasExistingCards) {
-                            replaceExisting = confirm(
-                                `Du har ${cy.nodes().length} befintliga kort.\n\n` +
-                                `Klicka OK för att ERSÄTTA alla kort\n` +
-                                `Klicka Avbryt för att LÄGGA TILL kort`
-                            );
-                        }
-                        
-                        // Clear existing cards if replacing
-                        if (replaceExisting) {
-                            cy.nodes().remove();
-                        }
+                        // Always add to existing cards (no replace option)
                         
                         // Add imported cards
                         let importedCount = 0;
-                        let duplicateCount = 0;
+                        
+                        // Generate import date in YYMMDD format
+                        const now = new Date();
+                        const importDate = now.getFullYear().toString().substr(-2) + 
+                                          String(now.getMonth() + 1).padStart(2, '0') + 
+                                          String(now.getDate()).padStart(2, '0');
                         
                         importData.cards.forEach(cardData => {
-                            // Check for duplicate IDs if not replacing
-                            if (!replaceExisting && cy.getElementById(cardData.id).length > 0) {
-                                // Generate new unique ID for duplicate
-                                cardData.id = cardData.id + '_imported_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-                                duplicateCount++;
-                            }
+                            // Save original ID for origin tag
+                            const originalId = cardData.id;
+                            
+                            // Always generate new unique ID for all imported cards
+                            const timestamp = Date.now();
+                            const random = Math.random().toString(36).substr(2, 9);
+                            const newId = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}-${random}`;
+                            
+                            cardData.id = newId;
+                            
+                            // Create hidden tags for import tracking
+                            const hiddenTags = cardData.hidden_tags || [];
+                            hiddenTags.push(`origin_${originalId}`);
+                            hiddenTags.push(`import_${importDate}`);
                             
                             const newNode = cy.add({
                                 data: {
@@ -2207,7 +2857,7 @@
                                     title: cardData.title || '',
                                     text: cardData.text || '',
                                     tags: cardData.tags || [],
-                                    hidden_tags: cardData.hidden_tags || [],
+                                    hidden_tags: hiddenTags,
                                     searchMatch: false,
                                     // Restore metadata
                                     export_timestamp: cardData.export_timestamp || null,
@@ -2242,9 +2892,7 @@
                         
                         // Show success message
                         let message = `📁 JSON-import lyckades: ${importedCount} kort importerade`;
-                        if (duplicateCount > 0) {
-                            message += ` (${duplicateCount} dubbletter fick nya ID:n)`;
-                        }
+                        message += ` (alla fick nya ID:n + gömda taggar)`;
                         if (importData.metadata) {
                             message += `\nExportdatum: ${new Date(importData.metadata.exportDate).toLocaleString('sv-SE')}`;
                         }
@@ -2460,6 +3108,16 @@
                 case 'C':
                     copySelectedCards();
                     break;
+                case 'T':
+                    const selectedNodes = cy.$('node:selected');
+                    if (selectedNodes.length > 0) {
+                        const fakeEvent = {
+                            clientX: window.innerWidth / 2,
+                            clientY: window.innerHeight / 2
+                        };
+                        showColorPicker(fakeEvent, selectedNodes);
+                    }
+                    break;
                 case 'V':
                     arrangeSelectedInColumn();
                     break;
@@ -2533,6 +3191,206 @@
                 setTimeout(() => {
                     searchInfo.classList.remove('visible');
                 }, 3000);
+            }
+        }
+
+        function toggleDarkTheme() {
+            const body = document.body;
+            const themeBtn = document.getElementById('themeBtn');
+            
+            let currentTheme = 'light';
+            if (body.classList.contains('dark-theme')) {
+                currentTheme = 'dark';
+            } else if (body.classList.contains('sepia-theme')) {
+                currentTheme = 'sepia';
+            }
+            
+            // Cycle through themes: light -> dark -> sepia -> light
+            if (currentTheme === 'light') {
+                body.classList.remove('sepia-theme');
+                body.classList.add('dark-theme');
+                themeBtn.innerHTML = '📜 Sepia Tema';
+                localStorage.setItem('theme', 'dark');
+                applyCardTheme('dark');
+            } else if (currentTheme === 'dark') {
+                body.classList.remove('dark-theme');
+                body.classList.add('sepia-theme');
+                themeBtn.innerHTML = '☀️ Ljust Tema';
+                localStorage.setItem('theme', 'sepia');
+                applyCardTheme('sepia');
+            } else {
+                body.classList.remove('sepia-theme');
+                themeBtn.innerHTML = '🌙 Mörkt Tema';
+                localStorage.setItem('theme', 'light');
+                applyCardTheme('light');
+            }
+        }
+        
+        // Get card color value based on theme
+        function getCardColorValue(colorId, theme) {
+            const colors = {
+                light: {
+                    1: '#e8f5e8', // Grön
+                    2: '#fff3e0', // Orange  
+                    3: '#ffebee', // Röd
+                    4: '#fffde7', // Gul
+                    5: '#f1f8e9', // Gröngul
+                    6: '#e3f2fd'  // Blå
+                },
+                dark: {
+                    1: '#2d4a2d', // Mörk Grön
+                    2: '#4a3d2a', // Mörk Orange
+                    3: '#4a2c2a', // Mörk Röd
+                    4: '#4a4a2a', // Mörk Gul
+                    5: '#3a4a2d', // Mörk Gröngul
+                    6: '#1e3a5f'  // Mörk Blå
+                },
+                sepia: {
+                    1: '#e8e6d7', // Sepia Grön
+                    2: '#f0e6d2', // Sepia Orange
+                    3: '#f4e6d7', // Sepia Röd
+                    4: '#f5f2e6', // Sepia Gul
+                    5: '#eae6d7', // Sepia Gröngul
+                    6: '#e6d7c3'  // Sepia Blå
+                }
+            };
+            
+            // Extract number from colorId (card-color-1 -> 1)
+            const colorNumber = colorId.toString().replace('card-color-', '');
+            
+            return colors[theme] && colors[theme][colorNumber] ? colors[theme][colorNumber] : null;
+        }
+
+        function applyCardTheme(theme) {
+            if (cy) {
+                if (theme === 'dark') {
+                    // Dark theme styling
+                    cy.style()
+                        .selector('node').style({
+                            'background-color': function(node) {
+                                const cardColor = node.data('cardColor');
+                                if (cardColor) {
+                                    // Color priority: if card has color, use it regardless of theme
+                                    return getCardColorValue(cardColor, 'dark');
+                                }
+                                return '#2a2a2a';
+                            },
+                            'color': '#f0f0f0',
+                            'border-color': '#555'
+                        })
+                        .selector('node:selected').style({
+                            'border-color': '#66b3ff',  // Bright blue for visibility
+                            'border-width': 5,
+                            'box-shadow': '0 0 25px rgba(102, 179, 255, 0.8)'
+                        })
+                        .selector('node.search-match').style({
+                            'background-color': '#4a3c00',  // Dark yellow background
+                            'border-color': '#ffcc00',     // Bright yellow border
+                            'border-width': 3,
+                            'box-shadow': '0 0 15px rgba(255, 204, 0, 0.6)'
+                        })
+                        .selector('node.pinned').style({
+                            'border-color': '#4caf50',  // Bright green
+                            'border-width': 4,
+                            'box-shadow': '0 0 15px rgba(76, 175, 80, 0.6)'
+                        })
+                        .update();
+                } else if (theme === 'sepia') {
+                    // Sepia theme styling
+                    cy.style()
+                        .selector('node').style({
+                            'background-color': function(node) {
+                                const cardColor = node.data('cardColor');
+                                if (cardColor) {
+                                    return getCardColorValue(cardColor, 'sepia');
+                                }
+                                return '#f0e6d2';
+                            },
+                            'color': '#5d4e37',
+                            'border-color': '#c8a882'
+                        })
+                        .selector('node:selected').style({
+                            'border-color': '#8b7556',  // Dark brown for sepia
+                            'border-width': 4,
+                            'box-shadow': '0 0 20px rgba(139, 117, 86, 0.7)'
+                        })
+                        .selector('node.search-match').style({
+                            'background-color': '#f4e8d0',  // Light sepia highlight
+                            'border-color': '#d2691e',     // Chocolate border
+                            'border-width': 2,
+                            'box-shadow': '0 0 10px rgba(210, 105, 30, 0.5)'
+                        })
+                        .selector('node.pinned').style({
+                            'border-color': '#8fbc8f',  // Dark sea green for sepia
+                            'border-width': 4,
+                            'box-shadow': '0 0 15px rgba(143, 188, 143, 0.6)'
+                        })
+                        .update();
+                } else {
+                    // Light theme styling (default)
+                    cy.style()
+                        .selector('node').style({
+                            'background-color': function(node) {
+                                const cardColor = node.data('cardColor');
+                                if (cardColor) {
+                                    return getCardColorValue(cardColor, 'light');
+                                }
+                                return '#ffffff';
+                            },
+                            'color': '#333333',
+                            'border-color': '#ddd'
+                        })
+                        .selector('node:selected').style({
+                            'border-color': '#1565c0',
+                            'border-width': 4,
+                            'box-shadow': '0 0 20px rgba(21, 101, 192, 0.7)'
+                        })
+                        .selector('node.search-match').style({
+                            'background-color': '#fff9c4',
+                            'border-color': '#f57f17',
+                            'border-width': 2,
+                            'box-shadow': '0 0 10px rgba(245, 127, 23, 0.4)'
+                        })
+                        .selector('node.pinned').style({
+                            'border-color': '#2e7d32',
+                            'border-width': 4,
+                            'box-shadow': '0 0 15px rgba(46, 125, 50, 0.6)'
+                        })
+                        .update();
+                }
+            }
+        }
+        
+        // Load saved theme on page load
+        function loadSavedTheme() {
+            const savedTheme = localStorage.getItem('theme') || localStorage.getItem('darkTheme'); // Backward compatibility
+            const themeBtn = document.getElementById('themeBtn');
+            
+            // Handle backward compatibility
+            let theme = 'light';
+            if (savedTheme === 'dark' || savedTheme === 'true') {
+                theme = 'dark';
+            } else if (savedTheme === 'sepia') {
+                theme = 'sepia';
+            }
+            
+            if (theme === 'dark') {
+                document.body.classList.add('dark-theme');
+                if (themeBtn) {
+                    themeBtn.innerHTML = '📜 Sepia Tema';
+                }
+                setTimeout(() => applyCardTheme('dark'), 100);
+            } else if (theme === 'sepia') {
+                document.body.classList.add('sepia-theme');
+                if (themeBtn) {
+                    themeBtn.innerHTML = '☀️ Ljust Tema';
+                }
+                setTimeout(() => applyCardTheme('sepia'), 100);
+            } else {
+                if (themeBtn) {
+                    themeBtn.innerHTML = '🌙 Mörkt Tema';
+                }
+                setTimeout(() => applyCardTheme('light'), 100);
             }
         }
 
@@ -2794,6 +3652,7 @@
                     title: node.data('title') || '',
                     text: node.data('text') || '',
                     tags: [...(node.data('tags') || [])], // Clone array
+                    hidden_tags: [...(node.data('hidden_tags') || [])], // Clone hidden tags array
                     // Copy all metadata too
                     export_timestamp: node.data('export_timestamp'),
                     export_session: node.data('export_session'),
@@ -2804,9 +3663,9 @@
                     card_index: node.data('card_index')
                 };
                 
-                // Add copy metadata
+                // Add copy metadata to hidden tags (searchable but not visible)
                 const copyTag = `copy_${timestamp}_${index + 1}`;
-                originalData.tags.push(copyTag);
+                originalData.hidden_tags.push(copyTag);
                 originalData.copyOf = node.id();
                 originalData.isCopy = true;
                 originalData.copyTimestamp = now.toISOString();
@@ -2836,6 +3695,7 @@
                         title: cardData.title,
                         text: cardData.text,
                         tags: cardData.tags,
+                        hidden_tags: cardData.hidden_tags || [],
                         searchMatch: false,
                         // Copy metadata
                         export_timestamp: cardData.export_timestamp,
@@ -2908,6 +3768,7 @@
                         title: cardData.title,
                         text: cardData.text,
                         tags: cardData.tags,
+                        hidden_tags: cardData.hidden_tags || [],
                         searchMatch: false,
                         // Copy metadata
                         export_timestamp: cardData.export_timestamp,
@@ -2980,6 +3841,7 @@
                         title: cardData.title,
                         text: cardData.text,
                         tags: cardData.tags,
+                        hidden_tags: cardData.hidden_tags || [],
                         searchMatch: false,
                         // Copy metadata
                         export_timestamp: cardData.export_timestamp,
@@ -3055,6 +3917,7 @@
                         title: cardData.title,
                         text: cardData.text,
                         tags: cardData.tags,
+                        hidden_tags: cardData.hidden_tags || [],
                         searchMatch: false,
                         // Copy metadata
                         export_timestamp: cardData.export_timestamp,
@@ -3128,6 +3991,7 @@
                         title: cardData.title,
                         text: cardData.text,
                         tags: cardData.tags,
+                        hidden_tags: cardData.hidden_tags || [],
                         searchMatch: false,
                         // Copy metadata
                         export_timestamp: cardData.export_timestamp,
@@ -3240,6 +4104,19 @@
                     <label style="display: block; margin-bottom: 5px; font-weight: bold;">Tags (kommaseparerade):</label>
                     <input type="text" id="formTags" placeholder="tech, ai, design" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
                 </div>
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: bold;">Färg (valfritt):</label>
+                    <div id="formColorPicker" style="display: flex; gap: 8px; align-items: center;">
+                        <div class="form-color-dot" data-color="" style="width: 24px; height: 24px; border: 2px solid #333; border-radius: 50%; cursor: pointer; background: white; position: relative;">
+                            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 14px; color: #999;">×</div>
+                        </div>
+                        <div class="form-color-dot card-color-1" data-color="card-color-1" style="width: 24px; height: 24px; border: 2px solid #333; border-radius: 50%; cursor: pointer;"></div>
+                        <div class="form-color-dot card-color-2" data-color="card-color-2" style="width: 24px; height: 24px; border: 2px solid #333; border-radius: 50%; cursor: pointer;"></div>
+                        <div class="form-color-dot card-color-3" data-color="card-color-3" style="width: 24px; height: 24px; border: 2px solid #333; border-radius: 50%; cursor: pointer;"></div>
+                        <div class="form-color-dot card-color-4" data-color="card-color-4" style="width: 24px; height: 24px; border: 2px solid #333; border-radius: 50%; cursor: pointer;"></div>
+                        <div class="form-color-dot card-color-5" data-color="card-color-5" style="width: 24px; height: 24px; border: 2px solid #333; border-radius: 50%; cursor: pointer;"></div>
+                    </div>
+                </div>
                 <div style="text-align: right;">
                     <button id="formCancel" style="margin-right: 10px; padding: 8px 16px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">Avbryt</button>
                     <button id="formSave" style="padding: 8px 16px; border: none; background: #007AFF; color: white; border-radius: 4px; cursor: pointer;">Skapa kort</button>
@@ -3258,9 +4135,28 @@
             };
             
             document.getElementById('formSave').onclick = () => {
-                createCardFromForm(x, y);
+                createCardFromForm(x, y, selectedColor);
                 document.body.removeChild(overlay);
             };
+            
+            // Color picker event handlers
+            let selectedColor = '';
+            document.querySelectorAll('.form-color-dot').forEach(dot => {
+                dot.onclick = () => {
+                    // Remove selection from all dots
+                    document.querySelectorAll('.form-color-dot').forEach(d => {
+                        d.style.boxShadow = '';
+                        d.style.transform = '';
+                    });
+                    // Select this dot
+                    dot.style.boxShadow = '0 0 0 3px #007AFF';
+                    dot.style.transform = 'scale(1.1)';
+                    selectedColor = dot.dataset.color;
+                };
+            });
+            
+            // Store selected color on overlay for access in createCardFromForm
+            overlay.selectedColor = () => selectedColor;
             
             // ESC to cancel - must capture on document for focus issues
             function handleEscape(e) {
@@ -3273,7 +4169,7 @@
         }
         
         // Create card from form data
-        function createCardFromForm(x, y) {
+        function createCardFromForm(x, y, selectedColor = '') {
             const title = document.getElementById('formTitle').value.trim();
             const text = document.getElementById('formText').value.trim();
             const tagsInput = document.getElementById('formTags').value.trim();
@@ -3283,19 +4179,31 @@
             const tags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(t => t) : [];
             
             const newId = generateCardId();
+            const nodeData = {
+                id: newId,
+                title: title,
+                text: text,
+                tags: tags,
+                searchMatch: false
+            };
+            
+            // Add color if selected
+            if (selectedColor) {
+                nodeData.cardColor = selectedColor;
+            }
+            
             const newNode = cy.add({
-                data: {
-                    id: newId,
-                    title: title,
-                    text: text,
-                    tags: tags,
-                    searchMatch: false
-                },
+                data: nodeData,
                 position: { x: x, y: y }
             });
             
+            // Apply color styling if selected
+            if (selectedColor) {
+                newNode.style('background-color', getCardColorValue(selectedColor, getCurrentTheme()));
+            }
+            
             newNode.grabify();
-            console.log(`Created card via form: ${title || 'Untitled'}`);
+            console.log(`Created card via form: ${title || 'Untitled'} ${selectedColor ? 'with color ' + selectedColor : ''}`);
         }
         
         // Code syntax dialog for quick card creation
@@ -3444,6 +4352,7 @@ Skriv ditt innehåll här...
                         title: cardData.title,
                         text: cardData.text,
                         tags: cardData.tags,
+                        hidden_tags: cardData.hidden_tags || [],
                         searchMatch: false,
                         // Copy metadata
                         export_timestamp: cardData.export_timestamp,
@@ -4035,6 +4944,7 @@ Kan ha #taggar överallt.
         // Event listeners
         document.addEventListener('DOMContentLoaded', function() {
             initCytoscape();
+            loadSavedTheme(); // Load theme before anything else
             
             // Auto-load from localStorage if data exists
             setTimeout(() => {
@@ -4052,8 +4962,10 @@ Kan ha #taggar överallt.
                                         title: cardData.title,
                                         text: cardData.text,
                                         tags: cardData.tags || [],
+                                        hidden_tags: cardData.hidden_tags || [],
                                         searchMatch: false,
                                         isManualCard: cardData.isManualCard || false,
+                                        cardColor: cardData.cardColor || null,
                                         export_timestamp: cardData.export_timestamp || null,
                                         export_session: cardData.export_session || null,
                                         export_source: cardData.export_source || null,
@@ -4064,6 +4976,17 @@ Kan ha #taggar överallt.
                                     },
                                     position: cardData.position
                                 });
+                                
+                                // Restore pinned state
+                                if (cardData.pinned) {
+                                    newNode.addClass('pinned');
+                                }
+                                
+                                // Restore card color
+                                if (cardData.cardColor) {
+                                    newNode.style('background-color', getCardColorValue(cardData.cardColor, getCurrentTheme()));
+                                }
+                                
                                 newNode.grabify();
                             });
                             
@@ -4092,6 +5015,12 @@ Kan ha #taggar överallt.
                 searchTimeout = setTimeout(() => {
                     performSearch(this.value);
                 }, 300);
+            });
+            
+            // Make status info clickable to close (especially useful on mobile)
+            const searchInfo = document.getElementById('searchInfo');
+            searchInfo.addEventListener('click', function() {
+                this.classList.remove('visible');
             });
             
             // Clear search when input is empty
@@ -4341,30 +5270,64 @@ Kan ha #taggar överallt.
                     arrangeSelectedInRow();
                 }
                 
+                // T för färgval (markerade kort) - only if G is not pressed
+                if (e.key === 't' && !e.ctrlKey && !e.altKey && !window.keysPressed.has('g')) {
+                    e.preventDefault();
+                    const selectedNodes = cy.$('node:selected');
+                    if (selectedNodes.length > 0) {
+                        // Create fake event with screen center position
+                        const fakeEvent = {
+                            clientX: window.innerWidth / 2,
+                            clientY: window.innerHeight / 2
+                        };
+                        showColorPicker(fakeEvent, selectedNodes);
+                    }
+                }
+                
+                // Siffertangenter 1-6 för direktfärgning
+                if (['1', '2', '3', '4', '5', '6'].includes(e.key) && !e.ctrlKey && !e.altKey && !window.keysPressed.has('g')) {
+                    const selectedNodes = cy.$('node:selected');
+                    if (selectedNodes.length > 0) {
+                        e.preventDefault();
+                        const colorNumber = parseInt(e.key);
+                        const colorId = `card-color-${colorNumber}`;
+                        console.log(`Direct color shortcut ${colorNumber}, applying to ${selectedNodes.length} cards`);
+                        
+                        // Apply color to all selected nodes
+                        selectedNodes.forEach(node => {
+                            node.data('cardColor', colorId);
+                            const colorValue = getCardColorValue(colorId, getCurrentTheme());
+                            node.style('background-color', colorValue);
+                        });
+                        
+                        console.log(`Applied color ${colorNumber} to ${selectedNodes.length} cards via shortcut`);
+                    }
+                }
+                
+                // 0 för att ta bort färg (återställa)
+                if (e.key === '0' && !e.ctrlKey && !e.altKey && !window.keysPressed.has('g')) {
+                    const selectedNodes = cy.$('node:selected');
+                    if (selectedNodes.length > 0) {
+                        e.preventDefault();
+                        console.log(`Remove color shortcut, removing from ${selectedNodes.length} cards`);
+                        
+                        // Remove color from all selected nodes
+                        selectedNodes.forEach(node => {
+                            removeCardColor(node);
+                        });
+                        
+                        console.log(`Removed color from ${selectedNodes.length} cards via shortcut`);
+                    }
+                }
+                
                 // Q för kluster/grid (markerade kort)
                 if (e.key === 'q' && !e.ctrlKey && !e.altKey) {
                     e.preventDefault();
                     arrangeSelectedInGrid();
                 }
                 
-                // Arrangement shortcuts for selected cards
-                // 1 för kolumn (vertical column)
-                if (e.key === '1' && !e.ctrlKey && !e.altKey) {
-                    e.preventDefault();
-                    arrangeSelectedInColumn();
-                }
-                
-                // 2 för rad (horizontal row)
-                if (e.key === '2' && !e.ctrlKey && !e.altKey) {
-                    e.preventDefault();
-                    arrangeSelectedInRow();
-                }
-                
-                // 3 för rutnät (grid)
-                if (e.key === '3' && !e.ctrlKey && !e.altKey) {
-                    e.preventDefault();
-                    arrangeSelectedInGrid();
-                }
+                // Gamla arrangement shortcuts 1,2,3 borttagna för färgfunktionen
+                // Använd istället V (kolumn), H (rad), Q (rutnät)
                 
                 
                 
