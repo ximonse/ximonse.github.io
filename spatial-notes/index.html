@@ -6,6 +6,7 @@
     <title>Spatial Notes - Sök och Klunga</title>
     <script src="https://unpkg.com/cytoscape@3.26.0/dist/cytoscape.min.js"></script>
     <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
         body {
             margin: 0;
@@ -5002,51 +5003,53 @@ Kan ha #taggar överallt.
         
         let isGoogleApiLoaded = false;
         let isSignedIn = false;
-        let googleAuth = null;
+        let accessToken = null;
+        let tokenClient = null;
         
         // Initialize Google API
         async function initializeGoogleAPI() {
             try {
-                // Wait for gapi to be available
-                if (typeof gapi === 'undefined') {
-                    console.log('Google API not yet loaded, retrying in 2 seconds...');
+                // Wait for both gapi and google to be available
+                if (typeof gapi === 'undefined' || typeof google === 'undefined') {
+                    console.log('Google APIs not yet loaded, retrying in 2 seconds...');
                     setTimeout(() => initializeGoogleAPI(), 2000);
                     return;
                 }
                 
-                // Load client and auth2 libraries first
-                console.log('Loading Google API client and auth2...');
+                // Load Google Drive API client
+                console.log('Loading Google Drive API client...');
                 await new Promise((resolve, reject) => {
-                    gapi.load('client:auth2', {
-                        callback: () => {
-                            console.log('Google API client loaded successfully');
-                            resolve();
-                        },
-                        onerror: (error) => {
-                            console.error('Failed to load Google API client:', error);
-                            reject(error);
-                        }
+                    gapi.load('client', {
+                        callback: resolve,
+                        onerror: reject
                     });
                 });
                 
                 // Initialize client
                 await gapi.client.init({
-                    client_id: GOOGLE_CLIENT_ID,
-                    scope: GOOGLE_SCOPE,
-                    discoveryDocs: [DISCOVERY_DOC],
-                    cookie_policy: 'single_host_origin'
+                    discoveryDocs: [DISCOVERY_DOC]
                 });
                 
-                googleAuth = gapi.auth2.getAuthInstance();
+                // Initialize Google Identity Services
+                tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: GOOGLE_CLIENT_ID,
+                    scope: GOOGLE_SCOPE,
+                    callback: (response) => {
+                        if (response.access_token) {
+                            accessToken = response.access_token;
+                            isSignedIn = true;
+                            console.log('Successfully signed in to Google Drive');
+                            updateAuthStatus();
+                            
+                            // Auto-load after sign in
+                            setTimeout(() => loadFromGoogleDrive(), 500);
+                        }
+                    },
+                });
+                
                 isGoogleApiLoaded = true;
-                
-                // Listen to sign-in state changes
-                googleAuth.isSignedIn.listen(updateAuthStatus);
-                
-                // Check if user is already signed in
-                updateAuthStatus();
-                
                 console.log('Google API initialized successfully');
+                updateAuthStatus();
                 
             } catch (error) {
                 console.error('Error initializing Google API:', error);
@@ -5076,19 +5079,13 @@ Kan ha #taggar överallt.
         function updateAuthStatus() {
             if (!isGoogleApiLoaded) return;
             
-            isSignedIn = googleAuth.isSignedIn.get();
             const driveBtn = document.getElementById('googleDriveBtn');
             const driveButtonText = document.getElementById('driveButtonText');
             
-            if (isSignedIn) {
-                const user = googleAuth.currentUser.get();
-                const profile = user.getBasicProfile();
-                driveButtonText.textContent = `${profile.getGivenName()}`;
-                driveBtn.innerHTML = `<span>✅</span><span>${profile.getGivenName()}</span>`;
+            if (isSignedIn && accessToken) {
+                driveButtonText.textContent = 'Signed In';
+                driveBtn.innerHTML = `<span>✅</span><span>Signed In</span>`;
                 updateSyncStatus('Synced with Google Drive', 'success');
-                
-                // Auto-load from Drive when signed in
-                setTimeout(() => loadFromGoogleDrive(), 1000);
                 
                 // Start auto-sync
                 startAutoSync();
@@ -5104,27 +5101,26 @@ Kan ha #taggar överallt.
         
         // Toggle Google Drive authentication
         async function toggleGoogleDriveAuth() {
-            if (!isGoogleApiLoaded) {
+            if (!isGoogleApiLoaded || !tokenClient) {
                 updateSyncStatus('Google API not loaded yet...', 'loading');
                 return;
             }
             
             try {
-                if (isSignedIn) {
+                if (isSignedIn && accessToken) {
                     // Sign out
-                    await googleAuth.signOut();
+                    google.accounts.oauth2.revoke(accessToken, () => {
+                        console.log('Access token revoked');
+                    });
+                    accessToken = null;
+                    isSignedIn = false;
                     updateSyncStatus('Signed out from Google Drive', 'info');
+                    updateAuthStatus();
                 } else {
-                    // Sign in
+                    // Sign in - request access token
                     updateSyncStatus('Signing in to Google Drive...', 'loading');
-                    await googleAuth.signIn();
-                    updateSyncStatus('Signed in to Google Drive!', 'success');
-                    
-                    // Auto-load after sign in
-                    setTimeout(() => loadFromGoogleDrive(), 500);
+                    tokenClient.requestAccessToken({prompt: 'consent'});
                 }
-                
-                updateAuthStatus();
             } catch (error) {
                 console.error('Authentication error:', error);
                 updateSyncStatus('Authentication failed', 'error');
@@ -5152,7 +5148,7 @@ Kan ha #taggar överallt.
         
         // Save board to Google Drive
         async function saveToGoogleDrive() {
-            if (!isSignedIn) {
+            if (!isSignedIn || !accessToken) {
                 updateSyncStatus('Please sign in to Google Drive first', 'error');
                 return false;
             }
@@ -5194,6 +5190,7 @@ Kan ha #taggar överallt.
                             uploadType: 'media'
                         },
                         headers: {
+                            'Authorization': `Bearer ${accessToken}`,
                             'Content-Type': 'application/json'
                         },
                         body: fileContent
@@ -5207,6 +5204,7 @@ Kan ha #taggar överallt.
                             uploadType: 'multipart'
                         },
                         headers: {
+                            'Authorization': `Bearer ${accessToken}`,
                             'Content-Type': 'multipart/related; boundary="foo_bar_baz"'
                         },
                         body: `--foo_bar_baz\r\nContent-Type: application/json\r\n\r\n${JSON.stringify({
@@ -5227,7 +5225,7 @@ Kan ha #taggar överallt.
         
         // Load board from Google Drive
         async function loadFromGoogleDrive() {
-            if (!isSignedIn) {
+            if (!isSignedIn || !accessToken) {
                 return false;
             }
             
@@ -5240,9 +5238,15 @@ Kan ha #taggar överallt.
                     return false;
                 }
                 
-                const response = await gapi.client.drive.files.get({
-                    fileId: fileId,
-                    alt: 'media'
+                const response = await gapi.client.request({
+                    path: `https://www.googleapis.com/drive/v3/files/${fileId}`,
+                    method: 'GET',
+                    params: {
+                        alt: 'media'
+                    },
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    }
                 });
                 
                 const boardData = JSON.parse(response.body);
@@ -5294,10 +5298,17 @@ Kan ha #taggar överallt.
         // Find existing spatial notes file in Google Drive
         async function findSpatialNotesFile() {
             try {
-                const response = await gapi.client.drive.files.list({
-                    q: "name='spatial-notes-board.json' and trashed=false",
-                    spaces: 'drive',
-                    fields: 'files(id, name)'
+                const response = await gapi.client.request({
+                    path: 'https://www.googleapis.com/drive/v3/files',
+                    method: 'GET',
+                    params: {
+                        q: "name='spatial-notes-board.json' and trashed=false",
+                        spaces: 'drive',
+                        fields: 'files(id, name)'
+                    },
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    }
                 });
                 
                 const files = response.result.files;
@@ -5311,11 +5322,11 @@ Kan ha #taggar överallt.
         // Auto-sync functionality
         let autoSyncInterval;
         function startAutoSync() {
-            if (!isSignedIn) return;
+            if (!isSignedIn || !accessToken) return;
             
             // Auto-save to Drive every 30 seconds when signed in
             autoSyncInterval = setInterval(async () => {
-                if (isSignedIn) {
+                if (isSignedIn && accessToken) {
                     await saveToGoogleDrive();
                 }
             }, 30000);
@@ -5346,7 +5357,7 @@ Kan ha #taggar överallt.
                     }
                     
                     // Also save to Drive if signed in
-                    if (isSignedIn) {
+                    if (isSignedIn && accessToken) {
                         saveToGoogleDrive();
                     }
                 }
