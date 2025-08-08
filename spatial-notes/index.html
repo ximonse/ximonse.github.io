@@ -5081,15 +5081,21 @@ Kan ha #taggar överallt.
             const driveBtn = document.getElementById('googleDriveBtn');
             const driveButtonText = document.getElementById('driveButtonText');
             
+            // Check if elements exist before updating
+            if (!driveBtn) {
+                console.log('Google Drive button not found in DOM');
+                return;
+            }
+            
             if (isSignedIn && accessToken) {
-                driveButtonText.textContent = `${currentProject}`;
+                if (driveButtonText) driveButtonText.textContent = `${currentProject}`;
                 driveBtn.innerHTML = `<span>✅</span><span>${currentProject}</span>`;
                 updateSyncStatus(`Synced: ${currentProject}`, 'success');
                 
                 // Start auto-sync
                 startAutoSync();
             } else {
-                driveButtonText.textContent = 'Google Drive';
+                if (driveButtonText) driveButtonText.textContent = 'Google Drive';
                 driveBtn.innerHTML = `<span>📱</span><span>Google Drive</span>`;
                 updateSyncStatus('', '');
                 
@@ -5234,6 +5240,32 @@ Kan ha #taggar överallt.
         // Get current project filename
         function getCurrentProjectFileName() {
             return `spatial-notes-${currentProject}.json`;
+        }
+        
+        // Update node appearance after loading
+        function updateNodeAppearance(node) {
+            try {
+                // Apply color if node has cardColor data
+                const cardColor = node.data('cardColor');
+                if (cardColor) {
+                    const colorValue = getCardColorValue(cardColor, getCurrentTheme());
+                    node.style('background-color', colorValue);
+                }
+                
+                // Apply pinned styling if needed
+                const isPinned = node.data('isPinned');
+                if (isPinned) {
+                    node.addClass('pinned');
+                }
+                
+                // Update text content and height
+                const heightInfo = getMeasuredTextHeight(node);
+                node.style('height', heightInfo + 'px');
+                
+            } catch (error) {
+                console.error('Error updating node appearance:', error);
+                // Continue without styling rather than failing
+            }
         }
         
         // Update sync status display
