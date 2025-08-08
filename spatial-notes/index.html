@@ -5263,7 +5263,11 @@ Kan ha #taggar överallt.
             }
             
             try {
+                console.log(`Saving project "${currentProject}" to Google Drive...`);
                 updateSyncStatus('Saving to Google Drive...', 'loading');
+                
+                const cardCount = cy.nodes().length;
+                console.log(`Preparing to save ${cardCount} cards`);
                 
                 const boardData = {
                     cards: cy.nodes().map(node => ({
@@ -5287,8 +5291,14 @@ Kan ha #taggar överallt.
                 const fileContent = JSON.stringify(boardData, null, 2);
                 const fileName = getCurrentProjectFileName();
                 
+                console.log(`File to save: ${fileName}`);
+                console.log(`Content length: ${fileContent.length} characters`);
+                console.log(`Board data:`, boardData);
+                
                 // Check if file already exists
+                console.log('Checking if file exists...');
                 const existingFileId = await findSpatialNotesFile();
+                console.log('Existing file ID:', existingFileId);
                 
                 if (existingFileId) {
                     // Update existing file
@@ -5353,15 +5363,21 @@ Kan ha #taggar överallt.
         // Load board from Google Drive
         async function loadFromGoogleDrive() {
             if (!isSignedIn || !accessToken) {
+                console.log('Not signed in - cannot load from Drive');
+                updateSyncStatus('Please sign in to Google Drive first', 'error');
                 return false;
             }
             
             try {
+                console.log(`Loading project "${currentProject}" from Google Drive...`);
                 updateSyncStatus('Loading from Google Drive...', 'loading');
                 
                 const fileId = await findSpatialNotesFile();
+                console.log('File search result:', fileId);
+                
                 if (!fileId) {
-                    updateSyncStatus('No saved board found in Drive', 'info');
+                    console.log(`No file found for project "${currentProject}"`);
+                    updateSyncStatus(`No saved data for "${currentProject}"`, 'info');
                     return false;
                 }
                 
@@ -5372,19 +5388,31 @@ Kan ha #taggar överallt.
                     }
                 });
                 
+                console.log('Drive API response status:', response.status);
+                
                 if (!response.ok) {
-                    throw new Error(`Failed to load file: ${response.statusText}`);
+                    const errorText = await response.text();
+                    console.error('Drive API error:', errorText);
+                    throw new Error(`Failed to load file: ${response.status} ${response.statusText}`);
                 }
                 
                 const fileContent = await response.text();
+                console.log('File content length:', fileContent.length);
+                console.log('File content preview:', fileContent.substring(0, 200));
+                
                 const boardData = JSON.parse(fileContent);
+                console.log('Parsed board data:', boardData);
                 
                 // Clear existing cards
                 cy.nodes().remove();
                 
                 // Add cards from Drive
                 if (boardData.cards && boardData.cards.length > 0) {
-                    boardData.cards.forEach(card => {
+                    console.log(`Loading ${boardData.cards.length} cards...`);
+                    
+                    boardData.cards.forEach((card, index) => {
+                        console.log(`Adding card ${index + 1}:`, card.id, card.title?.substring(0, 30));
+                        
                         const nodeData = {
                             id: card.id,
                             title: card.title || '',
@@ -5406,16 +5434,18 @@ Kan ha #taggar överallt.
                         updateNodeAppearance(node);
                     });
                     
-                    updateSyncStatus('✅ Loaded from Drive', 'success');
+                    console.log('All cards loaded successfully');
+                    updateSyncStatus(`✅ Loaded ${boardData.cards.length} cards from "${currentProject}"`, 'success');
                     
                     // Auto-save to localStorage as backup
                     setTimeout(() => saveBoard(), 100);
                     
                     return true;
+                } else {
+                    console.log('No cards found in board data');
+                    updateSyncStatus(`Empty project: "${currentProject}"`, 'info');
+                    return false;
                 }
-                
-                updateSyncStatus('Empty board loaded', 'info');
-                return false;
             } catch (error) {
                 console.error('Error loading from Google Drive:', error);
                 updateSyncStatus('Failed to load from Drive', 'error');
