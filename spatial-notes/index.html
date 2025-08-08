@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Spatial Notes - Sök och Klunga</title>
     <script src="https://unpkg.com/cytoscape@3.26.0/dist/cytoscape.min.js"></script>
+    <script src="https://apis.google.com/js/api.js"></script>
     <style>
         body {
             margin: 0;
@@ -90,6 +91,52 @@
         
         .add-card-btn:hover {
             background: #005999;
+        }
+        
+        .google-drive-btn {
+            background: #1a73e8;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            margin-left: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .google-drive-btn:hover {
+            background: #1557b0;
+        }
+        
+        .google-drive-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .sync-status {
+            font-size: 12px;
+            color: #666;
+            margin-left: 8px;
+        }
+        
+        .sync-status.sync-success {
+            color: #28a745;
+        }
+        
+        .sync-status.sync-error {
+            color: #dc3545;
+        }
+        
+        .sync-status.sync-loading {
+            color: #007acc;
+        }
+        
+        .sync-status.sync-info {
+            color: #17a2b8;
         }
         
         .menu-dropdown {
@@ -778,6 +825,11 @@
             </select>
         </div>
         <button class="add-card-btn" onclick="addNewCard()">+ Nytt kort</button>
+        <button class="google-drive-btn" id="googleDriveBtn" onclick="toggleGoogleDriveAuth()">
+            <span>📱</span>
+            <span id="driveButtonText">Google Drive</span>
+        </button>
+        <span class="sync-status" id="syncStatus"></span>
         
         <!-- Mobile controls (hidden on desktop) -->
         <div class="mobile-controls">
@@ -795,6 +847,8 @@
                 <button onclick="exportToJSON()">📋 Exportera JSON</button>
                 <button onclick="importFromJSON()">📁 Importera JSON</button>
                 <button onclick="importFromExtractor()">📥 Från PDF-Extractor</button>
+                <button onclick="saveToGoogleDrive()" id="driveSaveBtn">☁️ Spara till Drive</button>
+                <button onclick="loadFromGoogleDrive()" id="driveLoadBtn">☁️ Ladda från Drive</button>
                 <button onclick="toggleMetadataView()" id="metadataBtn">🔍 Metadata</button>
                 <button onclick="debugDumpPositions()">🐛 Debug Positioner</button>
                 <button onclick="toggleDarkTheme()" id="themeBtn">🌙 Mörkt Tema</button>
@@ -4941,10 +4995,362 @@ Kan ha #taggar överallt.
             console.log('Cleared all edit dialogs and potential zombie listeners');
         }
         
+        // Google Drive API Configuration
+        const GOOGLE_CLIENT_ID = '971005822021-8ebrpd92n1upsedg7s5fn80mnmvhou5d.apps.googleusercontent.com';
+        const GOOGLE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+        const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
+        
+        let isGoogleApiLoaded = false;
+        let isSignedIn = false;
+        let googleAuth = null;
+        
+        // Initialize Google API
+        async function initializeGoogleAPI() {
+            try {
+                // Wait for gapi to be available
+                if (typeof gapi === 'undefined') {
+                    console.log('Google API not yet loaded, retrying in 2 seconds...');
+                    setTimeout(() => initializeGoogleAPI(), 2000);
+                    return;
+                }
+                
+                // Load client and auth2 libraries first
+                console.log('Loading Google API client and auth2...');
+                await new Promise((resolve, reject) => {
+                    gapi.load('client:auth2', {
+                        callback: () => {
+                            console.log('Google API client loaded successfully');
+                            resolve();
+                        },
+                        onerror: (error) => {
+                            console.error('Failed to load Google API client:', error);
+                            reject(error);
+                        }
+                    });
+                });
+                
+                // Initialize client
+                await gapi.client.init({
+                    client_id: GOOGLE_CLIENT_ID,
+                    scope: GOOGLE_SCOPE,
+                    discoveryDocs: [DISCOVERY_DOC],
+                    cookie_policy: 'single_host_origin'
+                });
+                
+                googleAuth = gapi.auth2.getAuthInstance();
+                isGoogleApiLoaded = true;
+                
+                // Listen to sign-in state changes
+                googleAuth.isSignedIn.listen(updateAuthStatus);
+                
+                // Check if user is already signed in
+                updateAuthStatus();
+                
+                console.log('Google API initialized successfully');
+                
+            } catch (error) {
+                console.error('Error initializing Google API:', error);
+                
+                // Check if we're running locally
+                if (window.location.protocol === 'file:') {
+                    console.log('Google Drive sync requires HTTPS. Deploy to GitHub Pages to test.');
+                    updateSyncStatus('Google Drive needs HTTPS', 'info');
+                    
+                    // Disable the Google Drive button for local development
+                    const driveBtn = document.getElementById('googleDriveBtn');
+                    if (driveBtn) {
+                        driveBtn.disabled = true;
+                        driveBtn.innerHTML = '<span>⚠️</span><span>Needs HTTPS</span>';
+                    }
+                } else {
+                    console.log('Google API will retry in 5 seconds...');
+                    updateSyncStatus('Google API loading...', 'info');
+                    
+                    // Retry initialization after 5 seconds
+                    setTimeout(() => initializeGoogleAPI(), 5000);
+                }
+            }
+        }
+        
+        // Update authentication status
+        function updateAuthStatus() {
+            if (!isGoogleApiLoaded) return;
+            
+            isSignedIn = googleAuth.isSignedIn.get();
+            const driveBtn = document.getElementById('googleDriveBtn');
+            const driveButtonText = document.getElementById('driveButtonText');
+            
+            if (isSignedIn) {
+                const user = googleAuth.currentUser.get();
+                const profile = user.getBasicProfile();
+                driveButtonText.textContent = `${profile.getGivenName()}`;
+                driveBtn.innerHTML = `<span>✅</span><span>${profile.getGivenName()}</span>`;
+                updateSyncStatus('Synced with Google Drive', 'success');
+                
+                // Auto-load from Drive when signed in
+                setTimeout(() => loadFromGoogleDrive(), 1000);
+                
+                // Start auto-sync
+                startAutoSync();
+            } else {
+                driveButtonText.textContent = 'Google Drive';
+                driveBtn.innerHTML = `<span>📱</span><span>Google Drive</span>`;
+                updateSyncStatus('', '');
+                
+                // Stop auto-sync when signed out
+                stopAutoSync();
+            }
+        }
+        
+        // Toggle Google Drive authentication
+        async function toggleGoogleDriveAuth() {
+            if (!isGoogleApiLoaded) {
+                updateSyncStatus('Google API not loaded yet...', 'loading');
+                return;
+            }
+            
+            try {
+                if (isSignedIn) {
+                    // Sign out
+                    await googleAuth.signOut();
+                    updateSyncStatus('Signed out from Google Drive', 'info');
+                } else {
+                    // Sign in
+                    updateSyncStatus('Signing in to Google Drive...', 'loading');
+                    await googleAuth.signIn();
+                    updateSyncStatus('Signed in to Google Drive!', 'success');
+                    
+                    // Auto-load after sign in
+                    setTimeout(() => loadFromGoogleDrive(), 500);
+                }
+                
+                updateAuthStatus();
+            } catch (error) {
+                console.error('Authentication error:', error);
+                updateSyncStatus('Authentication failed', 'error');
+            }
+        }
+        
+        // Update sync status display
+        function updateSyncStatus(message, type = '') {
+            const statusEl = document.getElementById('syncStatus');
+            statusEl.textContent = message;
+            statusEl.className = 'sync-status';
+            
+            if (type) {
+                statusEl.classList.add(`sync-${type}`);
+            }
+            
+            // Auto-clear status after 5 seconds for non-permanent messages
+            if (type === 'loading' || type === 'info') {
+                setTimeout(() => {
+                    statusEl.textContent = '';
+                    statusEl.className = 'sync-status';
+                }, 5000);
+            }
+        }
+        
+        // Save board to Google Drive
+        async function saveToGoogleDrive() {
+            if (!isSignedIn) {
+                updateSyncStatus('Please sign in to Google Drive first', 'error');
+                return false;
+            }
+            
+            try {
+                updateSyncStatus('Saving to Google Drive...', 'loading');
+                
+                const boardData = {
+                    cards: cy.nodes().map(node => ({
+                        id: node.id(),
+                        title: node.data('title') || '',
+                        text: node.data('text') || '',
+                        tags: node.data('tags') || [],
+                        x: node.position('x'),
+                        y: node.position('y'),
+                        cardColor: node.data('cardColor') || '',
+                        export_source: node.data('export_source') || '',
+                        source_file: node.data('source_file') || '',
+                        matched_terms: node.data('matched_terms') || '',
+                        isManualCard: node.data('isManualCard') || false,
+                        isPinned: node.data('isPinned') || false
+                    })),
+                    timestamp: new Date().toISOString(),
+                    version: '2.0'
+                };
+                
+                const fileContent = JSON.stringify(boardData, null, 2);
+                const fileName = 'spatial-notes-board.json';
+                
+                // Check if file already exists
+                const existingFileId = await findSpatialNotesFile();
+                
+                if (existingFileId) {
+                    // Update existing file
+                    await gapi.client.request({
+                        path: `https://www.googleapis.com/upload/drive/v3/files/${existingFileId}`,
+                        method: 'PATCH',
+                        params: {
+                            uploadType: 'media'
+                        },
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: fileContent
+                    });
+                } else {
+                    // Create new file
+                    await gapi.client.request({
+                        path: 'https://www.googleapis.com/upload/drive/v3/files',
+                        method: 'POST',
+                        params: {
+                            uploadType: 'multipart'
+                        },
+                        headers: {
+                            'Content-Type': 'multipart/related; boundary="foo_bar_baz"'
+                        },
+                        body: `--foo_bar_baz\r\nContent-Type: application/json\r\n\r\n${JSON.stringify({
+                            name: fileName,
+                            parents: []
+                        })}\r\n--foo_bar_baz\r\nContent-Type: application/json\r\n\r\n${fileContent}\r\n--foo_bar_baz--`
+                    });
+                }
+                
+                updateSyncStatus('✅ Saved to Drive', 'success');
+                return true;
+            } catch (error) {
+                console.error('Error saving to Google Drive:', error);
+                updateSyncStatus('Failed to save to Drive', 'error');
+                return false;
+            }
+        }
+        
+        // Load board from Google Drive
+        async function loadFromGoogleDrive() {
+            if (!isSignedIn) {
+                return false;
+            }
+            
+            try {
+                updateSyncStatus('Loading from Google Drive...', 'loading');
+                
+                const fileId = await findSpatialNotesFile();
+                if (!fileId) {
+                    updateSyncStatus('No saved board found in Drive', 'info');
+                    return false;
+                }
+                
+                const response = await gapi.client.drive.files.get({
+                    fileId: fileId,
+                    alt: 'media'
+                });
+                
+                const boardData = JSON.parse(response.body);
+                
+                // Clear existing cards
+                cy.nodes().remove();
+                
+                // Add cards from Drive
+                if (boardData.cards && boardData.cards.length > 0) {
+                    boardData.cards.forEach(card => {
+                        const nodeData = {
+                            id: card.id,
+                            title: card.title || '',
+                            text: card.text || '',
+                            tags: card.tags || [],
+                            cardColor: card.cardColor || '',
+                            export_source: card.export_source || '',
+                            source_file: card.source_file || '',
+                            matched_terms: card.matched_terms || '',
+                            isManualCard: card.isManualCard || false,
+                            isPinned: card.isPinned || false
+                        };
+                        
+                        const node = cy.add({
+                            data: nodeData,
+                            position: { x: card.x || 0, y: card.y || 0 }
+                        });
+                        
+                        updateNodeAppearance(node);
+                    });
+                    
+                    updateSyncStatus('✅ Loaded from Drive', 'success');
+                    
+                    // Auto-save to localStorage as backup
+                    setTimeout(() => saveBoard(), 100);
+                    
+                    return true;
+                }
+                
+                updateSyncStatus('Empty board loaded', 'info');
+                return false;
+            } catch (error) {
+                console.error('Error loading from Google Drive:', error);
+                updateSyncStatus('Failed to load from Drive', 'error');
+                return false;
+            }
+        }
+        
+        // Find existing spatial notes file in Google Drive
+        async function findSpatialNotesFile() {
+            try {
+                const response = await gapi.client.drive.files.list({
+                    q: "name='spatial-notes-board.json' and trashed=false",
+                    spaces: 'drive',
+                    fields: 'files(id, name)'
+                });
+                
+                const files = response.result.files;
+                return files && files.length > 0 ? files[0].id : null;
+            } catch (error) {
+                console.error('Error searching for spatial notes file:', error);
+                return null;
+            }
+        }
+        
+        // Auto-sync functionality
+        let autoSyncInterval;
+        function startAutoSync() {
+            if (!isSignedIn) return;
+            
+            // Auto-save to Drive every 30 seconds when signed in
+            autoSyncInterval = setInterval(async () => {
+                if (isSignedIn) {
+                    await saveToGoogleDrive();
+                }
+            }, 30000);
+        }
+        
+        function stopAutoSync() {
+            if (autoSyncInterval) {
+                clearInterval(autoSyncInterval);
+                autoSyncInterval = null;
+            }
+        }
+        
         // Event listeners
         document.addEventListener('DOMContentLoaded', function() {
             initCytoscape();
             loadSavedTheme(); // Load theme before anything else
+            
+            // Initialize Google Drive API (wait for gapi to load)
+            setTimeout(() => initializeGoogleAPI(), 3000);
+            
+            // Enhanced save function that includes Drive sync (after original function is defined)
+            setTimeout(() => {
+                const originalSaveBoard = window.saveBoard;
+                window.saveBoard = function() {
+                    // Always save to localStorage first
+                    if (originalSaveBoard) {
+                        originalSaveBoard();
+                    }
+                    
+                    // Also save to Drive if signed in
+                    if (isSignedIn) {
+                        saveToGoogleDrive();
+                    }
+                }
+            }, 100);
             
             // Auto-load from localStorage if data exists
             setTimeout(() => {
