@@ -5008,6 +5008,104 @@ Kan ha #taggar överallt.
         let availableProjects = [];
         let projectsLoaded = false;
         
+        // Token management
+        let tokenExpiry = null;
+        
+        // Save tokens to localStorage
+        function saveTokens() {
+            if (accessToken) {
+                localStorage.setItem('google_access_token', accessToken);
+                localStorage.setItem('google_token_expiry', tokenExpiry?.toString() || '');
+                localStorage.setItem('google_current_project', currentProject);
+                console.log('Tokens saved to localStorage');
+            }
+        }
+        
+        // Load tokens from localStorage
+        function loadSavedTokens() {
+            const savedToken = localStorage.getItem('google_access_token');
+            const savedExpiry = localStorage.getItem('google_token_expiry');
+            const savedProject = localStorage.getItem('google_current_project');
+            
+            if (savedToken && savedExpiry) {
+                const expiryTime = parseInt(savedExpiry);
+                const now = Date.now();
+                
+                // Check if token is still valid (with 5 minute buffer)
+                if (expiryTime && now < (expiryTime - 5 * 60 * 1000)) {
+                    accessToken = savedToken;
+                    tokenExpiry = expiryTime;
+                    isSignedIn = true;
+                    
+                    if (savedProject) {
+                        currentProject = savedProject;
+                    }
+                    
+                    console.log('Restored valid tokens from localStorage');
+                    return true;
+                } else {
+                    console.log('Saved tokens expired, clearing localStorage');
+                    clearSavedTokens();
+                }
+            }
+            
+            return false;
+        }
+        
+        // Clear saved tokens
+        function clearSavedTokens() {
+            localStorage.removeItem('google_access_token');
+            localStorage.removeItem('google_token_expiry');
+            localStorage.removeItem('google_current_project');
+            accessToken = null;
+            tokenExpiry = null;
+            isSignedIn = false;
+            console.log('Cleared saved tokens');
+        }
+        
+        // Check if token needs refresh
+        function isTokenExpiringSoon() {
+            if (!tokenExpiry) return true;
+            const now = Date.now();
+            const timeToExpiry = tokenExpiry - now;
+            // Refresh if less than 10 minutes left
+            return timeToExpiry < (10 * 60 * 1000);
+        }
+        
+        // Refresh token if needed before API calls
+        async function ensureValidToken() {
+            if (!isSignedIn || !accessToken) {
+                throw new Error('Not signed in to Google Drive');
+            }
+            
+            if (isTokenExpiringSoon()) {
+                console.log('Token expiring soon, requesting new token...');
+                
+                return new Promise((resolve, reject) => {
+                    // Request new token
+                    tokenClient.requestAccessToken({
+                        prompt: '',
+                        callback: (response) => {
+                            if (response.access_token) {
+                                accessToken = response.access_token;
+                                tokenExpiry = Date.now() + (response.expires_in ? response.expires_in * 1000 : 3600000);
+                                saveTokens();
+                                console.log('Token refreshed successfully');
+                                resolve();
+                            } else {
+                                console.error('Failed to refresh token:', response.error);
+                                clearSavedTokens();
+                                updateAuthStatus();
+                                reject(new Error('Token refresh failed'));
+                            }
+                        }
+                    });
+                });
+            }
+            
+            return Promise.resolve();
+        }
+        
         // Initialize Google API
         async function initializeGoogleAPI() {
             try {
@@ -5028,7 +5126,15 @@ Kan ha #taggar överallt.
                         if (response.access_token) {
                             accessToken = response.access_token;
                             isSignedIn = true;
+                            
+                            // Calculate token expiry (Google tokens typically last 1 hour)
+                            tokenExpiry = Date.now() + (response.expires_in ? response.expires_in * 1000 : 3600000);
+                            
+                            // Save tokens for persistence
+                            saveTokens();
+                            
                             console.log('Successfully signed in to Google Drive');
+                            console.log('Token expires at:', new Date(tokenExpiry).toLocaleString());
                             updateAuthStatus();
                             
                             // Load available projects and then current project
@@ -5045,7 +5151,20 @@ Kan ha #taggar överallt.
                 
                 isGoogleApiLoaded = true;
                 console.log('Google Identity Services initialized successfully');
-                updateAuthStatus();
+                
+                // Try to restore saved tokens
+                if (loadSavedTokens()) {
+                    console.log('Restored session from saved tokens');
+                    updateAuthStatus();
+                    
+                    // Load projects and current project
+                    setTimeout(async () => {
+                        await loadAvailableProjects();
+                        await loadFromGoogleDrive();
+                    }, 500);
+                } else {
+                    updateAuthStatus();
+                }
                 
             } catch (error) {
                 console.error('Error initializing Google Identity Services:', error);
@@ -5114,8 +5233,10 @@ Kan ha #taggar överallt.
                     google.accounts.oauth2.revoke(accessToken, () => {
                         console.log('Access token revoked');
                     });
-                    accessToken = null;
-                    isSignedIn = false;
+                    
+                    // Clear all tokens and saved data
+                    clearSavedTokens();
+                    
                     updateSyncStatus('Signed out from Google Drive', 'info');
                     updateAuthStatus();
                 } else {
@@ -5133,9 +5254,8 @@ Kan ha #taggar överallt.
         
         // Load list of available projects from Google Drive
         async function loadAvailableProjects() {
-            if (!isSignedIn || !accessToken) return [];
-            
             try {
+                await ensureValidToken();
                 const params = new URLSearchParams({
                     q: "name contains 'spatial-notes-' and name contains '.json' and trashed=false",
                     spaces: 'drive',
@@ -5309,12 +5429,10 @@ Kan ha #taggar överallt.
         
         // Save board to Google Drive
         async function saveToGoogleDrive() {
-            if (!isSignedIn || !accessToken) {
-                updateSyncStatus('Please sign in to Google Drive first', 'error');
-                return false;
-            }
-            
             try {
+                // Ensure we have a valid token
+                await ensureValidToken();
+                
                 console.log(`Saving project "${currentProject}" to Google Drive...`);
                 updateSyncStatus('Saving to Google Drive...', 'loading');
                 
@@ -5407,20 +5525,25 @@ Kan ha #taggar överallt.
                 return true;
             } catch (error) {
                 console.error('Error saving to Google Drive:', error);
-                updateSyncStatus('Failed to save to Drive', 'error');
+                
+                // If error is auth-related, clear tokens and update UI
+                if (error.message.includes('Not signed in') || error.message.includes('Token refresh failed')) {
+                    clearSavedTokens();
+                    updateAuthStatus();
+                    updateSyncStatus('Please sign in to Google Drive', 'error');
+                } else {
+                    updateSyncStatus('Failed to save to Drive', 'error');
+                }
                 return false;
             }
         }
         
         // Load board from Google Drive
         async function loadFromGoogleDrive() {
-            if (!isSignedIn || !accessToken) {
-                console.log('Not signed in - cannot load from Drive');
-                updateSyncStatus('Please sign in to Google Drive first', 'error');
-                return false;
-            }
-            
             try {
+                // Ensure we have a valid token
+                await ensureValidToken();
+                
                 console.log(`Loading project "${currentProject}" from Google Drive...`);
                 updateSyncStatus('Loading from Google Drive...', 'loading');
                 
@@ -5500,7 +5623,15 @@ Kan ha #taggar överallt.
                 }
             } catch (error) {
                 console.error('Error loading from Google Drive:', error);
-                updateSyncStatus('Failed to load from Drive', 'error');
+                
+                // If error is auth-related, clear tokens and update UI
+                if (error.message.includes('Not signed in') || error.message.includes('Token refresh failed')) {
+                    clearSavedTokens();
+                    updateAuthStatus();
+                    updateSyncStatus('Please sign in to Google Drive', 'error');
+                } else {
+                    updateSyncStatus('Failed to load from Drive', 'error');
+                }
                 return false;
             }
         }
