@@ -5003,7 +5003,7 @@ Kan ha #taggar överallt.
         let accessToken = null;
         let tokenClient = null;
         
-        // Project management
+        // Project management  
         let currentProject = 'default';
         let availableProjects = [];
         let projectsLoaded = false;
@@ -5154,12 +5154,13 @@ Kan ha #taggar överallt.
                 
                 // Try to restore saved tokens
                 if (loadSavedTokens()) {
-                    console.log('Restored session from saved tokens');
+                    console.log(`Restored session from saved tokens, project: ${currentProject}`);
                     updateAuthStatus();
                     
                     // Load projects and current project
                     setTimeout(async () => {
                         await loadAvailableProjects();
+                        console.log(`Loading saved project: ${currentProject}`);
                         await loadFromGoogleDrive();
                     }, 500);
                 } else {
@@ -5314,6 +5315,10 @@ Kan ha #taggar överallt.
                 
                 // Switch to new project
                 currentProject = projectName;
+                
+                // Save current project to localStorage immediately
+                localStorage.setItem('google_current_project', currentProject);
+                
                 updateSyncStatus(`Switching to ${projectName}...`, 'loading');
                 
                 // Load the new project
@@ -5824,6 +5829,13 @@ Kan ha #taggar överallt.
         document.addEventListener('DOMContentLoaded', function() {
             initCytoscape();
             loadSavedTheme(); // Load theme before anything else
+            
+            // Load current project from localStorage even without Google login
+            const savedProject = localStorage.getItem('google_current_project');
+            if (savedProject) {
+                currentProject = savedProject;
+                console.log(`Restored current project: ${currentProject}`);
+            }
             
             // Initialize Google Drive API (wait for gapi to load)
             setTimeout(() => initializeGoogleAPI(), 3000);
