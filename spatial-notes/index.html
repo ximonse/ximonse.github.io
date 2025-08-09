@@ -6659,6 +6659,8 @@ Kan ha #taggar överallt.
                 if (savedProject) {
                     this.state.currentProject = savedProject;
                     console.log(`[DriveModule] Restored project: ${savedProject}`);
+                } else {
+                    console.log(`[DriveModule] No saved project, using: ${this.state.currentProject}`);
                 }
                 
                 // Initialize Google API after delay
@@ -7021,6 +7023,7 @@ Kan ha #taggar överallt.
                 const fileName = `spatial-notes-${this.state.currentProject}.json`;
                 
                 console.log(`[DriveModule] Saving file: ${fileName} (${fileContent.length} chars)`);
+                console.log(`[DriveModule] Current project state: ${this.state.currentProject}`);
                 
                 // Check if file already exists
                 const existingFileId = await this.findProjectFile(fileName);
@@ -7255,10 +7258,21 @@ Kan ha #taggar överallt.
 
         // Add project management helper functions
         GoogleDriveModule.switchProject = function(projectName) {
+            console.log(`[DriveModule] Switching from '${this.state.currentProject}' to '${projectName}'`);
             this.state.currentProject = projectName;
             sessionStorage.setItem('google_current_project', projectName);
+            
+            // Update legacy global as well
+            if (window.currentProject !== undefined) {
+                window.currentProject = projectName;
+            }
+            
             this.showStatus(`Bytte till projekt: ${projectName}`);
-            document.querySelector('#newProjectName').closest('div').parentElement.parentElement.parentElement.remove();
+            console.log(`[DriveModule] Project switched successfully to: ${this.state.currentProject}`);
+            
+            // Close modal
+            const modal = document.querySelector('#newProjectName').closest('div').parentElement.parentElement.parentElement;
+            if (modal) modal.remove();
         };
 
         GoogleDriveModule.loadProject = async function(projectName) {
@@ -7299,6 +7313,7 @@ Kan ha #taggar överallt.
             window.isSignedIn = GoogleDriveModule.state.isSignedIn;
             window.accessToken = GoogleDriveModule.state.accessToken;
             window.currentProject = GoogleDriveModule.state.currentProject;
+            console.log(`[DriveModule] Updated legacy globals - currentProject: ${window.currentProject}`);
         }
 
         // Update legacy globals when auth state changes
