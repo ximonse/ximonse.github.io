@@ -2061,11 +2061,6 @@
         }
         
         function arrangeSelectedInColumn() {
-            // If we have copied cards, create and arrange them instead
-            if (copiedCards.length > 0) {
-                createAndArrangeInColumn();
-                return;
-            }
             
             const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
             
@@ -2186,49 +2181,6 @@
             return baseWidth + extraWidth;
         }
         
-        // Copy selected cards for pasting with arrangements
-        function copySelectedCards() {
-            const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
-            if (selectedNodes.length === 0) return;
-            
-            copiedCards = [];
-            const timestamp = Date.now();
-            
-            selectedNodes.forEach(node => {
-                copiedCards.push({
-                    title: node.data('title') || '',
-                    text: node.data('text') || '',
-                    tags: node.data('tags') || [],
-                    hidden_tags: node.data('hidden_tags') || [],
-                    // Copy all metadata
-                    export_timestamp: node.data('export_timestamp'),
-                    export_session: node.data('export_session'),
-                    export_source: node.data('export_source'),
-                    source_file: node.data('source_file'),
-                    page_number: node.data('page_number'),
-                    matched_terms: node.data('matched_terms'),
-                    card_index: node.data('card_index'),
-                    isManualCard: node.data('isManualCard'),
-                    cardColor: node.data('cardColor'),
-                    // Copy metadata
-                    copyOf: node.id(),
-                    isCopy: true,
-                    copyTimestamp: timestamp
-                });
-            });
-            
-            console.log(`Copied ${copiedCards.length} cards - use arrangement commands to paste`);
-            
-            // Show brief visual feedback
-            const searchInfo = document.getElementById('searchInfo');
-            if (searchInfo) {
-                searchInfo.textContent = `📋 ${copiedCards.length} kort kopierade - använd arrangemang för att klistra in`;
-                searchInfo.classList.add('visible');
-                setTimeout(() => {
-                    searchInfo.classList.remove('visible');
-                }, 3000);
-            }
-        }
         
         // Create new cards from copied data and arrange them in column
         function createAndArrangeInColumn() {
