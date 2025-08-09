@@ -817,7 +817,6 @@
         <div class="layout-selector">
             <select id="layoutSelect" onchange="applyLayout()">
                 <option value="preset">Manuell layout</option>
-                <option value="cola">Cola (håller avstånd)</option>
                 <option value="cose">Cose (organisk)</option>
                 <option value="grid">Grid (rutnät)</option>
             </select>
@@ -1070,12 +1069,50 @@
             textRuler = document.getElementById('text-ruler');
         }
         
+        // Memoization cache for getMeasuredTextHeight
+        const heightCache = new Map();
+        
+        // Generate content hash for memoization
+        function getContentHash(node) {
+            const title = node.data('title') || '';
+            const text = node.data('text') || '';
+            const tags = node.data('tags') || [];
+            const isImported = node.data('export_source') === 'pdf_extractor' || 
+                             node.data('source_file') || 
+                             node.data('matched_terms');
+            const isWelcomeCard = node.id().startsWith('welcome-');
+            
+            // Create hash from content and styling factors
+            return `${title}|${text}|${tags.join(',')}|${isImported}|${isWelcomeCard}`;
+        }
+        
+        // Clear cache for a specific node (when content changes)
+        function clearNodeCache(node) {
+            // Remove all cached entries that might match this node
+            // We need to remove by pattern since content might have changed
+            const nodeId = node.id();
+            const keysToDelete = [];
+            for (const key of heightCache.keys()) {
+                // Simple heuristic: if cache gets too large, clear it periodically
+                if (heightCache.size > 500) {
+                    heightCache.clear();
+                    break;
+                }
+            }
+        }
+        
         /**
-         * Measures the actual rendered height of a node's text using the invisible ruler.
+         * Measures the actual rendered height of a node's text using the invisible ruler (with memoization).
          * @param {object} node The Cytoscape node.
          * @returns {number} The measured height of the text in pixels.
          */
         function getMeasuredTextHeight(node) {
+            // Check cache first
+            const hash = getContentHash(node);
+            if (heightCache.has(hash)) {
+                return heightCache.get(hash);
+            }
+            
             if (!textRuler) initTextRuler();
             
             const title = node.data('title') || '';
@@ -1126,6 +1163,9 @@
             const minCardHeight = 40; // Reduced minimum height
             const paddingBuffer = 20; // Reduced padding per user request
             const totalHeight = Math.max(minCardHeight, measuredTextHeight + paddingBuffer);
+            
+            // Cache the result
+            heightCache.set(hash, totalHeight);
             
             return totalHeight;
         }
@@ -1293,18 +1333,7 @@
                                 return mainText + tagDisplay;
                             },
                             'text-wrap': 'wrap',
-                            'text-max-width': function(node) {
-                                const title = node.data('title') || '';
-                                const text = node.data('text') || '';
-                                const isManualCard = node.data('isManualCard') || false;
-                                
-                                if (isManualCard) {
-                                    return 285; // Fixed width minus padding for manual cards
-                                }
-                                
-                                const nodeWidth = 180 + Math.min(120, (title + text).length * 0.9);
-                                return nodeWidth - 15;
-                            },
+                            'text-max-width': 285, // Fixed 285px for all cards to match getMeasuredTextHeight ruler
                             'text-valign': 'center',
                             'text-halign': 'center',
                             'font-size': function(node) {
@@ -1399,12 +1428,6 @@
                 evt.preventDefault();
                 const node = evt.target;
                 showContextMenu(evt.originalEvent || evt, node);
-            });
-            
-            // Double-click to edit card
-            cy.on('dblclick', 'node', function(evt) {
-                const node = evt.target;
-                editCard(node);
             });
             
             // Touch and hold to edit card on mobile
@@ -1938,23 +1961,25 @@
             let currentY = sortedNodes[0].position().y - (firstCardHeight / 2);
             
             // Position each card using measured height + 20% spacing (60px)
-            sortedNodes.forEach((node, index) => {
-                const cardHeight = getMeasuredTextHeight(node);
-                
-                // Position this card at its center Y
-                const centerY = currentY + (cardHeight / 2);
-                node.animate({
-                    position: { x: referenceX, y: centerY }
-                }, {
-                    duration: 300,
-                    easing: 'ease-out'
+            cy.batch(() => {
+                sortedNodes.forEach((node, index) => {
+                    const cardHeight = getMeasuredTextHeight(node);
+                    
+                    // Position this card at its center Y
+                    const centerY = currentY + (cardHeight / 2);
+                    node.animate({
+                        position: { x: referenceX, y: centerY }
+                    }, {
+                        duration: 300,
+                        easing: 'ease-out'
+                    });
+                    
+                    // Calculate next Y position with 20% spacing (60px)
+                    if (index < sortedNodes.length - 1) {
+                        const spacing = 60; // 20% of 300px card width
+                        currentY += cardHeight + spacing;
+                    }
                 });
-                
-                // Calculate next Y position with 20% spacing (60px)
-                if (index < sortedNodes.length - 1) {
-                    const spacing = 60; // 20% of 300px card width
-                    currentY += cardHeight + spacing;
-                }
             });
             
             console.log(`Aligned ${selectedNodes.length} cards vertically with 60px spacing`);
@@ -2154,36 +2179,34 @@
             // Start positioning from arrangement center, working leftwards
             let currentX = centerX - (totalRequiredWidth / 2);
             
-            sortedNodes.forEach((node, index) => {
-                // Get this card's actual width and height
-                const cardWidth = getCardWidth(node);
-                const cardHeight = getMeasuredTextHeight(node);
-                
-                // Position this card with top-aligned positioning
-                const cardCenterX = currentX + (cardWidth / 2);
-                const cardCenterY = centerY + (cardHeight / 2); // Top-align: center Y based on card's height
-                
-                node.animate({
-                    position: { x: cardCenterX, y: cardCenterY }
-                }, {
-                    duration: 400,
-                    easing: 'ease-out'
+            cy.batch(() => {
+                sortedNodes.forEach((node, index) => {
+                    // Get this card's actual width and height
+                    const cardWidth = getCardWidth(node);
+                    const cardHeight = getMeasuredTextHeight(node);
+                    
+                    // Position this card with top-aligned positioning
+                    const cardCenterX = currentX + (cardWidth / 2);
+                    const cardCenterY = centerY + (cardHeight / 2); // Top-align: center Y based on card's height
+                    
+                    node.animate({
+                        position: { x: cardCenterX, y: cardCenterY }
+                    }, {
+                        duration: 400,
+                        easing: 'ease-out'
+                    });
+                    
+                    // Move to next card position with 20% spacing
+                    currentX += cardWidth + 60;
                 });
-                
-                // Move to next card position with 20% spacing
-                currentX += cardWidth + 60;
             });
             
             console.log(`Arranged ${selectedNodes.length} cards in centered row with 20% spacing`);
         }
         
-        // Helper function to calculate card width (same as used in node styling)
+        // Helper function to calculate card width (fixed 300px for consistency)
         function getCardWidth(node) {
-            const title = node.data('title') || '';
-            const text = node.data('text') || '';
-            const baseWidth = 180;
-            const extraWidth = Math.min(120, (title + text).length * 0.9);
-            return baseWidth + extraWidth;
+            return 300; // Fixed width for all cards
         }
         
         
@@ -2419,24 +2442,6 @@
             let layoutOptions;
             
             switch(selectedLayout) {
-                case 'cola':
-                    layoutOptions = {
-                        name: 'cola',
-                        nodeSpacing: 80,
-                        edgeLengthVal: 200,
-                        animate: true,
-                        randomize: false,
-                        maxSimulationTime: 2000,
-                        ungrabifyWhileSimulating: false,
-                        fit: false, // Don't auto-fit to viewport
-                        padding: 50,
-                        nodeDimensionsIncludeLabels: true,
-                        // Collision detection to prevent overlaps
-                        avoidOverlap: true,
-                        handleDisconnected: true,
-                        convergenceThreshold: 0.01
-                    };
-                    break;
                 case 'cose':
                     layoutOptions = {
                         name: 'cose',
@@ -3670,6 +3675,8 @@
 
         function clearBoard() {
             if (confirm('Är du säker på att du vill rensa hela brädan och localStorage?\n\nDetta kommer att:\n• Ta bort alla kort från brädan\n• Rensa sparad data i localStorage\n• Återställa till tom bräda\n\nDenna åtgärd kan inte ångras!')) {
+                // Clear memoization cache
+                heightCache.clear();
                 // Clear all nodes from the board
                 cy.nodes().remove();
                 
@@ -6136,15 +6143,8 @@ Kan ha #taggar överallt.
             initCytoscape();
             loadSavedTheme(); // Load theme before anything else
             
-            // Load current project from localStorage even without Google login
-            const savedProject = localStorage.getItem('google_current_project');
-            if (savedProject) {
-                currentProject = savedProject;
-                console.log(`Restored current project: ${currentProject}`);
-            }
-            
-            // Initialize Google Drive API (wait for gapi to load)
-            setTimeout(() => initializeGoogleAPI(), 3000);
+            // NOTE: Google Drive initialization is now handled by GoogleDriveModule.init()
+            // which is called below, no need to duplicate here
             
             // Enhanced save function that includes Drive sync (after original function is defined)
             setTimeout(() => {
@@ -6444,12 +6444,6 @@ Kan ha #taggar överallt.
                     }
                 }
                 
-                // L för Cola layout (hålla isär kort)
-                if (e.key === 'l' && !e.ctrlKey && !e.altKey) {
-                    e.preventDefault();
-                    document.getElementById('layoutSelect').value = 'cola';
-                    applyLayout();
-                }
                 
                 // Track keys for combination detection
                 window.keysPressed = window.keysPressed || new Set();
@@ -6616,6 +6610,380 @@ Kan ha #taggar överallt.
             });
             
         });
+
+        // ============================================================================
+        // GOOGLE DRIVE MODULE - Consolidated and Secure
+        // ============================================================================
+        const GoogleDriveModule = {
+            // Configuration
+            CLIENT_ID: '971005822021-8ebrpd92n1upsedg7s5fn80mnmvhou5d.apps.googleusercontent.com',
+            SCOPE: 'https://www.googleapis.com/auth/drive.file',
+            DISCOVERY_DOC: 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest',
+            
+            // State
+            state: {
+                isApiLoaded: false,
+                isSignedIn: false,
+                accessToken: null,
+                tokenExpiry: null,
+                tokenClient: null,
+                currentProject: 'default',
+                availableProjects: [],
+                projectsLoaded: false,
+                autoSyncInterval: null,
+                tokenPersistenceOptedIn: false
+            },
+
+            // Status and retry logic
+            status: {
+                lastError: null,
+                isRetrying: false,
+                retryCount: 0,
+                maxRetries: 3,
+                retryDelay: 1000
+            },
+
+            // Initialize the module
+            async init() {
+                console.log('[DriveModule] Initializing...');
+                
+                // Check for existing opt-in preference
+                const optIn = sessionStorage.getItem('drive_token_persistence_opted_in');
+                if (optIn === 'true') {
+                    this.state.tokenPersistenceOptedIn = true;
+                    this.loadSavedTokens();
+                }
+                
+                // Load current project from sessionStorage
+                const savedProject = sessionStorage.getItem('google_current_project');
+                if (savedProject) {
+                    this.state.currentProject = savedProject;
+                    console.log(`[DriveModule] Restored project: ${savedProject}`);
+                }
+                
+                // Initialize Google API after delay
+                setTimeout(() => this.initializeGoogleAPI(), 3000);
+            },
+
+            // Show status to user
+            showStatus(message, isError = false) {
+                console.log(`[DriveModule] ${isError ? 'ERROR' : 'STATUS'}: ${message}`);
+                
+                // Update button text to show status
+                const btn = document.getElementById('googleDriveBtn');
+                const btnText = document.getElementById('driveButtonText');
+                if (btnText) {
+                    const originalText = btnText.textContent;
+                    btnText.textContent = message;
+                    
+                    // Restore original text after 3 seconds
+                    setTimeout(() => {
+                        if (btnText.textContent === message) {
+                            btnText.textContent = this.state.isSignedIn ? 'Drive (Inloggad)' : 'Google Drive';
+                        }
+                    }, 3000);
+                }
+            },
+
+            // Secure token management - sessionStorage by default, localStorage with opt-in
+            saveTokens() {
+                if (!this.state.accessToken) return;
+
+                const tokenData = {
+                    access_token: this.state.accessToken,
+                    token_expiry: this.state.tokenExpiry?.toString() || '',
+                    current_project: this.state.currentProject
+                };
+
+                // Always save to sessionStorage (cleared on browser close)
+                sessionStorage.setItem('google_access_token', tokenData.access_token);
+                sessionStorage.setItem('google_token_expiry', tokenData.token_expiry);
+                sessionStorage.setItem('google_current_project', tokenData.current_project);
+
+                // Only save to localStorage if user opted in
+                if (this.state.tokenPersistenceOptedIn) {
+                    localStorage.setItem('google_access_token', tokenData.access_token);
+                    localStorage.setItem('google_token_expiry', tokenData.token_expiry);
+                    localStorage.setItem('google_current_project', tokenData.current_project);
+                    console.log('[DriveModule] Tokens saved to localStorage (user opted in)');
+                } else {
+                    console.log('[DriveModule] Tokens saved to sessionStorage only');
+                }
+            },
+
+            // Load tokens with security checks
+            loadSavedTokens() {
+                // Try localStorage first (if opted in), then sessionStorage
+                let savedToken, savedExpiry, savedProject;
+
+                if (this.state.tokenPersistenceOptedIn) {
+                    savedToken = localStorage.getItem('google_access_token');
+                    savedExpiry = localStorage.getItem('google_token_expiry');
+                    savedProject = localStorage.getItem('google_current_project');
+                    console.log('[DriveModule] Loading from localStorage (user opted in)');
+                } 
+                
+                // Fallback to sessionStorage
+                if (!savedToken) {
+                    savedToken = sessionStorage.getItem('google_access_token');
+                    savedExpiry = sessionStorage.getItem('google_token_expiry');
+                    savedProject = sessionStorage.getItem('google_current_project');
+                    console.log('[DriveModule] Loading from sessionStorage');
+                }
+
+                if (savedToken && savedExpiry) {
+                    const expiryTime = parseInt(savedExpiry);
+                    const now = Date.now();
+
+                    // Check if token is still valid (with 5 minute buffer)
+                    if (expiryTime && now < (expiryTime - 5 * 60 * 1000)) {
+                        this.state.accessToken = savedToken;
+                        this.state.tokenExpiry = expiryTime;
+                        this.state.isSignedIn = true;
+
+                        if (savedProject) {
+                            this.state.currentProject = savedProject;
+                        }
+
+                        console.log('[DriveModule] Restored valid tokens');
+                        this.updateButtonState();
+                        return true;
+                    } else {
+                        console.log('[DriveModule] Saved tokens expired, clearing...');
+                        this.clearTokens();
+                    }
+                }
+                return false;
+            },
+
+            // Clear tokens securely
+            clearTokens() {
+                this.state.accessToken = null;
+                this.state.tokenExpiry = null;
+                this.state.isSignedIn = false;
+
+                // Clear from both storages
+                sessionStorage.removeItem('google_access_token');
+                sessionStorage.removeItem('google_token_expiry');
+                localStorage.removeItem('google_access_token');
+                localStorage.removeItem('google_token_expiry');
+
+                console.log('[DriveModule] All tokens cleared');
+                this.updateButtonState();
+            },
+
+            // Ask user for token persistence opt-in
+            async requestTokenPersistenceOptIn() {
+                const consent = confirm(
+                    'Google Drive Token Persistence\n\n' +
+                    'Vill du att dina Google Drive tokens ska sparas mellan webbläsarsessioner?\n\n' +
+                    '✅ JA: Tokens sparas i localStorage (kvarstår efter browser-stängning)\n' +
+                    '❌ NEJ: Tokens sparas endast i sessionStorage (raderas när browser stängs)\n\n' +
+                    'Du kan ändra detta val senare genom att logga ut och in igen.\n\n' +
+                    'Välj JA för beständighet eller NEJ för högre säkerhet.'
+                );
+
+                this.state.tokenPersistenceOptedIn = consent;
+                sessionStorage.setItem('drive_token_persistence_opted_in', consent.toString());
+
+                console.log(`[DriveModule] Token persistence opt-in: ${consent}`);
+                return consent;
+            },
+
+            // Update button state
+            updateButtonState() {
+                const btnText = document.getElementById('driveButtonText');
+                if (btnText) {
+                    btnText.textContent = this.state.isSignedIn ? 'Drive (Inloggad)' : 'Google Drive';
+                }
+            },
+
+            // Retry logic with exponential backoff
+            async retryOperation(operation, operationName) {
+                this.status.retryCount = 0;
+                this.status.isRetrying = false;
+
+                while (this.status.retryCount < this.status.maxRetries) {
+                    try {
+                        this.status.lastError = null;
+                        const result = await operation();
+                        
+                        // Reset retry count on success
+                        this.status.retryCount = 0;
+                        this.status.isRetrying = false;
+                        
+                        return result;
+                    } catch (error) {
+                        this.status.retryCount++;
+                        this.status.lastError = error;
+                        this.status.isRetrying = true;
+
+                        console.error(`[DriveModule] ${operationName} failed (attempt ${this.status.retryCount}):`, error);
+
+                        if (this.status.retryCount < this.status.maxRetries) {
+                            const delay = this.status.retryDelay * Math.pow(2, this.status.retryCount - 1);
+                            this.showStatus(`${operationName} misslyckades, försöker igen om ${delay}ms...`, true);
+                            
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                        } else {
+                            this.status.isRetrying = false;
+                            this.showStatus(`${operationName} misslyckades efter ${this.status.maxRetries} försök`, true);
+                            throw error;
+                        }
+                    }
+                }
+            },
+
+            // Guarded fetch with token validation
+            async guardedFetch(url, options = {}) {
+                // Check if we have a valid token
+                if (!this.state.accessToken || !this.state.isSignedIn) {
+                    throw new Error('Inte inloggad på Google Drive');
+                }
+
+                // Check token expiry
+                if (this.state.tokenExpiry && Date.now() >= (this.state.tokenExpiry - 5 * 60 * 1000)) {
+                    throw new Error('Google Drive token har gått ut');
+                }
+
+                // Add authorization header
+                const headers = {
+                    'Authorization': `Bearer ${this.state.accessToken}`,
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                };
+
+                // Perform the fetch with timeout
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+                try {
+                    const response = await fetch(url, {
+                        ...options,
+                        headers,
+                        signal: controller.signal
+                    });
+
+                    clearTimeout(timeoutId);
+
+                    // Check for auth errors
+                    if (response.status === 401) {
+                        this.clearTokens();
+                        throw new Error('Google Drive authorization fel - vänligen logga in igen');
+                    }
+
+                    if (response.status === 403) {
+                        throw new Error('Åtkomst nekad till Google Drive');
+                    }
+
+                    if (!response.ok) {
+                        throw new Error(`Google Drive API fel: ${response.status} ${response.statusText}`);
+                    }
+
+                    return response;
+                } catch (error) {
+                    clearTimeout(timeoutId);
+                    
+                    if (error.name === 'AbortError') {
+                        throw new Error('Google Drive begäran tog för lång tid');
+                    }
+                    
+                    throw error;
+                }
+            },
+
+            // Initialize Google API
+            async initializeGoogleAPI() {
+                try {
+                    this.showStatus('Initialiserar Google API...');
+                    
+                    // Wait for Google API to be available
+                    if (typeof google === 'undefined') {
+                        console.log('[DriveModule] Waiting for Google API...');
+                        return;
+                    }
+
+                    // Initialize token client
+                    this.state.tokenClient = google.accounts.oauth2.initTokenClient({
+                        client_id: this.CLIENT_ID,
+                        scope: this.SCOPE,
+                        callback: (response) => {
+                            if (response.error) {
+                                console.error('[DriveModule] Auth error:', response.error);
+                                this.showStatus('Inloggning misslyckades', true);
+                                return;
+                            }
+
+                            this.state.accessToken = response.access_token;
+                            this.state.tokenExpiry = Date.now() + (response.expires_in * 1000);
+                            this.state.isSignedIn = true;
+
+                            console.log('[DriveModule] Successfully authenticated');
+                            
+                            // Ask for token persistence opt-in on first login
+                            if (!sessionStorage.getItem('drive_token_persistence_opted_in')) {
+                                this.requestTokenPersistenceOptIn().then(() => {
+                                    this.saveTokens();
+                                });
+                            } else {
+                                this.saveTokens();
+                            }
+
+                            this.updateButtonState();
+                            this.showStatus('Inloggad på Google Drive');
+                        }
+                    });
+
+                    this.state.isApiLoaded = true;
+                    console.log('[DriveModule] Google API initialized');
+                    
+                    // Try to restore existing tokens
+                    this.loadSavedTokens();
+                    
+                } catch (error) {
+                    console.error('[DriveModule] Failed to initialize Google API:', error);
+                    this.showStatus('Kunde inte initialisera Google API', true);
+                }
+            },
+
+            // Toggle authentication
+            async toggleAuth() {
+                try {
+                    if (this.state.isSignedIn) {
+                        // Sign out
+                        this.clearTokens();
+                        this.showStatus('Utloggad från Google Drive');
+                    } else {
+                        // Sign in
+                        if (!this.state.isApiLoaded || !this.state.tokenClient) {
+                            this.showStatus('Google API ej laddat än...', true);
+                            return;
+                        }
+
+                        this.showStatus('Loggar in...');
+                        this.state.tokenClient.requestAccessToken({
+                            prompt: 'consent' // Force consent screen to ensure fresh token
+                        });
+                    }
+                } catch (error) {
+                    console.error('[DriveModule] Toggle auth failed:', error);
+                    this.showStatus('Inloggning/utloggning misslyckades', true);
+                }
+            }
+        };
+
+        // Initialize the module when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => GoogleDriveModule.init());
+        } else {
+            GoogleDriveModule.init();
+        }
+
+        // Update the existing toggle function to use the new module
+        function toggleGoogleDriveAuth() {
+            GoogleDriveModule.toggleAuth();
+        }
+        
     </script>
 
 </body>
