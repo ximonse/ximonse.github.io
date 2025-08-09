@@ -1113,8 +1113,6 @@
             const paddingBuffer = 40; // Extra padding for borders, spacing
             const totalHeight = Math.max(minCardHeight, measuredTextHeight + paddingBuffer);
             
-            console.log(`Text height: ${measuredTextHeight}px, Total with padding: ${totalHeight}px`);
-            
             return totalHeight;
         }
         
@@ -5603,54 +5601,72 @@ Kan ha #taggar överallt.
                 const boardData = JSON.parse(fileContent);
                 console.log('Parsed board data:', boardData);
                 
-                // Clear existing cards
-                cy.nodes().remove();
+                // Clear existing cards silently without visual updates during sync
+                cy.batch(() => {
+                    cy.nodes().remove();
+                });
                 
-                // Add cards from Drive
+                // Add cards from Drive in a batch to minimize visual updates
                 if (boardData.cards && boardData.cards.length > 0) {
                     console.log(`Loading ${boardData.cards.length} cards...`);
                     
-                    boardData.cards.forEach((card, index) => {
-                        console.log(`Adding card ${index + 1}:`, card.id, card.title?.substring(0, 30));
-                        
-                        const nodeData = {
-                            id: card.id,
-                            title: card.title || '',
-                            text: card.text || '',
-                            tags: card.tags || [],
-                            cardColor: card.cardColor || '',
-                            export_source: card.export_source || '',
-                            source_file: card.source_file || '',
-                            matched_terms: card.matched_terms || '',
-                            isManualCard: card.isManualCard || false,
-                            isPinned: card.isPinned || false
-                        };
-                        
-                        const node = cy.add({
-                            data: nodeData,
-                            position: { x: card.x || 0, y: card.y || 0 }
+                    // Batch all card additions to prevent visual jumping
+                    cy.batch(() => {
+                        boardData.cards.forEach((card, index) => {
+                            console.log(`Adding card ${index + 1}:`, card.id, card.title?.substring(0, 30));
+                            
+                            const nodeData = {
+                                id: card.id,
+                                title: card.title || '',
+                                text: card.text || '',
+                                tags: card.tags || [],
+                                cardColor: card.cardColor || '',
+                                export_source: card.export_source || '',
+                                source_file: card.source_file || '',
+                                matched_terms: card.matched_terms || '',
+                                isManualCard: card.isManualCard || false,
+                                isPinned: card.isPinned || false
+                            };
+                            
+                            const node = cy.add({
+                                data: nodeData,
+                                position: { x: card.x || 0, y: card.y || 0 }
+                            });
+                            
+                            // Apply colors and pinning immediately, skip height for now
+                            const cardColor = node.data('cardColor');
+                            if (cardColor) {
+                                const colorValue = getCardColorValue(cardColor, getCurrentTheme());
+                                node.style('background-color', colorValue);
+                            }
+                            
+                            if (node.data('isPinned')) {
+                                node.addClass('pinned');
+                            }
                         });
-                        
-                        updateNodeAppearance(node);
                     });
                     
                     console.log('All cards loaded successfully');
                     updateSyncStatus(`✅ Loaded ${boardData.cards.length} cards from "${currentProject}"`, 'success');
                     
-                    // Batch update all node heights after a short delay to ensure DOM is stable
+                    // Single batch height update - much smoother visual transition
                     setTimeout(() => {
-                        console.log('Batch updating all node heights...');
-                        cy.nodes().forEach(node => {
-                            try {
-                                const heightInfo = getMeasuredTextHeight(node);
-                                console.log(`Batch height update for ${node.id()}: ${heightInfo}px`);
-                                node.style('height', heightInfo + 'px');
-                            } catch (error) {
-                                console.error('Batch height update failed for node:', node.id(), error);
-                            }
+                        console.log('Batch updating all node heights (single update)...');
+                        cy.batch(() => {
+                            cy.nodes().forEach(node => {
+                                try {
+                                    const heightInfo = getMeasuredTextHeight(node);
+                                    node.style('height', heightInfo + 'px');
+                                } catch (error) {
+                                    // Fallback height without logging to reduce console spam
+                                    const textLength = (node.data('text') || '').length;
+                                    const fallbackHeight = Math.max(100, textLength * 0.8 + 60);
+                                    node.style('height', fallbackHeight + 'px');
+                                }
+                            });
                         });
-                        console.log('Batch height update complete');
-                    }, 300);
+                        console.log(`Batch height update complete for ${cy.nodes().length} cards`);
+                    }, 150); // Shorter delay for smoother experience
                     
                     // Auto-save to localStorage as backup
                     setTimeout(() => saveBoard(), 500);
