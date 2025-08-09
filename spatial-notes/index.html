@@ -6990,29 +6990,308 @@ Kan ha #taggar överallt.
             GoogleDriveModule.toggleAuth();
         }
 
-        // Compatibility functions for existing code
-        function saveToGoogleDrive() {
+        // Add save functionality to the module
+        GoogleDriveModule.saveToGoogleDrive = async function() {
+            return await this.retryOperation(async () => {
+                this.showStatus('Sparar till Google Drive...');
+                
+                const cardCount = cy.nodes().length;
+                console.log(`[DriveModule] Preparing to save ${cardCount} cards`);
+                
+                const boardData = {
+                    cards: cy.nodes().map(node => ({
+                        id: node.id(),
+                        title: node.data('title') || '',
+                        text: node.data('text') || '',
+                        tags: node.data('tags') || [],
+                        x: node.position('x'),
+                        y: node.position('y'),
+                        cardColor: node.data('cardColor') || '',
+                        export_source: node.data('export_source') || '',
+                        source_file: node.data('source_file') || '',
+                        matched_terms: node.data('matched_terms') || '',
+                        isManualCard: node.data('isManualCard') || false,
+                        isPinned: node.data('isPinned') || false
+                    })),
+                    timestamp: new Date().toISOString(),
+                    version: '2.0'
+                };
+                
+                const fileContent = JSON.stringify(boardData, null, 2);
+                const fileName = `spatial-notes-${this.state.currentProject}.json`;
+                
+                console.log(`[DriveModule] Saving file: ${fileName} (${fileContent.length} chars)`);
+                
+                // Check if file already exists
+                const existingFileId = await this.findProjectFile(fileName);
+                
+                if (existingFileId) {
+                    // Update existing file
+                    const response = await this.guardedFetch(
+                        `https://www.googleapis.com/upload/drive/v3/files/${existingFileId}?uploadType=media`,
+                        {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: fileContent
+                        }
+                    );
+                    console.log('[DriveModule] Updated existing file');
+                } else {
+                    // Create new file
+                    const metadata = { name: fileName };
+                    
+                    const createResponse = await this.guardedFetch(
+                        'https://www.googleapis.com/drive/v3/files',
+                        {
+                            method: 'POST',
+                            body: JSON.stringify(metadata)
+                        }
+                    );
+                    
+                    const fileInfo = await createResponse.json();
+                    
+                    // Upload content
+                    await this.guardedFetch(
+                        `https://www.googleapis.com/upload/drive/v3/files/${fileInfo.id}?uploadType=media`,
+                        {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: fileContent
+                        }
+                    );
+                    console.log('[DriveModule] Created new file');
+                }
+                
+                this.showStatus(`Sparat ${cardCount} kort till Drive`);
+                return true;
+                
+            }, 'Spara till Drive');
+        };
+
+        // Add helper function to find project files
+        GoogleDriveModule.findProjectFile = async function(fileName) {
+            try {
+                const response = await this.guardedFetch(
+                    `https://www.googleapis.com/drive/v3/files?q=name='${fileName}' and trashed=false`
+                );
+                
+                const data = await response.json();
+                return data.files && data.files.length > 0 ? data.files[0].id : null;
+                
+            } catch (error) {
+                console.error('[DriveModule] Error finding file:', error);
+                return null;
+            }
+        };
+
+        // Compatibility function for existing code
+        async function saveToGoogleDrive() {
             if (!GoogleDriveModule.state.isSignedIn) {
                 alert('Du måste logga in på Google Drive först.');
                 return;
             }
-            GoogleDriveModule.showStatus('Save-funktionen migreras snart...');
+            
+            try {
+                await GoogleDriveModule.saveToGoogleDrive();
+            } catch (error) {
+                console.error('[DriveModule] Save failed:', error);
+                GoogleDriveModule.showStatus('Sparning misslyckades: ' + error.message, true);
+            }
         }
+
+        // Add load functionality to the module
+        GoogleDriveModule.loadFromGoogleDrive = async function() {
+            return await this.retryOperation(async () => {
+                this.showStatus('Laddar från Google Drive...');
+                
+                const fileName = `spatial-notes-${this.state.currentProject}.json`;
+                console.log(`[DriveModule] Loading file: ${fileName}`);
+                
+                // Find the file
+                const fileId = await this.findProjectFile(fileName);
+                if (!fileId) {
+                    throw new Error(`Projekt "${this.state.currentProject}" hittades inte på Drive`);
+                }
+                
+                // Download file content
+                const response = await this.guardedFetch(
+                    `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`
+                );
+                
+                const fileContent = await response.text();
+                const boardData = JSON.parse(fileContent);
+                
+                console.log(`[DriveModule] Loaded ${boardData.cards?.length || 0} cards`);
+                
+                // Clear current board
+                cy.nodes().remove();
+                
+                // Load cards in batch for performance
+                cy.batch(() => {
+                    boardData.cards.forEach(cardData => {
+                        const node = cy.add({
+                            data: {
+                                id: cardData.id,
+                                title: cardData.title || '',
+                                text: cardData.text || '',
+                                tags: cardData.tags || [],
+                                cardColor: cardData.cardColor || '',
+                                export_source: cardData.export_source || '',
+                                source_file: cardData.source_file || '',
+                                matched_terms: cardData.matched_terms || '',
+                                isManualCard: cardData.isManualCard || false,
+                                isPinned: cardData.isPinned || false
+                            },
+                            position: { x: cardData.x, y: cardData.y }
+                        });
+                        
+                        node.grabify();
+                    });
+                });
+                
+                // Apply current theme to new cards
+                if (window.applyCardTheme) {
+                    const currentTheme = localStorage.getItem('theme') || 'light';
+                    applyCardTheme(currentTheme);
+                }
+                
+                this.showStatus(`Laddade ${boardData.cards.length} kort från Drive`);
+                return true;
+                
+            }, 'Ladda från Drive');
+        };
 
         function loadFromGoogleDrive() {
             if (!GoogleDriveModule.state.isSignedIn) {
                 alert('Du måste logga in på Google Drive först.');
                 return;
             }
-            GoogleDriveModule.showStatus('Load-funktionen migreras snart...');
+            
+            try {
+                GoogleDriveModule.loadFromGoogleDrive();
+            } catch (error) {
+                console.error('[DriveModule] Load failed:', error);
+                GoogleDriveModule.showStatus('Laddning misslyckades: ' + error.message, true);
+            }
         }
+
+        // Add project manager functionality to the module
+        GoogleDriveModule.showProjectManager = async function() {
+            try {
+                this.showStatus('Laddar projekt...');
+                
+                // List all spatial-notes files
+                const response = await this.guardedFetch(
+                    `https://www.googleapis.com/drive/v3/files?q=name contains 'spatial-notes-' and name contains '.json' and trashed=false`
+                );
+                
+                const data = await response.json();
+                const projects = data.files.map(file => {
+                    const match = file.name.match(/spatial-notes-(.+)\.json/);
+                    return {
+                        name: match ? match[1] : file.name,
+                        fileName: file.name,
+                        id: file.id,
+                        modifiedTime: new Date(file.modifiedTime).toLocaleString('sv-SE')
+                    };
+                });
+                
+                console.log(`[DriveModule] Found ${projects.length} projects`);
+                
+                // Create simple project manager UI
+                const modal = document.createElement('div');
+                modal.style.cssText = `
+                    position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
+                    background: rgba(0,0,0,0.5); z-index: 10000; 
+                    display: flex; align-items: center; justify-content: center;
+                `;
+                
+                modal.innerHTML = `
+                    <div style="background: white; padding: 30px; border-radius: 15px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto;">
+                        <h2 style="margin-top: 0; text-align: center;">📁 Project Manager</h2>
+                        <p><strong>Aktuellt projekt:</strong> ${this.state.currentProject}</p>
+                        
+                        <div style="margin: 20px 0;">
+                            <input type="text" id="newProjectName" placeholder="Nytt projektnamn" style="width: 200px; padding: 8px; margin-right: 10px;">
+                            <button onclick="GoogleDriveModule.createProject()" style="padding: 8px 15px; background: #4285f4; color: white; border: none; border-radius: 5px;">Skapa</button>
+                        </div>
+                        
+                        <h3>Tillgängliga projekt:</h3>
+                        <div id="projectsList">
+                            ${projects.map(project => `
+                                <div style="border: 1px solid #ddd; margin: 10px 0; padding: 15px; border-radius: 8px;">
+                                    <strong>${project.name}</strong> 
+                                    ${project.name === this.state.currentProject ? '<span style="color: #4285f4;">(Aktiv)</span>' : ''}
+                                    <br>
+                                    <small>Senast ändrad: ${project.modifiedTime}</small>
+                                    <div style="margin-top: 10px;">
+                                        <button onclick="GoogleDriveModule.switchProject('${project.name}')" style="margin-right: 10px; padding: 5px 10px; background: #34a853; color: white; border: none; border-radius: 3px;">Växla</button>
+                                        <button onclick="GoogleDriveModule.loadProject('${project.name}')" style="padding: 5px 10px; background: #fbbc04; color: black; border: none; border-radius: 3px;">Ladda</button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        
+                        <div style="text-align: center; margin-top: 20px;">
+                            <button onclick="document.body.removeChild(this.parentElement.parentElement)" style="padding: 10px 20px; background: #666; color: white; border: none; border-radius: 8px;">Stäng</button>
+                        </div>
+                    </div>
+                `;
+                
+                modal.onclick = (e) => {
+                    if (e.target === modal) {
+                        document.body.removeChild(modal);
+                    }
+                };
+                
+                document.body.appendChild(modal);
+                this.showStatus(`Hittade ${projects.length} projekt`);
+                
+            } catch (error) {
+                console.error('[DriveModule] Project manager failed:', error);
+                this.showStatus('Kunde inte ladda projekt: ' + error.message, true);
+            }
+        };
+
+        // Add project management helper functions
+        GoogleDriveModule.switchProject = function(projectName) {
+            this.state.currentProject = projectName;
+            sessionStorage.setItem('google_current_project', projectName);
+            this.showStatus(`Bytte till projekt: ${projectName}`);
+            document.querySelector('#newProjectName').closest('div').parentElement.parentElement.parentElement.remove();
+        };
+
+        GoogleDriveModule.loadProject = async function(projectName) {
+            const oldProject = this.state.currentProject;
+            this.state.currentProject = projectName;
+            try {
+                await this.loadFromGoogleDrive();
+                sessionStorage.setItem('google_current_project', projectName);
+                document.querySelector('#newProjectName').closest('div').parentElement.parentElement.parentElement.remove();
+            } catch (error) {
+                this.state.currentProject = oldProject; // Restore on failure
+                throw error;
+            }
+        };
+
+        GoogleDriveModule.createProject = function() {
+            const input = document.getElementById('newProjectName');
+            const projectName = input.value.trim();
+            if (!projectName) {
+                alert('Ange ett projektnamn');
+                return;
+            }
+            this.switchProject(projectName);
+            input.value = '';
+        };
 
         function showProjectManager() {
             if (!GoogleDriveModule.state.isSignedIn) {
                 alert('Du måste logga in på Google Drive först.');
                 return;
             }
-            GoogleDriveModule.showStatus('Project Manager migreras snart...');
+            
+            GoogleDriveModule.showProjectManager();
         }
 
         // Update the global variables that old code might check
@@ -7023,8 +7302,46 @@ Kan ha #taggar överallt.
         }
 
         // Update legacy globals when auth state changes
+        // Add auto-sync functionality
+        GoogleDriveModule.startAutoSync = function() {
+            if (this.state.autoSyncInterval) {
+                clearInterval(this.state.autoSyncInterval);
+            }
+            
+            if (!this.state.isSignedIn) {
+                console.log('[DriveModule] Cannot start auto-sync: not signed in');
+                return;
+            }
+            
+            this.state.autoSyncInterval = setInterval(async () => {
+                try {
+                    console.log('[DriveModule] Auto-syncing...');
+                    await this.saveToGoogleDrive();
+                } catch (error) {
+                    console.error('[DriveModule] Auto-sync failed:', error);
+                }
+            }, 5 * 60 * 1000); // 5 minutes
+            
+            console.log('[DriveModule] Auto-sync started (5 min intervals)');
+        };
+
+        GoogleDriveModule.stopAutoSync = function() {
+            if (this.state.autoSyncInterval) {
+                clearInterval(this.state.autoSyncInterval);
+                this.state.autoSyncInterval = null;
+                console.log('[DriveModule] Auto-sync stopped');
+            }
+        };
+
+        // Auto-start sync when signed in
         GoogleDriveModule.onAuthStateChange = function() {
             updateLegacyGlobals();
+            
+            if (this.state.isSignedIn) {
+                this.startAutoSync();
+            } else {
+                this.stopAutoSync();
+            }
         };
         
     </script>
