@@ -937,6 +937,19 @@
         let redoStack = [];
         const MAX_UNDO_STEPS = 20;
         
+        // Generate unique timestamp-based ID for new cards
+        function generateUniqueId() {
+            const now = new Date();
+            const timestamp = now.getFullYear().toString() +
+                            (now.getMonth() + 1).toString().padStart(2, '0') +
+                            now.getDate().toString().padStart(2, '0') + '-' +
+                            now.getHours().toString().padStart(2, '0') +
+                            now.getMinutes().toString().padStart(2, '0') +
+                            now.getSeconds().toString().padStart(2, '0');
+            
+            return timestamp + '-copy';
+        }
+        
         // Save current state for undo
         function saveState() {
             try {
@@ -2048,13 +2061,20 @@
         }
         
         function arrangeSelectedInColumn() {
-            // If we have copied cards, create and arrange them. Otherwise, arrange selected nodes.
+            // If we have copied cards, create and arrange them instead
             if (copiedCards.length > 0) {
-                arrangeCopiedCardsInColumn();
+                createAndArrangeInColumn();
                 return;
             }
             
             const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
+            
+            // If only one card selected, move it instead of arranging
+            if (selectedNodes.length === 1) {
+                moveSelectedCard();
+                return;
+            }
+            
             if (selectedNodes.length < 2) return;
             
             // Use mouse position or fallback to screen center
@@ -2166,7 +2186,206 @@
             return baseWidth + extraWidth;
         }
         
-        // S (Stack): Neat stack, top and left aligned
+        // Copy selected cards for pasting with arrangements
+        function copySelectedCards() {
+            const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
+            if (selectedNodes.length === 0) return;
+            
+            copiedCards = [];
+            const timestamp = Date.now();
+            
+            selectedNodes.forEach(node => {
+                copiedCards.push({
+                    title: node.data('title') || '',
+                    text: node.data('text') || '',
+                    tags: node.data('tags') || [],
+                    hidden_tags: node.data('hidden_tags') || [],
+                    // Copy all metadata
+                    export_timestamp: node.data('export_timestamp'),
+                    export_session: node.data('export_session'),
+                    export_source: node.data('export_source'),
+                    source_file: node.data('source_file'),
+                    page_number: node.data('page_number'),
+                    matched_terms: node.data('matched_terms'),
+                    card_index: node.data('card_index'),
+                    isManualCard: node.data('isManualCard'),
+                    cardColor: node.data('cardColor'),
+                    // Copy metadata
+                    copyOf: node.id(),
+                    isCopy: true,
+                    copyTimestamp: timestamp
+                });
+            });
+            
+            console.log(`Copied ${copiedCards.length} cards - use arrangement commands to paste`);
+            
+            // Show brief visual feedback
+            const searchInfo = document.getElementById('searchInfo');
+            if (searchInfo) {
+                searchInfo.textContent = `📋 ${copiedCards.length} kort kopierade - använd arrangemang för att klistra in`;
+                searchInfo.classList.add('visible');
+                setTimeout(() => {
+                    searchInfo.classList.remove('visible');
+                }, 3000);
+            }
+        }
+        
+        // Create new cards from copied data and arrange them in column
+        function createAndArrangeInColumn() {
+            if (copiedCards.length === 0) return;
+            
+            const arrangePos = getArrangementPosition();
+            const centerX = arrangePos.x;
+            const centerY = arrangePos.y;
+            
+            // Create new nodes from copied card data
+            const newNodes = [];
+            copiedCards.forEach(cardData => {
+                const newNode = cy.add({
+                    data: {
+                        id: generateUniqueId(),
+                        title: cardData.title,
+                        text: cardData.text,
+                        tags: cardData.tags,
+                        hidden_tags: cardData.hidden_tags,
+                        searchMatch: false,
+                        // Copy all metadata
+                        export_timestamp: cardData.export_timestamp,
+                        export_session: cardData.export_session,
+                        export_source: cardData.export_source,
+                        source_file: cardData.source_file,
+                        page_number: cardData.page_number,
+                        matched_terms: cardData.matched_terms,
+                        card_index: cardData.card_index,
+                        isManualCard: cardData.isManualCard,
+                        cardColor: cardData.cardColor,
+                        // Copy metadata
+                        copyOf: cardData.copyOf,
+                        isCopy: cardData.isCopy,
+                        copyTimestamp: cardData.copyTimestamp
+                    },
+                    position: { x: centerX, y: centerY }
+                });
+                
+                newNode.grabify();
+                newNodes.push(newNode);
+            });
+            
+            // Calculate total height needed for all cards with spacing
+            let totalRequiredHeight = 0;
+            newNodes.forEach((node, index) => {
+                const cardHeight = getMeasuredTextHeight(node);
+                totalRequiredHeight += cardHeight;
+                if (index < newNodes.length - 1) {
+                    totalRequiredHeight += 60; // 20% spacing
+                }
+            });
+            
+            // Start positioning from arrangement center, working upwards
+            let currentY = centerY - (totalRequiredHeight / 2);
+            
+            newNodes.forEach((node, index) => {
+                const cardHeight = getMeasuredTextHeight(node);
+                const cardCenterY = currentY + (cardHeight / 2);
+                
+                node.position({ x: centerX, y: cardCenterY });
+                
+                // Move to next position
+                if (index < newNodes.length - 1) {
+                    currentY += cardHeight + 60;
+                }
+            });
+            
+            // Clear copied cards and select the new ones
+            copiedCards = [];
+            cy.nodes().unselect();
+            newNodes.forEach(node => node.select());
+            
+            console.log(`Created and arranged ${newNodes.length} copied cards in column`);
+        }
+        
+        // Create new cards from copied data and arrange them in row (H command)
+        function createAndArrangeInRow() {
+            if (copiedCards.length === 0) return;
+            
+            const arrangePos = getArrangementPosition();
+            const centerX = arrangePos.x;
+            const centerY = arrangePos.y;
+            
+            // Create new nodes from copied card data
+            const newNodes = [];
+            copiedCards.forEach(cardData => {
+                const newNode = cy.add({
+                    data: {
+                        id: generateUniqueId(),
+                        title: cardData.title,
+                        text: cardData.text,
+                        tags: cardData.tags,
+                        hidden_tags: cardData.hidden_tags,
+                        searchMatch: false,
+                        isManualCard: cardData.isManualCard,
+                        cardColor: cardData.cardColor,
+                        copyOf: cardData.copyOf,
+                        isCopy: cardData.isCopy,
+                        copyTimestamp: cardData.copyTimestamp
+                    },
+                    position: { x: centerX, y: centerY }
+                });
+                
+                newNode.grabify();
+                newNodes.push(newNode);
+            });
+            
+            // Arrange in horizontal row with 60px spacing
+            const cardWidth = 300;
+            const spacing = 60; // 20% spacing
+            let totalWidth = newNodes.length * cardWidth + (newNodes.length - 1) * spacing;
+            let currentX = centerX - (totalWidth / 2);
+            
+            newNodes.forEach((node, index) => {
+                const cardHeight = getMeasuredTextHeight(node);
+                const cardCenterX = currentX + (cardWidth / 2);
+                const cardCenterY = centerY + (cardHeight / 2);
+                
+                node.position({ x: cardCenterX, y: cardCenterY });
+                currentX += cardWidth + spacing;
+            });
+            
+            // Clear copied cards and select new ones
+            copiedCards = [];
+            cy.nodes().unselect();
+            newNodes.forEach(node => node.select());
+            
+            console.log(`Created and arranged ${newNodes.length} copied cards in row`);
+        }
+        
+        // Move single selected card to mouse cursor
+        function moveSelectedCard() {
+            const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
+            if (selectedNodes.length !== 1) return;
+            
+            saveState(); // Save for undo
+            
+            const arrangePos = getArrangementPosition();
+            const targetX = arrangePos.x;
+            const targetY = arrangePos.y;
+            
+            const node = selectedNodes[0];
+            const cardHeight = getMeasuredTextHeight(node);
+            // Position so card's top edge is at mouse cursor
+            const cardCenterY = targetY + (cardHeight / 2);
+            
+            node.animate({
+                position: { x: targetX, y: cardCenterY }
+            }, {
+                duration: 300,
+                easing: 'ease-out'
+            });
+            
+            console.log(`Moved card to cursor position (${Math.round(targetX)}, ${Math.round(targetY)})`);
+        }
+        
+        // Stack: Neat stack, top and left aligned at mouse cursor
         function stackSelectedCards() {
             const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
             if (selectedNodes.length < 2) return;
@@ -2174,19 +2393,20 @@
             saveState(); // Save for undo
             
             const arrangePos = getArrangementPosition();
-            const baseX = arrangePos.x - 150; // Offset left for alignment
-            const baseY = arrangePos.y - 100; // Offset up for alignment
+            const baseX = arrangePos.x; // Start at mouse cursor X
+            const baseY = arrangePos.y; // Start at mouse cursor Y (top edge)
             
-            // Sort cards by some logical order (could be by creation time, current position, etc.)
+            // Sort cards by current position for consistent stacking
             const sortedNodes = selectedNodes.sort((a, b) => a.position().y - b.position().y);
             
-            // Stack them with slight offset for visibility
-            const stackOffsetX = 5; // 5px right offset per card
-            const stackOffsetY = 8; // 8px down offset per card
+            // Stack them with small offset for neat pile effect
+            const stackOffsetX = 3; // 3px right offset per card
+            const stackOffsetY = 5; // 5px down offset per card
             
             sortedNodes.forEach((node, index) => {
                 const cardHeight = getMeasuredTextHeight(node);
                 const stackX = baseX + (index * stackOffsetX);
+                // Position so first card's top edge is at mouse cursor Y
                 const stackY = baseY + (index * stackOffsetY) + (cardHeight / 2);
                 
                 node.animate({
@@ -2197,7 +2417,7 @@
                 });
             });
             
-            console.log(`S: Stacked ${selectedNodes.length} cards in neat pile`);
+            console.log(`Stack: Created neat pile of ${selectedNodes.length} cards at cursor`);
         }
         
         function updateSelectionInfo() {
@@ -2445,12 +2665,6 @@
         
         // G+V: Grid Vertical - max 6 wide, 20% spacing, top row aligned
         function arrangeSelectedGridVerticalColumns() {
-            // If we have copied cards, create and arrange them. Otherwise, arrange selected nodes.
-            if (copiedCards.length > 0) {
-                arrangeCopiedCardsGridVerticalColumns();
-                return;
-            }
-            
             const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
             if (selectedNodes.length < 2) return;
             
@@ -2472,7 +2686,7 @@
             
             const gridWidth = (cols - 1) * horizontalSpacing;
             const startX = screenCenterX - gridWidth / 2;
-            const topLineY = screenCenterY - 100; // Fixed top line for alignment
+            const topLineY = screenCenterY; // Top of grid at mouse cursor (like G+H)
             
             const nodeArray = selectedNodes.toArray();
             
@@ -2509,12 +2723,6 @@
         
         // G+H: Grid where rows are top-aligned and packed tightly (no row overlap)
         function arrangeSelectedGridHorizontalPacked() {
-            // If we have copied cards, create and arrange them. Otherwise, arrange selected nodes.
-            if (copiedCards.length > 0) {
-                arrangeCopiedCardsGridHorizontalPacked();
-                return;
-            }
-            
             const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
             if (selectedNodes.length < 2) return;
             
@@ -2553,9 +2761,9 @@
                 rowHeights.push(maxRowHeight);
             }
             
-            // Calculate total height and start position
+            // Calculate total height and start position - top of grid at mouse cursor
             const totalHeight = rowHeights.reduce((sum, height) => sum + height, 0) + (rows - 1) * rowPadding;
-            let currentY = screenCenterY - totalHeight / 2;
+            let currentY = screenCenterY; // Top of grid at mouse cursor
             
             // Second pass: position cards row by row with tight packing
             for (let row = 0; row < rows; row++) {
@@ -2584,18 +2792,12 @@
                 currentY += rowHeight + rowPadding;
             }
             
-            console.log(`G+H: Grid med packade rader (ingen överlappning) - ${rows} rader × ${cols} kolumner för ${selectedNodes.length} kort`);
+            console.log(`G+H: Grid med packade rader - toppen vid muspekare - ${rows} rader × ${cols} kolumner för ${selectedNodes.length} kort`);
         }
         
         // G+T: Grid where all rows are top-aligned (all cards in same row at same height)
         // G+T (Grid Tight): Max 6 cards wide, 5% horizontal spacing, 40px overlap between cards vertically
         function arrangeSelectedGridTopAligned() {
-            // If we have copied cards, create and arrange them. Otherwise, arrange selected nodes.
-            if (copiedCards.length > 0) {
-                arrangeCopiedCardsGridTopAligned();
-                return;
-            }
-            
             const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
             if (selectedNodes.length < 2) return;
             
@@ -4040,7 +4242,7 @@
             const horizontalSpacing = 320;
             const gridWidth = (cols - 1) * horizontalSpacing;
             const startX = screenCenterX - gridWidth / 2;
-            const startY = screenCenterY - 100; // Start a bit above center
+            const startY = screenCenterY; // Top of grid at mouse cursor
             
             // Arrange column by column (like original)
             for (let col = 0; col < cols; col++) {
@@ -4056,7 +4258,7 @@
                         const cardCenterY = currentY + (cardHeight / 2);
                         
                         node.position({ x: newX, y: cardCenterY });
-                        currentY += cardHeight + 50; // 50px spacing between cards
+                        currentY += cardHeight + 40; // 40px spacing like G+H
                     }
                 }
             }
@@ -4483,7 +4685,7 @@ Skriv ditt innehåll här...
             const gridHeight = (rows - 1) * rowSpacing;
             
             const startX = screenCenterX - gridWidth / 2;
-            const startY = screenCenterY - gridHeight / 2;
+            const startY = screenCenterY; // Top of grid at mouse cursor
             
             newNodes.forEach((node, index) => {
                 const row = Math.floor(index / cols);
