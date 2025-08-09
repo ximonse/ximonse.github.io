@@ -1105,9 +1105,17 @@
             
             // Set the text and measure
             textRuler.textContent = fullLabel;
-            const measuredHeight = textRuler.offsetHeight;
+            const measuredTextHeight = textRuler.offsetHeight;
             
-            return measuredHeight;
+            // Add padding that Cytoscape applies to cards
+            // Cards need minimum padding for visual breathing room
+            const minCardHeight = 60; // Minimum height for proper padding
+            const paddingBuffer = 40; // Extra padding for borders, spacing
+            const totalHeight = Math.max(minCardHeight, measuredTextHeight + paddingBuffer);
+            
+            console.log(`Text height: ${measuredTextHeight}px, Total with padding: ${totalHeight}px`);
+            
+            return totalHeight;
         }
         
         // Subtle orphan prevention - use non-breaking spaces to keep last 2-3 words together
@@ -5388,8 +5396,10 @@ Kan ha #taggar överallt.
                         node.style('height', heightInfo + 'px');
                     } catch (heightError) {
                         console.error('Error calculating height for node:', node.id(), heightError);
-                        // Fallback to default height calculation
-                        const defaultHeight = Math.max(60, (node.data('text') || '').length * 0.5 + 80);
+                        // Fallback to default height calculation with proper padding
+                        const textLength = (node.data('text') || '').length;
+                        const defaultHeight = Math.max(60, textLength * 0.8 + 60); // More generous fallback
+                        console.log(`Fallback height for ${node.id()}: ${defaultHeight}px`);
                         node.style('height', defaultHeight + 'px');
                     }
                 }, 100);
