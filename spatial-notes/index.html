@@ -6931,6 +6931,9 @@ Kan ha #taggar överallt.
 
                             this.updateButtonState();
                             this.showStatus('Inloggad på Google Drive');
+                            
+                            // Update legacy globals for compatibility
+                            if (this.onAuthStateChange) this.onAuthStateChange();
                         }
                     });
 
@@ -6953,6 +6956,9 @@ Kan ha #taggar överallt.
                         // Sign out
                         this.clearTokens();
                         this.showStatus('Utloggad från Google Drive');
+                        
+                        // Update legacy globals for compatibility
+                        if (this.onAuthStateChange) this.onAuthStateChange();
                     } else {
                         // Sign in
                         if (!this.state.isApiLoaded || !this.state.tokenClient) {
@@ -6983,6 +6989,43 @@ Kan ha #taggar överallt.
         function toggleGoogleDriveAuth() {
             GoogleDriveModule.toggleAuth();
         }
+
+        // Compatibility functions for existing code
+        function saveToGoogleDrive() {
+            if (!GoogleDriveModule.state.isSignedIn) {
+                alert('Du måste logga in på Google Drive först.');
+                return;
+            }
+            GoogleDriveModule.showStatus('Save-funktionen migreras snart...');
+        }
+
+        function loadFromGoogleDrive() {
+            if (!GoogleDriveModule.state.isSignedIn) {
+                alert('Du måste logga in på Google Drive först.');
+                return;
+            }
+            GoogleDriveModule.showStatus('Load-funktionen migreras snart...');
+        }
+
+        function showProjectManager() {
+            if (!GoogleDriveModule.state.isSignedIn) {
+                alert('Du måste logga in på Google Drive först.');
+                return;
+            }
+            GoogleDriveModule.showStatus('Project Manager migreras snart...');
+        }
+
+        // Update the global variables that old code might check
+        function updateLegacyGlobals() {
+            window.isSignedIn = GoogleDriveModule.state.isSignedIn;
+            window.accessToken = GoogleDriveModule.state.accessToken;
+            window.currentProject = GoogleDriveModule.state.currentProject;
+        }
+
+        // Update legacy globals when auth state changes
+        GoogleDriveModule.onAuthStateChange = function() {
+            updateLegacyGlobals();
+        };
         
     </script>
 
