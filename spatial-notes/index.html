@@ -2061,6 +2061,11 @@
         }
         
         function arrangeSelectedInColumn() {
+            // Check if we should arrange copied cards instead
+            if (copiedCards.length > 0) {
+                arrangeCopiedCardsInColumn();
+                return;
+            }
             
             const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
             
@@ -2195,7 +2200,7 @@
             copiedCards.forEach(cardData => {
                 const newNode = cy.add({
                     data: {
-                        id: generateUniqueId(),
+                        id: generateCardId(),
                         title: cardData.title,
                         text: cardData.text,
                         tags: cardData.tags,
@@ -2269,7 +2274,7 @@
             copiedCards.forEach(cardData => {
                 const newNode = cy.add({
                     data: {
-                        id: generateUniqueId(),
+                        id: generateCardId(),
                         title: cardData.title,
                         text: cardData.text,
                         tags: cardData.tags,
@@ -2617,6 +2622,12 @@
         
         // G+V: Grid Vertical - max 6 wide, 20% spacing, top row aligned
         function arrangeSelectedGridVerticalColumns() {
+            // Check if we should arrange copied cards instead
+            if (copiedCards.length > 0) {
+                arrangeCopiedCardsGridVerticalColumns();
+                return;
+            }
+            
             const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
             if (selectedNodes.length < 2) return;
             
@@ -2675,6 +2686,12 @@
         
         // G+H: Grid where rows are top-aligned and packed tightly (no row overlap)
         function arrangeSelectedGridHorizontalPacked() {
+            // Check if we should arrange copied cards instead
+            if (copiedCards.length > 0) {
+                arrangeCopiedCardsGridHorizontalPacked();
+                return;
+            }
+            
             const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
             if (selectedNodes.length < 2) return;
             
@@ -2750,6 +2767,12 @@
         // G+T: Grid where all rows are top-aligned (all cards in same row at same height)
         // G+T (Grid Tight): Max 6 cards wide, 5% horizontal spacing, 40px overlap between cards vertically
         function arrangeSelectedGridTopAligned() {
+            // Check if we should arrange copied cards instead
+            if (copiedCards.length > 0) {
+                arrangeCopiedCardsGridTopAligned();
+                return;
+            }
+            
             const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
             if (selectedNodes.length < 2) return;
             
@@ -3935,10 +3958,13 @@
             const centerX = arrangePos.x;
             const centerY = arrangePos.y;
             
-            // Create the copied cards
+            // Create the copied cards with unique IDs
+            const now = new Date();
+            const baseId = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+            
             const newNodes = [];
             copiedCards.forEach((cardData, index) => {
-                const newId = generateCardId();
+                const newId = `${baseId}-copy-${index + 1}`;
                 
                 const newNode = cy.add({
                     data: {
@@ -3968,8 +3994,8 @@
                 newNodes.push(newNode);
             });
             
-            // Now arrange them in a row
-            const spacing = 80; // Same spacing as original
+            // Now arrange them in a row (H-logic: 20% spacing = 60px)
+            const spacing = 60; // 20% spacing as per spec
             let totalRequiredWidth = 0;
             newNodes.forEach((node, index) => {
                 const cardWidth = getCardWidth(node);
@@ -4008,10 +4034,13 @@
             const centerX = arrangePos.x;
             const centerY = arrangePos.y;
             
-            // Create the copied cards
+            // Create the copied cards with unique IDs
+            const now = new Date();
+            const baseId = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+            
             const newNodes = [];
             copiedCards.forEach((cardData, index) => {
-                const newId = generateCardId();
+                const newId = `${baseId}-copy-${index + 1}`;
                 
                 const newNode = cy.add({
                     data: {
@@ -4041,8 +4070,8 @@
                 newNodes.push(newNode);
             });
             
-            // Now arrange them in a column (same logic as original)
-            const spacing = 50; // Same spacing as original
+            // Now arrange them in a column (V-logic: 20% spacing = 60px)
+            const spacing = 60; // 20% spacing as per spec
             let totalRequiredHeight = 0;
             newNodes.forEach((node, index) => {
                 const cardHeight = getMeasuredTextHeight(node);
@@ -4081,10 +4110,13 @@
             const cols = Math.ceil(Math.sqrt(nodeCount));
             const rows = Math.ceil(nodeCount / cols);
             
-            // Create the copied cards
+            // Create the copied cards with unique IDs
+            const now = new Date();
+            const baseId = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+            
             const newNodes = [];
             copiedCards.forEach((cardData, index) => {
-                const newId = generateCardId();
+                const newId = `${baseId}-copy-${index + 1}`;
                 
                 const newNode = cy.add({
                     data: {
@@ -4157,10 +4189,13 @@
             const cols = Math.ceil(Math.sqrt(nodeCount));
             const rows = Math.ceil(nodeCount / cols);
             
-            // Create the copied cards
+            // Create the copied cards with unique IDs
+            const now = new Date();
+            const baseId = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+            
             const newNodes = [];
             copiedCards.forEach((cardData, index) => {
-                const newId = generateCardId();
+                const newId = `${baseId}-copy-${index + 1}`;
                 
                 const newNode = cy.add({
                     data: {
@@ -4231,10 +4266,13 @@
             const screenCenterX = arrangePos.x;
             const screenCenterY = arrangePos.y;
             
-            // Create the copied cards
+            // Create the copied cards with unique IDs
+            const now = new Date();
+            const baseId = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+            
             const newNodes = [];
             copiedCards.forEach((cardData, index) => {
-                const newId = generateCardId();
+                const newId = `${baseId}-copy-${index + 1}`;
                 
                 const newNode = cy.add({
                     data: {
@@ -4292,7 +4330,7 @@
             
             // Calculate total height and start position
             const totalHeight = rowHeights.reduce((sum, height) => sum + height, 0) + (rows - 1) * rowPadding;
-            let currentY = screenCenterY - totalHeight / 2;
+            let currentY = screenCenterY; // Top of grid at mouse cursor (same as move G+H)
             
             // Second pass: position cards row by row with tight packing
             for (let row = 0; row < rows; row++) {
@@ -4592,10 +4630,13 @@ Skriv ditt innehåll här...
             const screenCenterX = arrangePos.x;
             const screenCenterY = arrangePos.y;
             
-            // Create the copied cards
+            // Create the copied cards with unique IDs
+            const now = new Date();
+            const baseId = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+            
             const newNodes = [];
             copiedCards.forEach((cardData, index) => {
-                const newId = generateCardId();
+                const newId = `${baseId}-copy-${index + 1}`;
                 
                 const newNode = cy.add({
                     data: {
@@ -4625,29 +4666,41 @@ Skriv ditt innehåll här...
                 newNodes.push(newNode);
             });
             
-            // Arrange in top-aligned grid (same logic as original)
+            // Arrange in G+T layout (max 6 cols, 120px overlap, column-major ordering)
             const nodeCount = newNodes.length;
-            const cols = Math.ceil(Math.sqrt(nodeCount));
+            const maxCols = 6; // Max 6 cards wide (same as original)
+            const cols = Math.min(maxCols, nodeCount);
             const rows = Math.ceil(nodeCount / cols);
             
-            const horizontalSpacing = 320;
-            const rowSpacing = 200;
+            const cardWidth = 300;
+            const horizontalSpacing = cardWidth * 0.05; // 5% of card width = 15px
+            const overlapSpacing = 120; // 120px between card tops (3x more to show titles)
             
-            const gridWidth = (cols - 1) * horizontalSpacing;
-            const gridHeight = (rows - 1) * rowSpacing;
-            
+            // Calculate grid size
+            const gridWidth = (cols - 1) * (cardWidth + horizontalSpacing);
             const startX = screenCenterX - gridWidth / 2;
-            const startY = screenCenterY; // Top of grid at mouse cursor
             
-            newNodes.forEach((node, index) => {
-                const row = Math.floor(index / cols);
-                const col = index % cols;
+            // For top row alignment
+            const topRowY = screenCenterY - 100; // Start a bit above center
+            
+            // Position cards column by column for proper overlapping (same as original)
+            for (let col = 0; col < cols; col++) {
+                const colX = startX + col * (cardWidth + horizontalSpacing);
+                let currentY = topRowY;
                 
-                const x = startX + col * horizontalSpacing;
-                const y = startY + row * rowSpacing; // Top-aligned - same Y for same row
-                
-                node.position({ x: x, y: y });
-            });
+                // Go through each row in this column
+                for (let row = 0; row < rows; row++) {
+                    const nodeIndex = row * cols + col; // Same ordering as original G+T
+                    if (nodeIndex < newNodes.length) {
+                        const node = newNodes[nodeIndex];
+                        const cardHeight = getMeasuredTextHeight(node);
+                        const cardCenterY = currentY + (cardHeight / 2);
+                        
+                        node.position({ x: colX, y: cardCenterY });
+                        currentY += overlapSpacing; // Move down for next card in this column
+                    }
+                }
+            }
             
             // Clear copied cards and select the new ones
             copiedCards = [];
