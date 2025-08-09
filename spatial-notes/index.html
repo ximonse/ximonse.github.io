@@ -1109,8 +1109,8 @@
             
             // Add padding that Cytoscape applies to cards
             // Cards need minimum padding for visual breathing room
-            const minCardHeight = 60; // Minimum height for proper padding
-            const paddingBuffer = 40; // Extra padding for borders, spacing
+            const minCardHeight = 40; // Reduced minimum height
+            const paddingBuffer = 20; // Reduced padding per user request
             const totalHeight = Math.max(minCardHeight, measuredTextHeight + paddingBuffer);
             
             return totalHeight;
@@ -1920,14 +1920,14 @@
             const sortedNodes = selectedNodes.sort((a, b) => a.position().y - b.position().y);
             
             // Start from the topmost card's position, adjusted for its height
-            const firstCardHeight = Math.max(100, getMeasuredTextHeight(sortedNodes[0]) + 10);
+            const firstCardHeight = getMeasuredTextHeight(sortedNodes[0]);
             let currentY = sortedNodes[0].position().y - (firstCardHeight / 2);
             
             // Position each card using measured height + padding
             sortedNodes.forEach((node, index) => {
                 // Get this card's actual height
                 const measuredHeight = getMeasuredTextHeight(node);
-                const cardHeight = Math.max(100, measuredHeight + 10);
+                const cardHeight = getMeasuredTextHeight(node);
                 
                 // Position this card at its center Y
                 const centerY = currentY + (cardHeight / 2);
@@ -2066,7 +2066,7 @@
             // Calculate total height needed for all cards with spacing
             let totalRequiredHeight = 0;
             selectedNodes.forEach((node, index) => {
-                const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                const cardHeight = getMeasuredTextHeight(node);
                 totalRequiredHeight += cardHeight;
                 if (index < selectedNodes.length - 1) {
                     totalRequiredHeight += 50; // padding between cards
@@ -2078,7 +2078,7 @@
             
             selectedNodes.forEach((node, index) => {
                 // Get this card's actual height
-                const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                const cardHeight = getMeasuredTextHeight(node);
                 
                 // Position this card at its center
                 const cardCenterY = currentY + (cardHeight / 2);
@@ -2140,7 +2140,7 @@
             sortedNodes.forEach((node, index) => {
                 // Get this card's actual width and height
                 const cardWidth = getCardWidth(node);
-                const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                const cardHeight = getMeasuredTextHeight(node);
                 
                 // Position this card with top-aligned positioning
                 const cardCenterX = currentX + (cardWidth / 2);
@@ -2278,7 +2278,7 @@
             // Calculate total height needed and start from center
             let totalRequiredHeight = 0;
             allNodes.forEach((node, index) => {
-                const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                const cardHeight = getMeasuredTextHeight(node);
                 totalRequiredHeight += cardHeight;
                 if (index < allNodes.length - 1) {
                     totalRequiredHeight += 30; // spacing between cards
@@ -2289,7 +2289,7 @@
             let currentY = -(totalRequiredHeight / 2);
             
             allNodes.forEach((node, index) => {
-                const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                const cardHeight = getMeasuredTextHeight(node);
                 const cardCenterY = currentY + (cardHeight / 2);
                 
                 node.animate({
@@ -2384,13 +2384,13 @@
                 // Find tallest card in this row to determine row height
                 let maxRowHeight = 0;
                 rowNodes.forEach(node => {
-                    const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                    const cardHeight = getMeasuredTextHeight(node);
                     maxRowHeight = Math.max(maxRowHeight, cardHeight);
                 });
                 
                 // Position each card in this row (top-aligned)
                 rowNodes.forEach((node, colIndex) => {
-                    const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                    const cardHeight = getMeasuredTextHeight(node);
                     
                     const newX = startX + colIndex * horizontalSpacing;
                     const rowBaseY = startY + row * verticalSpacing;
@@ -2455,7 +2455,7 @@
                     const nodeIndex = row * cols + col;
                     if (nodeIndex < nodeArray.length) {
                         const node = nodeArray[nodeIndex];
-                        const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                        const cardHeight = getMeasuredTextHeight(node);
                         
                         const newX = startX + col * horizontalSpacing;
                         const cardCenterY = currentY + (cardHeight / 2);
@@ -2517,7 +2517,7 @@
                     const nodeIndex = row * cols + col;
                     if (nodeIndex < nodeArray.length) {
                         const node = nodeArray[nodeIndex];
-                        const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                        const cardHeight = getMeasuredTextHeight(node);
                         maxRowHeight = Math.max(maxRowHeight, cardHeight);
                     }
                 }
@@ -2539,7 +2539,7 @@
                         const newX = startX + col * horizontalSpacing;
                         
                         // Position card at top of its row space
-                        const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                        const cardHeight = getMeasuredTextHeight(node);
                         const cardCenterY = currentY + (cardHeight / 2); // Top-aligned within row
                         
                         node.animate({
@@ -2602,7 +2602,7 @@
                         const newX = startX + col * horizontalSpacing;
                         
                         // Get card height and position based on top edge
-                        const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                        const cardHeight = getMeasuredTextHeight(node);
                         const cardCenterY = rowTopY + (cardHeight / 2); // Center card within its height
                         
                         node.animate({
@@ -3789,7 +3789,7 @@
             let currentX = centerX - (totalRequiredWidth / 2);
             newNodes.forEach(node => {
                 const cardWidth = getCardWidth(node);
-                const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                const cardHeight = getMeasuredTextHeight(node);
                 
                 // Position with top-aligned positioning (same as original)
                 const cardCenterX = currentX + (cardWidth / 2);
@@ -3852,7 +3852,7 @@
             const spacing = 50; // Same spacing as original
             let totalRequiredHeight = 0;
             newNodes.forEach((node, index) => {
-                const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                const cardHeight = getMeasuredTextHeight(node);
                 totalRequiredHeight += cardHeight;
                 if (index < newNodes.length - 1) {
                     totalRequiredHeight += spacing;
@@ -3861,7 +3861,7 @@
             
             let currentY = centerY - (totalRequiredHeight / 2);
             newNodes.forEach(node => {
-                const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                const cardHeight = getMeasuredTextHeight(node);
                 const cardCenterY = currentY + (cardHeight / 2);
                 node.position({ x: centerX, y: cardCenterY });
                 currentY += cardHeight + spacing;
@@ -4011,7 +4011,7 @@
                     const nodeIndex = row * cols + col;
                     if (nodeIndex < newNodes.length) {
                         const node = newNodes[nodeIndex];
-                        const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                        const cardHeight = getMeasuredTextHeight(node);
                         
                         const newX = startX + col * horizontalSpacing;
                         const cardCenterY = currentY + (cardHeight / 2);
@@ -4090,7 +4090,7 @@
                     const nodeIndex = row * cols + col;
                     if (nodeIndex < newNodes.length) {
                         const node = newNodes[nodeIndex];
-                        const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                        const cardHeight = getMeasuredTextHeight(node);
                         maxRowHeight = Math.max(maxRowHeight, cardHeight);
                     }
                 }
@@ -4112,7 +4112,7 @@
                         const newX = startX + col * horizontalSpacing;
                         
                         // Position card at top of its row space
-                        const cardHeight = Math.max(100, getMeasuredTextHeight(node) + 10);
+                        const cardHeight = getMeasuredTextHeight(node);
                         const cardCenterY = currentY + (cardHeight / 2); // Top-aligned within row
                         
                         node.position({ x: newX, y: cardCenterY });
