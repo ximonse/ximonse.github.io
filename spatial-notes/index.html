@@ -5380,9 +5380,19 @@ Kan ha #taggar överallt.
                     node.addClass('pinned');
                 }
                 
-                // Update text content and height
-                const heightInfo = getMeasuredTextHeight(node);
-                node.style('height', heightInfo + 'px');
+                // Update text content and height with delay to ensure DOM is ready
+                setTimeout(() => {
+                    try {
+                        const heightInfo = getMeasuredTextHeight(node);
+                        console.log(`Setting height for node ${node.id()}: ${heightInfo}px`);
+                        node.style('height', heightInfo + 'px');
+                    } catch (heightError) {
+                        console.error('Error calculating height for node:', node.id(), heightError);
+                        // Fallback to default height calculation
+                        const defaultHeight = Math.max(60, (node.data('text') || '').length * 0.5 + 80);
+                        node.style('height', defaultHeight + 'px');
+                    }
+                }, 100);
                 
             } catch (error) {
                 console.error('Error updating node appearance:', error);
@@ -5617,8 +5627,23 @@ Kan ha #taggar överallt.
                     console.log('All cards loaded successfully');
                     updateSyncStatus(`✅ Loaded ${boardData.cards.length} cards from "${currentProject}"`, 'success');
                     
+                    // Batch update all node heights after a short delay to ensure DOM is stable
+                    setTimeout(() => {
+                        console.log('Batch updating all node heights...');
+                        cy.nodes().forEach(node => {
+                            try {
+                                const heightInfo = getMeasuredTextHeight(node);
+                                console.log(`Batch height update for ${node.id()}: ${heightInfo}px`);
+                                node.style('height', heightInfo + 'px');
+                            } catch (error) {
+                                console.error('Batch height update failed for node:', node.id(), error);
+                            }
+                        });
+                        console.log('Batch height update complete');
+                    }, 300);
+                    
                     // Auto-save to localStorage as backup
-                    setTimeout(() => saveBoard(), 100);
+                    setTimeout(() => saveBoard(), 500);
                     
                     return true;
                 } else {
