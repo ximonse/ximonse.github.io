@@ -866,6 +866,7 @@
                 <button onclick="executeCommand('G+V')">G+V</button>
                 <button onclick="executeCommand('G+H')">G+H</button>
                 <button onclick="executeCommand('G+T')">G+T</button>
+                <button onclick="executeCommand('QQ')">QQ</button>
                 <button onclick="executeCommand('Q')">Q</button>
                 <button onclick="executeCommand('C')">C</button>
                 <button onclick="executeCommand('T')">🎨 T</button>
@@ -1156,7 +1157,7 @@
             {
                 id: 'welcome-3',
                 title: '📐 Arrangera Kort',
-                text: 'Markera flera kort, tryck sedan:\n\nH = Horisontell rad\n\nG+V = Grid Vertical, Grid med kort packade i kolumner\n\nG+H = Grid Horisontal, Grid med raka rader\n\nG+T = Grid Tight, Grid med tight packade\n\nQ = Kluster, samla korten i en hög\n\nKorten arrangeras runt muspekaren!',
+                text: 'Markera flera kort, tryck sedan:\n\nH = Horisontell rad (20% mellanrum)\nV = Vertikal kolumn (20% mellanrum)\n\nG+V = Grid Vertical (max 6 bred, 20% mellanrum)\nG+H = Grid Horizontal (rader, 20% mellan rader)\nG+T = Grid Tight (max 6 bred, 40px överlapp)\n\nQ = Kluster (sporadisk skräphög)\nQQ = Stack (prydlig hög, dubbla Q)\nAlt+S = Stack (samma som QQ)\n\nKorten arrangeras runt muspekaren!',
                 tags: ['arrangemang'],
                 x: 1307,
                 y: 247
@@ -1923,10 +1924,8 @@
             const firstCardHeight = getMeasuredTextHeight(sortedNodes[0]);
             let currentY = sortedNodes[0].position().y - (firstCardHeight / 2);
             
-            // Position each card using measured height + padding
+            // Position each card using measured height + 20% spacing (60px)
             sortedNodes.forEach((node, index) => {
-                // Get this card's actual height
-                const measuredHeight = getMeasuredTextHeight(node);
                 const cardHeight = getMeasuredTextHeight(node);
                 
                 // Position this card at its center Y
@@ -1938,14 +1937,14 @@
                     easing: 'ease-out'
                 });
                 
-                // Calculate next Y position (top of next card)
+                // Calculate next Y position with 20% spacing (60px)
                 if (index < sortedNodes.length - 1) {
-                    const padding = 40; // Space between cards
-                    currentY += cardHeight + padding;
+                    const spacing = 60; // 20% of 300px card width
+                    currentY += cardHeight + spacing;
                 }
             });
             
-            console.log(`Aligned ${selectedNodes.length} cards vertically with measured spacing`);
+            console.log(`Aligned ${selectedNodes.length} cards vertically with 60px spacing`);
         }
         
         function alignSelectedVerticalSimple() {
@@ -2069,7 +2068,7 @@
                 const cardHeight = getMeasuredTextHeight(node);
                 totalRequiredHeight += cardHeight;
                 if (index < selectedNodes.length - 1) {
-                    totalRequiredHeight += 50; // padding between cards
+                    totalRequiredHeight += 60; // 20% spacing (60px)
                 }
             });
             
@@ -2091,7 +2090,7 @@
                 
                 // Move to next card position
                 if (index < selectedNodes.length - 1) {
-                    const padding = 50;
+                    const padding = 60; // 20% spacing
                     currentY += cardHeight + padding;
                 }
             });
@@ -2119,18 +2118,16 @@
             const centerX = arrangePos.x;
             const centerY = arrangePos.y;
             
-            // Remove the topY calculation since we're centering around screen center
-            
             // Sort cards by current X position to maintain left-to-right order
             const sortedNodes = selectedNodes.sort((a, b) => a.position().x - b.position().x);
             
-            // Calculate total width needed for all cards with spacing
+            // Calculate total width needed for all cards with spacing (use 20% spacing)
             let totalRequiredWidth = 0;
             sortedNodes.forEach((node, index) => {
                 const cardWidth = getCardWidth(node);
                 totalRequiredWidth += cardWidth;
                 if (index < sortedNodes.length - 1) {
-                    totalRequiredWidth += 80; // padding between cards
+                    totalRequiredWidth += 60; // 20% of 300px = 60px spacing
                 }
             });
             
@@ -2153,14 +2150,11 @@
                     easing: 'ease-out'
                 });
                 
-                // Move to next card position
-                if (index < sortedNodes.length - 1) {
-                    const padding = 80;
-                    currentX += cardWidth + padding;
-                }
+                // Move to next card position with 20% spacing
+                currentX += cardWidth + 60;
             });
             
-            console.log(`Arranged ${sortedNodes.length} cards in centered row`);
+            console.log(`Arranged ${selectedNodes.length} cards in centered row with 20% spacing`);
         }
         
         // Helper function to calculate card width (same as used in node styling)
@@ -2170,6 +2164,40 @@
             const baseWidth = 180;
             const extraWidth = Math.min(120, (title + text).length * 0.9);
             return baseWidth + extraWidth;
+        }
+        
+        // S (Stack): Neat stack, top and left aligned
+        function stackSelectedCards() {
+            const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
+            if (selectedNodes.length < 2) return;
+            
+            saveState(); // Save for undo
+            
+            const arrangePos = getArrangementPosition();
+            const baseX = arrangePos.x - 150; // Offset left for alignment
+            const baseY = arrangePos.y - 100; // Offset up for alignment
+            
+            // Sort cards by some logical order (could be by creation time, current position, etc.)
+            const sortedNodes = selectedNodes.sort((a, b) => a.position().y - b.position().y);
+            
+            // Stack them with slight offset for visibility
+            const stackOffsetX = 5; // 5px right offset per card
+            const stackOffsetY = 8; // 8px down offset per card
+            
+            sortedNodes.forEach((node, index) => {
+                const cardHeight = getMeasuredTextHeight(node);
+                const stackX = baseX + (index * stackOffsetX);
+                const stackY = baseY + (index * stackOffsetY) + (cardHeight / 2);
+                
+                node.animate({
+                    position: { x: stackX, y: stackY }
+                }, {
+                    duration: 300,
+                    easing: 'ease-out'
+                });
+            });
+            
+            console.log(`S: Stacked ${selectedNodes.length} cards in neat pile`);
         }
         
         function updateSelectionInfo() {
@@ -2415,7 +2443,7 @@
             }, 2000);
         }
         
-        // G+V: Grid where top row is top-aligned, other rows in columns below (like command 1)
+        // G+V: Grid Vertical - max 6 wide, 20% spacing, top row aligned
         function arrangeSelectedGridVerticalColumns() {
             // If we have copied cards, create and arrange them. Otherwise, arrange selected nodes.
             if (copiedCards.length > 0) {
@@ -2426,30 +2454,31 @@
             const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
             if (selectedNodes.length < 2) return;
             
-            // Save state for undo before arranging
             saveState();
             
-            // Calculate grid dimensions
+            // G+V: Max 6 wide grid with 20% spacing
             const nodeCount = selectedNodes.length;
-            const cols = Math.ceil(Math.sqrt(nodeCount));
+            const maxCols = 6;
+            const cols = Math.min(maxCols, Math.ceil(Math.sqrt(nodeCount)));
             const rows = Math.ceil(nodeCount / cols);
             
-            // Use mouse position or fallback to screen center
             const arrangePos = getArrangementPosition();
             const screenCenterX = arrangePos.x;
             const screenCenterY = arrangePos.y;
             
-            const horizontalSpacing = 320;
+            // Use same spacing as G+H for consistency
+            const horizontalSpacing = 320; // Same as G+H
+            const verticalSpacing = 40; // Same row padding as G+H
             
             const gridWidth = (cols - 1) * horizontalSpacing;
             const startX = screenCenterX - gridWidth / 2;
-            const startY = screenCenterY - 100; // Start a bit above center
+            const topLineY = screenCenterY - 100; // Fixed top line for alignment
             
             const nodeArray = selectedNodes.toArray();
             
-            // Arrange column by column (like command 1)
+            // Arrange column by column with top alignment
             for (let col = 0; col < cols; col++) {
-                let currentY = startY;
+                let currentY = topLineY;
                 
                 for (let row = 0; row < rows; row++) {
                     const nodeIndex = row * cols + col;
@@ -2467,9 +2496,9 @@
                             easing: 'ease-out'
                         });
                         
-                        // Move to next position in this column
+                        // Move to next position in this column with same spacing as G+H
                         if (row < rows - 1) {
-                            currentY += cardHeight + 50; // spacing between cards in column
+                            currentY += cardHeight + verticalSpacing; // 40px spacing like G+H
                         }
                     }
                 }
@@ -2559,6 +2588,7 @@
         }
         
         // G+T: Grid where all rows are top-aligned (all cards in same row at same height)
+        // G+T (Grid Tight): Max 6 cards wide, 5% horizontal spacing, 40px overlap between cards vertically
         function arrangeSelectedGridTopAligned() {
             // If we have copied cards, create and arrange them. Otherwise, arrange selected nodes.
             if (copiedCards.length > 0) {
@@ -2569,53 +2599,57 @@
             const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
             if (selectedNodes.length < 2) return;
             
-            // Save state for undo before arranging
-            saveState();
+            saveState(); // Save for undo
             
-            // Use mouse position or fallback to screen center
             const arrangePos = getArrangementPosition();
             const screenCenterX = arrangePos.x;
             const screenCenterY = arrangePos.y;
             
             const nodeCount = selectedNodes.length;
-            const cols = Math.ceil(Math.sqrt(nodeCount));
+            const maxCols = 6; // Max 6 cards wide
+            const cols = Math.min(maxCols, nodeCount);
             const rows = Math.ceil(nodeCount / cols);
             
-            const horizontalSpacing = 320;
-            const verticalSpacing = 180;
+            const cardWidth = 300;
+            const horizontalSpacing = cardWidth * 0.05; // 5% of card width = 15px
+            const overlapSpacing = 120; // 120px between card tops (3x more to show titles)
             
-            const gridWidth = (cols - 1) * horizontalSpacing;
-            const gridHeight = (rows - 1) * verticalSpacing;
+            // Calculate grid size
+            const gridWidth = (cols - 1) * (cardWidth + horizontalSpacing);
             const startX = screenCenterX - gridWidth / 2;
-            const startY = screenCenterY - gridHeight / 2;
+            
+            // For top row alignment
+            const topRowY = screenCenterY - 100; // Start a bit above center
             
             const nodeArray = selectedNodes.toArray();
             
-            // Position cards row by row, top-aligned within each row
-            for (let row = 0; row < rows; row++) {
-                const rowTopY = startY + row * verticalSpacing;
+            // Position cards column by column for proper overlapping
+            for (let col = 0; col < cols; col++) {
+                const colX = startX + col * (cardWidth + horizontalSpacing);
+                let currentY = topRowY;
                 
-                for (let col = 0; col < cols; col++) {
+                // Go through each row in this column
+                for (let row = 0; row < rows; row++) {
                     const nodeIndex = row * cols + col;
                     if (nodeIndex < nodeArray.length) {
                         const node = nodeArray[nodeIndex];
-                        const newX = startX + col * horizontalSpacing;
-                        
-                        // Get card height and position based on top edge
                         const cardHeight = getMeasuredTextHeight(node);
-                        const cardCenterY = rowTopY + (cardHeight / 2); // Center card within its height
+                        const cardCenterY = currentY + (cardHeight / 2);
                         
                         node.animate({
-                            position: { x: newX, y: cardCenterY }
+                            position: { x: colX, y: cardCenterY }
                         }, {
                             duration: 400,
                             easing: 'ease-out'
                         });
+                        
+                        // Next card in this column is 120px lower (enough space to show titles)
+                        currentY += overlapSpacing;
                     }
                 }
             }
             
-            console.log(`G+T: Grid med top-alignade rader - ${rows} rader × ${cols} kolumner för ${selectedNodes.length} kort`);
+            console.log(`G+T: Tight grid with 120px overlap - max ${maxCols} wide, ${rows} deep for ${selectedNodes.length} cards`);
         }
         
         // Save board to localStorage
@@ -3178,6 +3212,11 @@
                     break;
                 case 'V':
                     arrangeSelectedInColumn();
+                    break;
+                case 'Stack':
+                case 'QQ':
+                case 'Alt+S':
+                    stackSelectedCards();
                     break;
                 case 'Pin':
                     selectedNodes.forEach(node => {
@@ -6290,10 +6329,40 @@ Kan ha #taggar överallt.
                     }
                 }
                 
-                // Q för kluster/grid (markerade kort)
+                
+                // Q toggles between cluster (ruffig) and stack (prydlig) - infinite loop
                 if (e.key === 'q' && !e.ctrlKey && !e.altKey) {
+                    const now = Date.now();
+                    const lastQTime = window.lastQPress || 0;
+                    
                     e.preventDefault();
-                    arrangeSelectedInGrid();
+                    
+                    if (now - lastQTime < 500) {
+                        // Recent Q press - toggle to the other arrangement
+                        const wasCluster = window.lastQWasCluster || true;
+                        if (wasCluster) {
+                            console.log('Q toggle: cluster → stack');
+                            stackSelectedCards();
+                            window.lastQWasCluster = false;
+                        } else {
+                            console.log('Q toggle: stack → cluster');
+                            clusterSelectedCards();
+                            window.lastQWasCluster = true;
+                        }
+                        window.lastQPress = now; // Continue the chain
+                    } else {
+                        // First Q or timeout - always start with cluster
+                        console.log('Q start: cluster');
+                        clusterSelectedCards();
+                        window.lastQWasCluster = true;
+                        window.lastQPress = now;
+                    }
+                }
+                
+                // Alt+S för neat stack (samma som N)
+                if (e.key === 's' && e.altKey && !e.ctrlKey) {
+                    e.preventDefault();
+                    stackSelectedCards();
                 }
                 
                 // Gamla arrangement shortcuts 1,2,3 borttagna för färgfunktionen
