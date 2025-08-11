@@ -1503,7 +1503,8 @@
                             'border-color': '#666666',
                             'border-width': 2,
                             'opacity': 0.8,
-                            'background-color': '#f5f5f5'
+                            'background-color': '#f5f5f5',
+                            'color': '#888888'
                         }
                     },
                     {
@@ -6279,10 +6280,13 @@ Kan ha #taggar överallt.
                 note.eventTime = parseTimeFromText(timeMatch[0]);
             }
             
-            const locationMatch = firstLine.match(/@([A-Za-zÅÄÖåäö0-9_-]+)(?!\d{6})/);
-            if (locationMatch && !locationMatch[0].match(/@\d{6}/)) {
-                note.location = locationMatch[1];
-            }
+            // Parse location - find @word that's NOT a date
+            const locationMatches = firstLine.match(/@([A-Za-zÅÄÖåäö0-9_-]+)/g) || [];
+            locationMatches.forEach(match => {
+                if (!match.match(/@\d{6}/)) { // Not a date  
+                    note.location = match.substring(1); // Remove @
+                }
+            });
             
             // Find title line (first non-@ line)
             let titleLineIndex = -1;
@@ -6309,11 +6313,12 @@ Kan ha #taggar överallt.
             const hashtagMatches = sectionText.match(/#[A-Za-zÅÄÖåäö0-9_-]+/g) || [];
             note.tags = hashtagMatches.map(tag => tag.substring(1)); // Remove #
             
-            // Add location as tag if exists
-            if (note.location) {
-                note.allTags = [...note.tags, note.location];
+            // Add location as tag if exists (avoid duplicates)
+            const uniqueTags = [...new Set(note.tags)]; // Remove duplicates from hashtags
+            if (note.location && !uniqueTags.includes(note.location)) {
+                note.allTags = [...uniqueTags, note.location];
             } else {
-                note.allTags = [...note.tags];
+                note.allTags = uniqueTags;
             }
             
             return note;
@@ -6329,28 +6334,34 @@ Kan ha #taggar överallt.
             let currentY = arrangePos.y - 100; // Start above center
             
             notes.forEach((note, index) => {
-                // Build full card text  
+                // Build full card text: Första raden + innehåll + metadata + taggar
                 let cardText = '';
                 
-                // Add event time to text if exists
-                if (note.eventTime) {
-                    cardText += note.eventTime.originalText + ' ';
-                }
-                
-                // Add location to text if exists  
-                if (note.location) {
-                    cardText += '@' + note.location + '\n';
-                }
-                
+                // Första raden (titel)
                 cardText += note.title;
                 
+                // Resten av texten (innehåll)
                 if (note.content) {
                     cardText += '\n' + note.content;
                 }
                 
-                // Add hashtags at the end
-                if (note.tags.length > 0) {
-                    cardText += '\n' + note.tags.map(tag => '#' + tag).join(' ');
+                // @tid @plats efter dubbel radbrytning
+                let metadataLine = '';
+                if (note.eventTime) {
+                    metadataLine += note.eventTime.originalText;
+                }
+                if (note.location) {
+                    if (metadataLine) metadataLine += ' ';
+                    metadataLine += '@' + note.location;
+                }
+                
+                if (metadataLine) {
+                    cardText += '\n\n' + metadataLine;
+                }
+                
+                // Hashtags efter dubbel radbrytning
+                if (note.allTags.length > 0) {
+                    cardText += '\n\n' + note.allTags.map(tag => '#' + tag).join(' ');
                 }
                 
                 // Create new card
