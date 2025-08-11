@@ -6313,9 +6313,12 @@ Kan ha #taggar överallt.
             const hashtagMatches = sectionText.match(/#[A-Za-zÅÄÖåäö0-9_-]+/g) || [];
             note.tags = hashtagMatches.map(tag => tag.substring(1)); // Remove #
             
-            // Add location as tag if exists (avoid duplicates)
-            const uniqueTags = [...new Set(note.tags)]; // Remove duplicates from hashtags
-            if (note.location && !uniqueTags.includes(note.location)) {
+            // Remove duplicates from hashtags first
+            const uniqueTags = [...new Set(note.tags)];
+            
+            // Add location as tag ONLY if it's not already in hashtags (case insensitive check)
+            const tagsLowerCase = uniqueTags.map(tag => tag.toLowerCase());
+            if (note.location && !tagsLowerCase.includes(note.location.toLowerCase())) {
                 note.allTags = [...uniqueTags, note.location];
             } else {
                 note.allTags = uniqueTags;
