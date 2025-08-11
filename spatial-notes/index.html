@@ -122,6 +122,8 @@
             display: inline-block;
         }
         
+        
+        
         .menu-button {
             background: #007acc;
             color: white;
@@ -728,6 +730,52 @@
             z-index: 1000;
         }
         
+        /* Make toolbar mobile-friendly with icons */
+        @media (max-width: 768px) {
+            .toolbar {
+                flex-wrap: wrap;
+                gap: 3px;
+                padding: 5px;
+                min-height: auto;
+            }
+            
+            .search-box, .tag-filter-box {
+                flex: 1 1 40%;
+                min-width: 100px;
+            }
+            
+            /* Convert google drive button to icon on mobile */
+            .google-drive-btn {
+                padding: 8px;
+                font-size: 18px;
+                min-width: auto;
+                border-radius: 50%;
+                width: 40px;
+                height: 40px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .google-drive-btn span:last-child {
+                display: none; /* Hide "Google Drive" text */
+            }
+            
+            .google-drive-btn {
+                width: 40px;
+                height: 40px;
+            }
+            
+            .menu-button {
+                padding: 8px 12px;
+                font-size: 16px;
+            }
+            
+            .menu-button span:last-child {
+                margin-left: 3px; /* Less space for arrow */
+            }
+        }
+        
         .mobile-btn {
             width: 60px;
             height: 60px;
@@ -739,6 +787,9 @@
             cursor: pointer;
             box-shadow: 0 4px 12px rgba(0,122,204,0.3);
             transition: all 0.2s ease;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            touch-action: manipulation;
         }
         
         .mobile-btn:hover {
@@ -748,6 +799,7 @@
         
         .mobile-btn:active {
             transform: scale(0.95);
+            background: #0056b3;
         }
         
         /* Show mobile controls on touch devices */
@@ -764,32 +816,53 @@
             }
         }
         
-        /* Desktop zoom-out button */
+        /* Desktop zoom-out button - smaller and more discrete */
         .desktop-zoom-btn {
             position: fixed;
-            bottom: 20px;
-            right: 20px;
-            width: 50px;
-            height: 50px;
+            bottom: 15px;
+            right: 15px;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
-            background: #007acc;
+            background: rgba(128, 128, 128, 0.7); /* Discrete gray with transparency */
             color: white;
             border: none;
-            font-size: 20px;
+            font-size: 16px;
             cursor: pointer;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
             z-index: 1000;
             transition: all 0.2s ease;
+            opacity: 0.8;
         }
         
         .desktop-zoom-btn:hover {
-            background: #005999;
-            transform: scale(1.1);
-            box-shadow: 0 6px 16px rgba(0,0,0,0.3);
+            background: rgba(100, 100, 100, 0.9);
+            transform: scale(1.05);
+            opacity: 1;
         }
         
         .desktop-zoom-btn:active {
             transform: scale(0.95);
+        }
+        
+        /* Dark theme discrete zoom button */
+        .dark-theme .desktop-zoom-btn {
+            background: rgba(80, 80, 80, 0.8);
+            color: #e0e0e0;
+        }
+        
+        .dark-theme .desktop-zoom-btn:hover {
+            background: rgba(100, 100, 100, 0.9);
+        }
+        
+        /* Sepia theme discrete zoom button */
+        .sepia-theme .desktop-zoom-btn {
+            background: rgba(139, 117, 86, 0.7);
+            color: #f4f1e8;
+        }
+        
+        .sepia-theme .desktop-zoom-btn:hover {
+            background: rgba(109, 90, 68, 0.9);
         }
         
         /* Hide desktop button on mobile (where mobile-controls are shown) */
@@ -821,7 +894,6 @@
                 <option value="grid">Grid (rutnät)</option>
             </select>
         </div>
-        <button class="add-card-btn" onclick="addNewCard()">+ Nytt kort</button>
         <button class="google-drive-btn" id="googleDriveBtn" onclick="toggleGoogleDriveAuth()">
             <span>📱</span>
             <span id="driveButtonText">Google Drive</span>
@@ -869,6 +941,7 @@
                 <button onclick="executeCommand('Q')">Q</button>
                 <button onclick="executeCommand('C')">C</button>
                 <button onclick="executeCommand('T')">🎨 T</button>
+                <button onclick="showSortMenu(event)">📊 Sortera</button>
                 <button onclick="executeCommand('Pin')">📌 Pin</button>
                 <button onclick="executeCommand('Unpin')">🔓 Unpin</button>
                 <button onclick="executeCommand('Delete')">🗑️ Delete</button>
@@ -1160,8 +1233,20 @@
             
             // Add padding that Cytoscape applies to cards
             // Cards need minimum padding for visual breathing room
-            const minCardHeight = 40; // Reduced minimum height
-            const paddingBuffer = 20; // Reduced padding per user request
+            const minCardHeight = 140; // 140px minimum height
+            
+            // Dynamic padding: less padding for longer text, more for short text
+            let paddingBuffer;
+            if (measuredTextHeight <= 50) {
+                paddingBuffer = 25; // Short text needs more padding
+            } else if (measuredTextHeight <= 100) {
+                paddingBuffer = 20; // Medium text gets normal padding
+            } else if (measuredTextHeight <= 200) {
+                paddingBuffer = 15; // Long text needs less extra padding
+            } else {
+                paddingBuffer = 10; // Very long text needs minimal padding
+            }
+            
             const totalHeight = Math.max(minCardHeight, measuredTextHeight + paddingBuffer);
             
             // Cache the result
@@ -1291,7 +1376,7 @@
                                 
                                 // Use the ruler to get exact height for other cards
                                 const measuredHeight = getMeasuredTextHeight(node);
-                                return Math.max(100, measuredHeight + 10); // Standard padding
+                                return Math.max(140, measuredHeight + 10); // Standard padding, 140px minimum
                             },
                             'shape': 'round-rectangle',
                             'cursor': 'grab',
@@ -1940,6 +2025,179 @@
             }
         }
         
+        // ========================================
+        // SORTING SYSTEM - EASY TO FIND
+        // ========================================
+        // Global sorting state
+        let sortMode = null; // null, 'textLength-asc', 'textLength-desc', 'alphabetic-asc', 'alphabetic-desc', 'color', 'date-asc', 'date-desc', 'tagCount'
+        
+        function showSortMenu(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            // Check if we have selected nodes
+            const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
+            if (selectedNodes.length < 2) {
+                alert('Markera minst 2 kort för att sortera');
+                return;
+            }
+            
+            // Create sort menu
+            const sortMenu = document.createElement('div');
+            sortMenu.id = 'sortMenu';
+            sortMenu.style.cssText = `
+                position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                background: white; border: 2px solid #007acc; border-radius: 8px;
+                padding: 15px; z-index: 10001; box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            `;
+            
+            sortMenu.innerHTML = `
+                <h3 style="margin: 0 0 15px 0; text-align: center; color: #007acc;">📊 Sortera ${selectedNodes.length} kort</h3>
+                <p style="margin: 0 0 15px 0; text-align: center; font-size: 14px; color: #666;">
+                    Välj sortering, tryck sedan H/V/G+V/G+H/G+T för layout
+                </p>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <button onclick="setSortMode('textLength-asc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">📝 Text: Kort → Lång</button>
+                    <button onclick="setSortMode('textLength-desc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">📝 Text: Lång → Kort</button>
+                    <button onclick="setSortMode('alphabetic-asc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🔤 A → Z</button>
+                    <button onclick="setSortMode('alphabetic-desc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🔤 Z → A</button>
+                    <button onclick="setSortMode('color')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🎨 Färg 1→6</button>
+                    <button onclick="setSortMode('date-asc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">📅 Äldst → Nyast</button>
+                    <button onclick="setSortMode('date-desc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">📅 Nyast → Äldst</button>
+                    <button onclick="setSortMode('tagCount')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🏷️ Färre → Fler taggar</button>
+                </div>
+                <div style="text-align: center; margin-top: 15px;">
+                    <button onclick="closeSortMenu()" style="padding: 8px 16px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer;">Avbryt</button>
+                </div>
+            `;
+            
+            document.body.appendChild(sortMenu);
+            
+            // Close on outside click
+            setTimeout(() => {
+                document.addEventListener('click', function closeSortOnClick(e) {
+                    if (!sortMenu.contains(e.target)) {
+                        closeSortMenu();
+                        document.removeEventListener('click', closeSortOnClick);
+                    }
+                });
+            }, 100);
+        }
+        
+        function setSortMode(mode) {
+            sortMode = mode;
+            console.log('Sort mode set to:', mode);
+            closeSortMenu();
+            
+            // Show instruction
+            const statusDiv = document.getElementById('selectionInfo');
+            if (statusDiv) {
+                statusDiv.textContent = `Sorteringsläge: ${getSortModeDescription(mode)}. Tryck H/V/G+V/G+H/G+T för layout.`;
+                statusDiv.classList.add('visible');
+                
+                // Auto-hide after 5 seconds
+                setTimeout(() => {
+                    if (sortMode === mode) { // Only hide if we're still in same sort mode
+                        statusDiv.classList.remove('visible');
+                    }
+                }, 5000);
+            }
+        }
+        
+        function closeSortMenu() {
+            const sortMenu = document.getElementById('sortMenu');
+            if (sortMenu) {
+                document.body.removeChild(sortMenu);
+            }
+        }
+        
+        function getSortModeDescription(mode) {
+            switch(mode) {
+                case 'textLength-asc': return 'Text kort → lång';
+                case 'textLength-desc': return 'Text lång → kort';
+                case 'alphabetic-asc': return 'Alfabetisk A → Z';
+                case 'alphabetic-desc': return 'Alfabetisk Z → A';
+                case 'color': return 'Färg 1 → 6';
+                case 'date-asc': return 'Äldst → nyast';
+                case 'date-desc': return 'Nyast → äldst';
+                case 'tagCount': return 'Färre → fler taggar';
+                default: return 'Okänt';
+            }
+        }
+        
+        function sortNodes(nodes) {
+            if (!sortMode) return nodes;
+            
+            return nodes.sort((a, b) => {
+                switch(sortMode) {
+                    case 'textLength-asc':
+                        const aTextLength = (a.data('text') || '').length;
+                        const bTextLength = (b.data('text') || '').length;
+                        return aTextLength - bTextLength;
+                        
+                    case 'textLength-desc':
+                        const aTextLengthDesc = (a.data('text') || '').length;
+                        const bTextLengthDesc = (b.data('text') || '').length;
+                        return bTextLengthDesc - aTextLengthDesc;
+                        
+                    case 'alphabetic-asc':
+                        const aText = (a.data('text') || '').toLowerCase();
+                        const bText = (b.data('text') || '').toLowerCase();
+                        return aText.localeCompare(bText, 'sv');
+                        
+                    case 'alphabetic-desc':
+                        const aTextDesc = (a.data('text') || '').toLowerCase();
+                        const bTextDesc = (b.data('text') || '').toLowerCase();
+                        return bTextDesc.localeCompare(aTextDesc, 'sv');
+                        
+                    case 'color':
+                        const aColor = a.data('cardColor') || 'zzz'; // No color goes last
+                        const bColor = b.data('cardColor') || 'zzz';
+                        return aColor.localeCompare(bColor);
+                        
+                    case 'date-asc':
+                        const aDate = extractDateFromId(a.id());
+                        const bDate = extractDateFromId(b.id());
+                        return aDate - bDate;
+                        
+                    case 'date-desc':
+                        const aDateDesc = extractDateFromId(a.id());
+                        const bDateDesc = extractDateFromId(b.id());
+                        return bDateDesc - aDateDesc;
+                        
+                    case 'tagCount':
+                        const aTagCount = (a.data('tags') || []).length;
+                        const bTagCount = (b.data('tags') || []).length;
+                        return aTagCount - bTagCount;
+                        
+                    default:
+                        return 0;
+                }
+            });
+        }
+        
+        function extractDateFromId(nodeId) {
+            // Try to extract timestamp from ID like "20250810-143052"
+            const match = nodeId.match(/(\d{8}-\d{6})/);
+            if (match) {
+                const dateStr = match[1];
+                const year = parseInt(dateStr.substr(0, 4));
+                const month = parseInt(dateStr.substr(4, 2)) - 1; // Month is 0-indexed
+                const day = parseInt(dateStr.substr(6, 2));
+                const hour = parseInt(dateStr.substr(9, 2));
+                const minute = parseInt(dateStr.substr(11, 2));
+                const second = parseInt(dateStr.substr(13, 2));
+                return new Date(year, month, day, hour, minute, second).getTime();
+            }
+            
+            // Fallback for older IDs - return very old date
+            return new Date(2020, 0, 1).getTime();
+        }
+        // ========================================
+        // END SORTING SYSTEM
+        // ========================================
+        
         // Alignment functions for selected cards
         function alignSelectedVertical() {
             const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
@@ -2107,12 +2365,24 @@
             const centerX = arrangePos.x;
             const centerY = arrangePos.y;
             
+            // Sort nodes - use custom sorting if active, otherwise keep original order
+            let nodesToArrange = sortMode ? sortNodes(selectedNodes.toArray()) : selectedNodes.toArray();
+            
+            // Clear sort mode after use
+            if (sortMode) {
+                console.log('Applied sorting:', sortMode);
+                sortMode = null;
+                // Hide status message
+                const statusDiv = document.getElementById('selectionInfo');
+                if (statusDiv) statusDiv.classList.remove('visible');
+            }
+            
             // Calculate total height needed for all cards with spacing
             let totalRequiredHeight = 0;
-            selectedNodes.forEach((node, index) => {
+            nodesToArrange.forEach((node, index) => {
                 const cardHeight = getMeasuredTextHeight(node);
                 totalRequiredHeight += cardHeight;
-                if (index < selectedNodes.length - 1) {
+                if (index < nodesToArrange.length - 1) {
                     totalRequiredHeight += 60; // 20% spacing (60px)
                 }
             });
@@ -2120,7 +2390,7 @@
             // Start positioning from arrangement center, working upwards
             let currentY = centerY - (totalRequiredHeight / 2);
             
-            selectedNodes.forEach((node, index) => {
+            nodesToArrange.forEach((node, index) => {
                 // Get this card's actual height
                 const cardHeight = getMeasuredTextHeight(node);
                 
@@ -2163,8 +2433,17 @@
             const centerX = arrangePos.x;
             const centerY = arrangePos.y;
             
-            // Sort cards by current X position to maintain left-to-right order
-            const sortedNodes = selectedNodes.sort((a, b) => a.position().x - b.position().x);
+            // Sort nodes - use custom sorting if active, otherwise maintain left-to-right order
+            let sortedNodes = sortMode ? sortNodes(selectedNodes.toArray()) : selectedNodes.sort((a, b) => a.position().x - b.position().x);
+            
+            // Clear sort mode after use
+            if (sortMode) {
+                console.log('Applied sorting:', sortMode);
+                sortMode = null;
+                // Hide status message
+                const statusDiv = document.getElementById('selectionInfo');
+                if (statusDiv) statusDiv.classList.remove('visible');
+            }
             
             // Calculate total width needed for all cards with spacing (use 20% spacing)
             let totalRequiredWidth = 0;
@@ -2557,7 +2836,7 @@
                 // Measure text height
                 const combinedText = title + '\n\n' + text + '\n\n' + tags.map(tag => `#${tag}`).join(' ');
                 ruler.textContent = combinedText;
-                const measuredHeight = Math.max(120, ruler.offsetHeight + 40);
+                const measuredHeight = Math.max(140, ruler.offsetHeight + 40);
                 maxCardHeight = Math.max(maxCardHeight, measuredHeight);
                 
                 // Calculate width based on content
@@ -2656,7 +2935,17 @@
             const startX = screenCenterX - gridWidth / 2;
             const topLineY = screenCenterY; // Top of grid at mouse cursor (like G+H)
             
-            const nodeArray = selectedNodes.toArray();
+            // Sort nodes - use custom sorting if active, otherwise keep original order
+            const nodeArray = sortMode ? sortNodes(selectedNodes.toArray()) : selectedNodes.toArray();
+            
+            // Clear sort mode after use
+            if (sortMode) {
+                console.log('Applied sorting:', sortMode);
+                sortMode = null;
+                // Hide status message
+                const statusDiv = document.getElementById('selectionInfo');
+                if (statusDiv) statusDiv.classList.remove('visible');
+            }
             
             // Arrange column by column with top alignment
             for (let col = 0; col < cols; col++) {
@@ -2718,7 +3007,17 @@
             const gridWidth = (cols - 1) * horizontalSpacing;
             const startX = screenCenterX - gridWidth / 2;
             
-            const nodeArray = selectedNodes.toArray();
+            // Sort nodes - use custom sorting if active, otherwise keep original order
+            const nodeArray = sortMode ? sortNodes(selectedNodes.toArray()) : selectedNodes.toArray();
+            
+            // Clear sort mode after use
+            if (sortMode) {
+                console.log('Applied sorting:', sortMode);
+                sortMode = null;
+                // Hide status message
+                const statusDiv = document.getElementById('selectionInfo');
+                if (statusDiv) statusDiv.classList.remove('visible');
+            }
             
             // First pass: calculate the height of each row
             const rowHeights = [];
@@ -2803,9 +3102,20 @@
             // For top row alignment
             const topRowY = screenCenterY - 100; // Start a bit above center
             
-            const nodeArray = selectedNodes.toArray();
+            // Sort nodes - use custom sorting if active, otherwise keep original order
+            const wasSorted = !!sortMode;
+            const nodeArray = sortMode ? sortNodes(selectedNodes.toArray()) : selectedNodes.toArray();
             
-            // Position cards column by column for proper overlapping
+            // Clear sort mode after use
+            if (sortMode) {
+                console.log('Applied sorting:', sortMode);
+                sortMode = null;
+                // Hide status message
+                const statusDiv = document.getElementById('selectionInfo');
+                if (statusDiv) statusDiv.classList.remove('visible');
+            }
+            
+            // Use same column-by-column placement as original (works for both sorted and unsorted)
             for (let col = 0; col < cols; col++) {
                 const colX = startX + col * (cardWidth + horizontalSpacing);
                 let currentY = topRowY;
@@ -2825,11 +3135,14 @@
                             easing: 'ease-out'
                         });
                         
-                        // Next card in this column is 120px lower (enough space to show titles)
+                        // Next card in this column is 120px lower
                         currentY += overlapSpacing;
                     }
                 }
             }
+            
+            // Z-LAYERING: Disabled for now - remove/re-add breaks original creation timestamps
+            // TODO: Find Cytoscape method that changes render order without breaking node identity
             
             console.log(`G+T: Tight grid with 120px overlap - max ${maxCols} wide, ${rows} deep for ${selectedNodes.length} cards`);
         }
@@ -5649,7 +5962,7 @@ Kan ha #taggar överallt.
                         console.error('Error calculating height for node:', node.id(), heightError);
                         // Fallback to default height calculation with proper padding
                         const textLength = (node.data('text') || '').length;
-                        const defaultHeight = Math.max(60, textLength * 0.8 + 60); // More generous fallback
+                        const defaultHeight = Math.max(140, textLength * 0.8 + 60); // 140px minimum fallback
                         console.log(`Fallback height for ${node.id()}: ${defaultHeight}px`);
                         node.style('height', defaultHeight + 'px');
                     }
@@ -5919,7 +6232,7 @@ Kan ha #taggar överallt.
                                         node.style('height', heightInfo + 'px');
                                     } catch (error) {
                                         const textLength = (node.data('text') || '').length;
-                                        const fallbackHeight = Math.max(100, textLength * 0.8 + 60);
+                                        const fallbackHeight = Math.max(140, textLength * 0.8 + 60);
                                         node.style('height', fallbackHeight + 'px');
                                     }
                                 });
@@ -6143,8 +6456,15 @@ Kan ha #taggar överallt.
             initCytoscape();
             loadSavedTheme(); // Load theme before anything else
             
-            // NOTE: Google Drive initialization is now handled by GoogleDriveModule.init()
-            // which is called below, no need to duplicate here
+            // Load current project from localStorage even without Google login
+            const savedProject = localStorage.getItem('google_current_project');
+            if (savedProject) {
+                currentProject = savedProject;
+                console.log(`Restored current project: ${currentProject}`);
+            }
+            
+            // Initialize Google Drive API (wait for gapi to load)
+            setTimeout(() => initializeGoogleAPI(), 3000);
             
             // Enhanced save function that includes Drive sync (after original function is defined)
             setTimeout(() => {
@@ -6610,755 +6930,6 @@ Kan ha #taggar överallt.
             });
             
         });
-
-        // ============================================================================
-        // GOOGLE DRIVE MODULE - Consolidated and Secure
-        // ============================================================================
-        const GoogleDriveModule = {
-            // Configuration
-            CLIENT_ID: '971005822021-8ebrpd92n1upsedg7s5fn80mnmvhou5d.apps.googleusercontent.com',
-            SCOPE: 'https://www.googleapis.com/auth/drive.file',
-            DISCOVERY_DOC: 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest',
-            
-            // State
-            state: {
-                isApiLoaded: false,
-                isSignedIn: false,
-                accessToken: null,
-                tokenExpiry: null,
-                tokenClient: null,
-                currentProject: 'default',
-                availableProjects: [],
-                projectsLoaded: false,
-                autoSyncInterval: null,
-                tokenPersistenceOptedIn: false
-            },
-
-            // Status and retry logic
-            status: {
-                lastError: null,
-                isRetrying: false,
-                retryCount: 0,
-                maxRetries: 3,
-                retryDelay: 1000
-            },
-
-            // Initialize the module
-            async init() {
-                console.log('[DriveModule] Initializing...');
-                
-                // Check for existing opt-in preference
-                const optIn = sessionStorage.getItem('drive_token_persistence_opted_in');
-                if (optIn === 'true') {
-                    this.state.tokenPersistenceOptedIn = true;
-                    this.loadSavedTokens();
-                }
-                
-                // Load current project from sessionStorage
-                const savedProject = sessionStorage.getItem('google_current_project');
-                if (savedProject) {
-                    this.state.currentProject = savedProject;
-                    console.log(`[DriveModule] Restored project: ${savedProject}`);
-                } else {
-                    console.log(`[DriveModule] No saved project, using: ${this.state.currentProject}`);
-                }
-                
-                // Initialize Google API after delay
-                setTimeout(() => this.initializeGoogleAPI(), 3000);
-            },
-
-            // Show status to user
-            showStatus(message, isError = false) {
-                console.log(`[DriveModule] ${isError ? 'ERROR' : 'STATUS'}: ${message}`);
-                
-                // Update button text to show status
-                const btn = document.getElementById('googleDriveBtn');
-                const btnText = document.getElementById('driveButtonText');
-                if (btnText) {
-                    const originalText = btnText.textContent;
-                    btnText.textContent = message;
-                    
-                    // Restore original text after 3 seconds
-                    setTimeout(() => {
-                        if (btnText.textContent === message) {
-                            btnText.textContent = this.state.isSignedIn ? 'Drive (Inloggad)' : 'Google Drive';
-                        }
-                    }, 3000);
-                }
-            },
-
-            // Secure token management - sessionStorage by default, localStorage with opt-in
-            saveTokens() {
-                if (!this.state.accessToken) return;
-
-                const tokenData = {
-                    access_token: this.state.accessToken,
-                    token_expiry: this.state.tokenExpiry?.toString() || '',
-                    current_project: this.state.currentProject
-                };
-
-                // Always save to sessionStorage (cleared on browser close)
-                sessionStorage.setItem('google_access_token', tokenData.access_token);
-                sessionStorage.setItem('google_token_expiry', tokenData.token_expiry);
-                sessionStorage.setItem('google_current_project', tokenData.current_project);
-
-                // Only save to localStorage if user opted in
-                if (this.state.tokenPersistenceOptedIn) {
-                    localStorage.setItem('google_access_token', tokenData.access_token);
-                    localStorage.setItem('google_token_expiry', tokenData.token_expiry);
-                    localStorage.setItem('google_current_project', tokenData.current_project);
-                    console.log('[DriveModule] Tokens saved to localStorage (user opted in)');
-                } else {
-                    console.log('[DriveModule] Tokens saved to sessionStorage only');
-                }
-            },
-
-            // Load tokens with security checks
-            loadSavedTokens() {
-                // Try localStorage first (if opted in), then sessionStorage
-                let savedToken, savedExpiry, savedProject;
-
-                if (this.state.tokenPersistenceOptedIn) {
-                    savedToken = localStorage.getItem('google_access_token');
-                    savedExpiry = localStorage.getItem('google_token_expiry');
-                    savedProject = localStorage.getItem('google_current_project');
-                    console.log('[DriveModule] Loading from localStorage (user opted in)');
-                } 
-                
-                // Fallback to sessionStorage
-                if (!savedToken) {
-                    savedToken = sessionStorage.getItem('google_access_token');
-                    savedExpiry = sessionStorage.getItem('google_token_expiry');
-                    savedProject = sessionStorage.getItem('google_current_project');
-                    console.log('[DriveModule] Loading from sessionStorage');
-                }
-
-                if (savedToken && savedExpiry) {
-                    const expiryTime = parseInt(savedExpiry);
-                    const now = Date.now();
-
-                    // Check if token is still valid (with 5 minute buffer)
-                    if (expiryTime && now < (expiryTime - 5 * 60 * 1000)) {
-                        this.state.accessToken = savedToken;
-                        this.state.tokenExpiry = expiryTime;
-                        this.state.isSignedIn = true;
-
-                        if (savedProject) {
-                            this.state.currentProject = savedProject;
-                        }
-
-                        console.log('[DriveModule] Restored valid tokens');
-                        this.updateButtonState();
-                        return true;
-                    } else {
-                        console.log('[DriveModule] Saved tokens expired, clearing...');
-                        this.clearTokens();
-                    }
-                }
-                return false;
-            },
-
-            // Clear tokens securely
-            clearTokens() {
-                this.state.accessToken = null;
-                this.state.tokenExpiry = null;
-                this.state.isSignedIn = false;
-
-                // Clear from both storages
-                sessionStorage.removeItem('google_access_token');
-                sessionStorage.removeItem('google_token_expiry');
-                localStorage.removeItem('google_access_token');
-                localStorage.removeItem('google_token_expiry');
-
-                console.log('[DriveModule] All tokens cleared');
-                this.updateButtonState();
-            },
-
-            // Ask user for token persistence opt-in
-            async requestTokenPersistenceOptIn() {
-                const consent = confirm(
-                    'Google Drive Token Persistence\n\n' +
-                    'Vill du att dina Google Drive tokens ska sparas mellan webbläsarsessioner?\n\n' +
-                    '✅ JA: Tokens sparas i localStorage (kvarstår efter browser-stängning)\n' +
-                    '❌ NEJ: Tokens sparas endast i sessionStorage (raderas när browser stängs)\n\n' +
-                    'Du kan ändra detta val senare genom att logga ut och in igen.\n\n' +
-                    'Välj JA för beständighet eller NEJ för högre säkerhet.'
-                );
-
-                this.state.tokenPersistenceOptedIn = consent;
-                sessionStorage.setItem('drive_token_persistence_opted_in', consent.toString());
-
-                console.log(`[DriveModule] Token persistence opt-in: ${consent}`);
-                return consent;
-            },
-
-            // Update button state
-            updateButtonState() {
-                const btnText = document.getElementById('driveButtonText');
-                if (btnText) {
-                    btnText.textContent = this.state.isSignedIn ? 'Drive (Inloggad)' : 'Google Drive';
-                }
-            },
-
-            // Retry logic with exponential backoff
-            async retryOperation(operation, operationName) {
-                this.status.retryCount = 0;
-                this.status.isRetrying = false;
-
-                while (this.status.retryCount < this.status.maxRetries) {
-                    try {
-                        this.status.lastError = null;
-                        const result = await operation();
-                        
-                        // Reset retry count on success
-                        this.status.retryCount = 0;
-                        this.status.isRetrying = false;
-                        
-                        return result;
-                    } catch (error) {
-                        this.status.retryCount++;
-                        this.status.lastError = error;
-                        this.status.isRetrying = true;
-
-                        console.error(`[DriveModule] ${operationName} failed (attempt ${this.status.retryCount}):`, error);
-
-                        if (this.status.retryCount < this.status.maxRetries) {
-                            const delay = this.status.retryDelay * Math.pow(2, this.status.retryCount - 1);
-                            this.showStatus(`${operationName} misslyckades, försöker igen om ${delay}ms...`, true);
-                            
-                            await new Promise(resolve => setTimeout(resolve, delay));
-                        } else {
-                            this.status.isRetrying = false;
-                            this.showStatus(`${operationName} misslyckades efter ${this.status.maxRetries} försök`, true);
-                            throw error;
-                        }
-                    }
-                }
-            },
-
-            // Guarded fetch with token validation
-            async guardedFetch(url, options = {}) {
-                // Check if we have a valid token
-                if (!this.state.accessToken || !this.state.isSignedIn) {
-                    throw new Error('Inte inloggad på Google Drive');
-                }
-
-                // Check token expiry
-                if (this.state.tokenExpiry && Date.now() >= (this.state.tokenExpiry - 5 * 60 * 1000)) {
-                    throw new Error('Google Drive token har gått ut');
-                }
-
-                // Add authorization header
-                const headers = {
-                    'Authorization': `Bearer ${this.state.accessToken}`,
-                    'Content-Type': 'application/json',
-                    ...options.headers
-                };
-
-                // Perform the fetch with timeout
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-
-                try {
-                    const response = await fetch(url, {
-                        ...options,
-                        headers,
-                        signal: controller.signal
-                    });
-
-                    clearTimeout(timeoutId);
-
-                    // Check for auth errors
-                    if (response.status === 401) {
-                        this.clearTokens();
-                        throw new Error('Google Drive authorization fel - vänligen logga in igen');
-                    }
-
-                    if (response.status === 403) {
-                        throw new Error('Åtkomst nekad till Google Drive');
-                    }
-
-                    if (!response.ok) {
-                        throw new Error(`Google Drive API fel: ${response.status} ${response.statusText}`);
-                    }
-
-                    return response;
-                } catch (error) {
-                    clearTimeout(timeoutId);
-                    
-                    if (error.name === 'AbortError') {
-                        throw new Error('Google Drive begäran tog för lång tid');
-                    }
-                    
-                    throw error;
-                }
-            },
-
-            // Initialize Google API
-            async initializeGoogleAPI() {
-                try {
-                    this.showStatus('Initialiserar Google API...');
-                    
-                    // Wait for Google API to be available
-                    if (typeof google === 'undefined') {
-                        console.log('[DriveModule] Waiting for Google API...');
-                        return;
-                    }
-
-                    // Initialize token client
-                    this.state.tokenClient = google.accounts.oauth2.initTokenClient({
-                        client_id: this.CLIENT_ID,
-                        scope: this.SCOPE,
-                        callback: (response) => {
-                            if (response.error) {
-                                console.error('[DriveModule] Auth error:', response.error);
-                                this.showStatus('Inloggning misslyckades', true);
-                                return;
-                            }
-
-                            this.state.accessToken = response.access_token;
-                            this.state.tokenExpiry = Date.now() + (response.expires_in * 1000);
-                            this.state.isSignedIn = true;
-
-                            console.log('[DriveModule] Successfully authenticated');
-                            
-                            // Ask for token persistence opt-in on first login
-                            if (!sessionStorage.getItem('drive_token_persistence_opted_in')) {
-                                this.requestTokenPersistenceOptIn().then(() => {
-                                    this.saveTokens();
-                                });
-                            } else {
-                                this.saveTokens();
-                            }
-
-                            this.updateButtonState();
-                            this.showStatus('Inloggad på Google Drive');
-                            
-                            // Update legacy globals for compatibility
-                            if (this.onAuthStateChange) this.onAuthStateChange();
-                        }
-                    });
-
-                    this.state.isApiLoaded = true;
-                    console.log('[DriveModule] Google API initialized');
-                    
-                    // Try to restore existing tokens
-                    this.loadSavedTokens();
-                    
-                } catch (error) {
-                    console.error('[DriveModule] Failed to initialize Google API:', error);
-                    this.showStatus('Kunde inte initialisera Google API', true);
-                }
-            },
-
-            // Toggle authentication
-            async toggleAuth() {
-                try {
-                    if (this.state.isSignedIn) {
-                        // Sign out
-                        this.clearTokens();
-                        this.showStatus('Utloggad från Google Drive');
-                        
-                        // Update legacy globals for compatibility
-                        if (this.onAuthStateChange) this.onAuthStateChange();
-                    } else {
-                        // Sign in
-                        if (!this.state.isApiLoaded || !this.state.tokenClient) {
-                            this.showStatus('Google API ej laddat än...', true);
-                            return;
-                        }
-
-                        this.showStatus('Loggar in...');
-                        this.state.tokenClient.requestAccessToken({
-                            prompt: 'consent' // Force consent screen to ensure fresh token
-                        });
-                    }
-                } catch (error) {
-                    console.error('[DriveModule] Toggle auth failed:', error);
-                    this.showStatus('Inloggning/utloggning misslyckades', true);
-                }
-            }
-        };
-
-        // Initialize the module when DOM is ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => GoogleDriveModule.init());
-        } else {
-            GoogleDriveModule.init();
-        }
-
-        // Update the existing toggle function to use the new module
-        function toggleGoogleDriveAuth() {
-            GoogleDriveModule.toggleAuth();
-        }
-
-        // Add save functionality to the module
-        GoogleDriveModule.saveToGoogleDrive = async function() {
-            return await this.retryOperation(async () => {
-                this.showStatus('Sparar till Google Drive...');
-                
-                const cardCount = cy.nodes().length;
-                console.log(`[DriveModule] Preparing to save ${cardCount} cards`);
-                
-                const boardData = {
-                    cards: cy.nodes().map(node => ({
-                        id: node.id(),
-                        title: node.data('title') || '',
-                        text: node.data('text') || '',
-                        tags: node.data('tags') || [],
-                        x: node.position('x'),
-                        y: node.position('y'),
-                        cardColor: node.data('cardColor') || '',
-                        export_source: node.data('export_source') || '',
-                        source_file: node.data('source_file') || '',
-                        matched_terms: node.data('matched_terms') || '',
-                        isManualCard: node.data('isManualCard') || false,
-                        isPinned: node.data('isPinned') || false
-                    })),
-                    timestamp: new Date().toISOString(),
-                    version: '2.0'
-                };
-                
-                const fileContent = JSON.stringify(boardData, null, 2);
-                const fileName = `spatial-notes-${this.state.currentProject}.json`;
-                
-                console.log(`[DriveModule] Saving file: ${fileName} (${fileContent.length} chars)`);
-                console.log(`[DriveModule] Current project state: ${this.state.currentProject}`);
-                
-                // Check if file already exists
-                const existingFileId = await this.findProjectFile(fileName);
-                
-                if (existingFileId) {
-                    // Update existing file
-                    const response = await this.guardedFetch(
-                        `https://www.googleapis.com/upload/drive/v3/files/${existingFileId}?uploadType=media`,
-                        {
-                            method: 'PATCH',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: fileContent
-                        }
-                    );
-                    console.log('[DriveModule] Updated existing file');
-                } else {
-                    // Create new file
-                    const metadata = { name: fileName };
-                    
-                    const createResponse = await this.guardedFetch(
-                        'https://www.googleapis.com/drive/v3/files',
-                        {
-                            method: 'POST',
-                            body: JSON.stringify(metadata)
-                        }
-                    );
-                    
-                    const fileInfo = await createResponse.json();
-                    
-                    // Upload content
-                    await this.guardedFetch(
-                        `https://www.googleapis.com/upload/drive/v3/files/${fileInfo.id}?uploadType=media`,
-                        {
-                            method: 'PATCH',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: fileContent
-                        }
-                    );
-                    console.log('[DriveModule] Created new file');
-                }
-                
-                this.showStatus(`Sparat ${cardCount} kort till Drive`);
-                return true;
-                
-            }, 'Spara till Drive');
-        };
-
-        // Add helper function to find project files
-        GoogleDriveModule.findProjectFile = async function(fileName) {
-            try {
-                const response = await this.guardedFetch(
-                    `https://www.googleapis.com/drive/v3/files?q=name='${fileName}' and trashed=false`
-                );
-                
-                const data = await response.json();
-                return data.files && data.files.length > 0 ? data.files[0].id : null;
-                
-            } catch (error) {
-                console.error('[DriveModule] Error finding file:', error);
-                return null;
-            }
-        };
-
-        // Compatibility function for existing code
-        async function saveToGoogleDrive() {
-            if (!GoogleDriveModule.state.isSignedIn) {
-                alert('Du måste logga in på Google Drive först.');
-                return;
-            }
-            
-            try {
-                await GoogleDriveModule.saveToGoogleDrive();
-            } catch (error) {
-                console.error('[DriveModule] Save failed:', error);
-                GoogleDriveModule.showStatus('Sparning misslyckades: ' + error.message, true);
-            }
-        }
-
-        // Add load functionality to the module
-        GoogleDriveModule.loadFromGoogleDrive = async function() {
-            return await this.retryOperation(async () => {
-                this.showStatus('Laddar från Google Drive...');
-                
-                const fileName = `spatial-notes-${this.state.currentProject}.json`;
-                console.log(`[DriveModule] Loading file: ${fileName}`);
-                
-                // Find the file
-                const fileId = await this.findProjectFile(fileName);
-                if (!fileId) {
-                    throw new Error(`Projekt "${this.state.currentProject}" hittades inte på Drive`);
-                }
-                
-                // Download file content
-                const response = await this.guardedFetch(
-                    `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`
-                );
-                
-                const fileContent = await response.text();
-                const boardData = JSON.parse(fileContent);
-                
-                console.log(`[DriveModule] Loaded ${boardData.cards?.length || 0} cards`);
-                
-                // Clear current board
-                cy.nodes().remove();
-                
-                // Load cards in batch for performance
-                cy.batch(() => {
-                    boardData.cards.forEach(cardData => {
-                        const node = cy.add({
-                            data: {
-                                id: cardData.id,
-                                title: cardData.title || '',
-                                text: cardData.text || '',
-                                tags: cardData.tags || [],
-                                cardColor: cardData.cardColor || '',
-                                export_source: cardData.export_source || '',
-                                source_file: cardData.source_file || '',
-                                matched_terms: cardData.matched_terms || '',
-                                isManualCard: cardData.isManualCard || false,
-                                isPinned: cardData.isPinned || false
-                            },
-                            position: { x: cardData.x, y: cardData.y }
-                        });
-                        
-                        node.grabify();
-                    });
-                });
-                
-                // Apply current theme to new cards
-                if (window.applyCardTheme) {
-                    const currentTheme = localStorage.getItem('theme') || 'light';
-                    applyCardTheme(currentTheme);
-                }
-                
-                this.showStatus(`Laddade ${boardData.cards.length} kort från Drive`);
-                return true;
-                
-            }, 'Ladda från Drive');
-        };
-
-        function loadFromGoogleDrive() {
-            if (!GoogleDriveModule.state.isSignedIn) {
-                alert('Du måste logga in på Google Drive först.');
-                return;
-            }
-            
-            try {
-                GoogleDriveModule.loadFromGoogleDrive();
-            } catch (error) {
-                console.error('[DriveModule] Load failed:', error);
-                GoogleDriveModule.showStatus('Laddning misslyckades: ' + error.message, true);
-            }
-        }
-
-        // Add project manager functionality to the module
-        GoogleDriveModule.showProjectManager = async function() {
-            try {
-                this.showStatus('Laddar projekt...');
-                
-                // List all spatial-notes files
-                const response = await this.guardedFetch(
-                    `https://www.googleapis.com/drive/v3/files?q=name contains 'spatial-notes-' and name contains '.json' and trashed=false`
-                );
-                
-                const data = await response.json();
-                const projects = data.files.map(file => {
-                    const match = file.name.match(/spatial-notes-(.+)\.json/);
-                    return {
-                        name: match ? match[1] : file.name,
-                        fileName: file.name,
-                        id: file.id,
-                        modifiedTime: new Date(file.modifiedTime).toLocaleString('sv-SE')
-                    };
-                });
-                
-                console.log(`[DriveModule] Found ${projects.length} projects`);
-                
-                // Create simple project manager UI
-                const modal = document.createElement('div');
-                modal.style.cssText = `
-                    position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
-                    background: rgba(0,0,0,0.5); z-index: 10000; 
-                    display: flex; align-items: center; justify-content: center;
-                `;
-                
-                modal.innerHTML = `
-                    <div style="background: white; padding: 30px; border-radius: 15px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto;">
-                        <h2 style="margin-top: 0; text-align: center;">📁 Project Manager</h2>
-                        <p><strong>Aktuellt projekt:</strong> ${this.state.currentProject}</p>
-                        
-                        <div style="margin: 20px 0;">
-                            <input type="text" id="newProjectName" placeholder="Nytt projektnamn" style="width: 200px; padding: 8px; margin-right: 10px;">
-                            <button onclick="GoogleDriveModule.createProject()" style="padding: 8px 15px; background: #4285f4; color: white; border: none; border-radius: 5px;">Skapa</button>
-                        </div>
-                        
-                        <h3>Tillgängliga projekt:</h3>
-                        <div id="projectsList">
-                            ${projects.map(project => `
-                                <div style="border: 1px solid #ddd; margin: 10px 0; padding: 15px; border-radius: 8px;">
-                                    <strong>${project.name}</strong> 
-                                    ${project.name === this.state.currentProject ? '<span style="color: #4285f4;">(Aktiv)</span>' : ''}
-                                    <br>
-                                    <small>Senast ändrad: ${project.modifiedTime}</small>
-                                    <div style="margin-top: 10px;">
-                                        <button onclick="GoogleDriveModule.switchProject('${project.name}')" style="margin-right: 10px; padding: 5px 10px; background: #34a853; color: white; border: none; border-radius: 3px;">Växla</button>
-                                        <button onclick="GoogleDriveModule.loadProject('${project.name}')" style="padding: 5px 10px; background: #fbbc04; color: black; border: none; border-radius: 3px;">Ladda</button>
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
-                        
-                        <div style="text-align: center; margin-top: 20px;">
-                            <button onclick="document.body.removeChild(this.parentElement.parentElement)" style="padding: 10px 20px; background: #666; color: white; border: none; border-radius: 8px;">Stäng</button>
-                        </div>
-                    </div>
-                `;
-                
-                modal.onclick = (e) => {
-                    if (e.target === modal) {
-                        document.body.removeChild(modal);
-                    }
-                };
-                
-                document.body.appendChild(modal);
-                this.showStatus(`Hittade ${projects.length} projekt`);
-                
-            } catch (error) {
-                console.error('[DriveModule] Project manager failed:', error);
-                this.showStatus('Kunde inte ladda projekt: ' + error.message, true);
-            }
-        };
-
-        // Add project management helper functions
-        GoogleDriveModule.switchProject = function(projectName) {
-            console.log(`[DriveModule] Switching from '${this.state.currentProject}' to '${projectName}'`);
-            this.state.currentProject = projectName;
-            sessionStorage.setItem('google_current_project', projectName);
-            
-            // Update legacy global as well
-            if (window.currentProject !== undefined) {
-                window.currentProject = projectName;
-            }
-            
-            this.showStatus(`Bytte till projekt: ${projectName}`);
-            console.log(`[DriveModule] Project switched successfully to: ${this.state.currentProject}`);
-            
-            // Close modal
-            const modal = document.querySelector('#newProjectName').closest('div').parentElement.parentElement.parentElement;
-            if (modal) modal.remove();
-        };
-
-        GoogleDriveModule.loadProject = async function(projectName) {
-            const oldProject = this.state.currentProject;
-            this.state.currentProject = projectName;
-            try {
-                await this.loadFromGoogleDrive();
-                sessionStorage.setItem('google_current_project', projectName);
-                document.querySelector('#newProjectName').closest('div').parentElement.parentElement.parentElement.remove();
-            } catch (error) {
-                this.state.currentProject = oldProject; // Restore on failure
-                throw error;
-            }
-        };
-
-        GoogleDriveModule.createProject = function() {
-            const input = document.getElementById('newProjectName');
-            const projectName = input.value.trim();
-            if (!projectName) {
-                alert('Ange ett projektnamn');
-                return;
-            }
-            this.switchProject(projectName);
-            input.value = '';
-        };
-
-        function showProjectManager() {
-            if (!GoogleDriveModule.state.isSignedIn) {
-                alert('Du måste logga in på Google Drive först.');
-                return;
-            }
-            
-            GoogleDriveModule.showProjectManager();
-        }
-
-        // Update the global variables that old code might check
-        function updateLegacyGlobals() {
-            window.isSignedIn = GoogleDriveModule.state.isSignedIn;
-            window.accessToken = GoogleDriveModule.state.accessToken;
-            window.currentProject = GoogleDriveModule.state.currentProject;
-            console.log(`[DriveModule] Updated legacy globals - currentProject: ${window.currentProject}`);
-        }
-
-        // Update legacy globals when auth state changes
-        // Add auto-sync functionality
-        GoogleDriveModule.startAutoSync = function() {
-            if (this.state.autoSyncInterval) {
-                clearInterval(this.state.autoSyncInterval);
-            }
-            
-            if (!this.state.isSignedIn) {
-                console.log('[DriveModule] Cannot start auto-sync: not signed in');
-                return;
-            }
-            
-            this.state.autoSyncInterval = setInterval(async () => {
-                try {
-                    console.log('[DriveModule] Auto-syncing...');
-                    await this.saveToGoogleDrive();
-                } catch (error) {
-                    console.error('[DriveModule] Auto-sync failed:', error);
-                }
-            }, 5 * 60 * 1000); // 5 minutes
-            
-            console.log('[DriveModule] Auto-sync started (5 min intervals)');
-        };
-
-        GoogleDriveModule.stopAutoSync = function() {
-            if (this.state.autoSyncInterval) {
-                clearInterval(this.state.autoSyncInterval);
-                this.state.autoSyncInterval = null;
-                console.log('[DriveModule] Auto-sync stopped');
-            }
-        };
-
-        // Auto-start sync when signed in
-        GoogleDriveModule.onAuthStateChange = function() {
-            updateLegacyGlobals();
-            
-            if (this.state.isSignedIn) {
-                this.startAutoSync();
-            } else {
-                this.stopAutoSync();
-            }
-        };
-        
     </script>
 
 </body>
