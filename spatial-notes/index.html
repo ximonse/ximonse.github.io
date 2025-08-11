@@ -6226,18 +6226,33 @@ Kan ha #taggar överallt.
         function parseBulkEntryText(bulkText) {
             if (!bulkText || !bulkText.trim()) return [];
             
-            // Split text into sections starting with @YYMMDD
-            const sections = bulkText.split(/(?=@\d{6})/);
+            // Find all positions where @YYMMDD appears at start of line
+            const lines = bulkText.split('\n');
+            const noteStarts = [];
+            
+            lines.forEach((line, index) => {
+                if (line.trim().match(/^@\d{6}(?:_\d{4})?/)) {
+                    noteStarts.push(index);
+                }
+            });
+            
+            if (noteStarts.length === 0) return [];
+            
             const notes = [];
             
-            sections.forEach(section => {
-                const trimmedSection = section.trim();
-                if (!trimmedSection) return;
+            // Extract each note section
+            for (let i = 0; i < noteStarts.length; i++) {
+                const startLine = noteStarts[i];
+                const endLine = i < noteStarts.length - 1 ? noteStarts[i + 1] : lines.length;
                 
-                // Parse each section
-                const note = parseSingleNoteSection(trimmedSection);
-                if (note) notes.push(note);
-            });
+                const sectionLines = lines.slice(startLine, endLine);
+                const sectionText = sectionLines.join('\n').trim();
+                
+                if (sectionText) {
+                    const note = parseSingleNoteSection(sectionText);
+                    if (note) notes.push(note);
+                }
+            }
             
             return notes;
         }
