@@ -1494,6 +1494,43 @@
                             'background-color': '#c8e6c9',
                             'box-shadow': '0 0 12px rgba(46, 125, 50, 0.5)'
                         }
+                    },
+                    // Time-based categorization styles
+                    {
+                        selector: 'node.time-past',
+                        style: {
+                            'border-color': '#666666',
+                            'border-width': 2,
+                            'opacity': 0.8,
+                            'background-color': '#f5f5f5'
+                        }
+                    },
+                    {
+                        selector: 'node.time-today',
+                        style: {
+                            'border-color': '#ff4444',
+                            'border-width': 3,
+                            'background-color': '#ffebee',
+                            'box-shadow': '0 0 8px rgba(255, 68, 68, 0.4)'
+                        }
+                    },
+                    {
+                        selector: 'node.time-thisweek',
+                        style: {
+                            'border-color': '#ff8800',
+                            'border-width': 2,
+                            'background-color': '#fff3e0',
+                            'box-shadow': '0 0 6px rgba(255, 136, 0, 0.3)'
+                        }
+                    },
+                    {
+                        selector: 'node.time-future',
+                        style: {
+                            'border-color': '#4444ff',
+                            'border-width': 2,
+                            'background-color': '#e3f2fd',
+                            'box-shadow': '0 0 6px rgba(68, 68, 255, 0.3)'
+                        }
                     }
                 ],
                 
@@ -2079,15 +2116,24 @@
                 <p style="margin: 0 0 15px 0; text-align: center; font-size: 14px; color: #666;">
                     Välj sortering, tryck sedan H/V/G+V/G+H/G+T för layout
                 </p>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 15px;">
                     <button onclick="setSortMode('textLength-asc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">📝 Text: Kort → Lång</button>
                     <button onclick="setSortMode('textLength-desc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">📝 Text: Lång → Kort</button>
                     <button onclick="setSortMode('alphabetic-asc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🔤 A → Z</button>
                     <button onclick="setSortMode('alphabetic-desc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🔤 Z → A</button>
                     <button onclick="setSortMode('color')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🎨 Färg 1→6</button>
-                    <button onclick="setSortMode('date-asc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">📅 Äldst → Nyast</button>
-                    <button onclick="setSortMode('date-desc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">📅 Nyast → Äldst</button>
                     <button onclick="setSortMode('tagCount')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🏷️ Färre → Fler taggar</button>
+                    <button onclick="setSortMode('eventTime-asc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">⏰ Tid: Äldst först</button>
+                    <button onclick="setSortMode('eventTime-desc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">⏰ Tid: Nyast först</button>
+                </div>
+                <hr style="border: none; height: 1px; background: #ddd; margin: 15px 0;">
+                <h4 style="margin: 0 0 10px 0; text-align: center; color: #007acc;">🔍 Tidsfilter</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <button onclick="filterByTimeCategory('today')" style="padding: 8px; border: 2px solid #ff4444; background: #ffebee; border-radius: 4px; cursor: pointer;">🔴 Idag</button>
+                    <button onclick="filterByTimeCategory('thisweek')" style="padding: 8px; border: 2px solid #ff8800; background: #fff3e0; border-radius: 4px; cursor: pointer;">🟠 Denna vecka</button>
+                    <button onclick="filterByTimeCategory('future')" style="padding: 8px; border: 2px solid #4444ff; background: #e3f2fd; border-radius: 4px; cursor: pointer;">🔵 Framtid</button>
+                    <button onclick="filterByTimeCategory('past')" style="padding: 8px; border: 2px solid #666666; background: #f5f5f5; border-radius: 4px; cursor: pointer;">⚫ Förflutit</button>
+                    <button onclick="filterByTimeCategory('all')" style="padding: 8px; border: 1px solid #28a745; background: #d4edda; border-radius: 4px; cursor: pointer; grid-column: 1 / -1;">✅ Visa alla</button>
                 </div>
                 <div style="text-align: center; margin-top: 15px;">
                     <button onclick="closeSortMenu()" style="padding: 8px 16px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer;">Avbryt</button>
@@ -2144,6 +2190,8 @@
                 case 'date-asc': return 'Äldst → nyast';
                 case 'date-desc': return 'Nyast → äldst';
                 case 'tagCount': return 'Färre → fler taggar';
+                case 'eventTime-asc': return 'Event-tid äldst → nyast';
+                case 'eventTime-desc': return 'Event-tid nyast → äldst';
                 default: return 'Okänt';
             }
         }
@@ -2193,10 +2241,78 @@
                         const bTagCount = (b.data('tags') || []).length;
                         return aTagCount - bTagCount;
                         
+                    case 'eventTime-asc':
+                        const aEventData = a.data('eventData');
+                        const bEventData = b.data('eventData');
+                        const aEventTime = aEventData ? aEventData.timestamp : 0;
+                        const bEventTime = bEventData ? bEventData.timestamp : 0;
+                        // Cards without event time go to end
+                        if (!aEventData && !bEventData) return 0;
+                        if (!aEventData) return 1;
+                        if (!bEventData) return -1;
+                        return aEventTime - bEventTime;
+                        
+                    case 'eventTime-desc':
+                        const aEventDataDesc = a.data('eventData');
+                        const bEventDataDesc = b.data('eventData');
+                        const aEventTimeDesc = aEventDataDesc ? aEventDataDesc.timestamp : 0;
+                        const bEventTimeDesc = bEventDataDesc ? bEventDataDesc.timestamp : 0;
+                        // Cards without event time go to end  
+                        if (!aEventDataDesc && !bEventDataDesc) return 0;
+                        if (!aEventDataDesc) return 1;
+                        if (!bEventDataDesc) return -1;
+                        return bEventTimeDesc - aEventTimeDesc;
+                        
                     default:
                         return 0;
                 }
             });
+        }
+        
+        // Filter nodes by time category
+        function filterByTimeCategory(category) {
+            // First refresh all time styling to ensure current categorization
+            refreshAllTimeBasedStyling();
+            
+            // Clear existing selections
+            cy.nodes().unselect();
+            
+            if (category === 'all') {
+                // Select all nodes
+                cy.nodes().select();
+                console.log('Selected all nodes');
+            } else {
+                // Select nodes with specific time category
+                const filteredNodes = cy.nodes().filter(node => {
+                    const eventData = node.data('eventData');
+                    return eventData && eventData.category === category;
+                });
+                
+                filteredNodes.select();
+                console.log(`Selected ${filteredNodes.length} nodes with category: ${category}`);
+                
+                // Show feedback
+                const statusDiv = document.getElementById('selectionInfo');
+                if (statusDiv) {
+                    const categoryNames = {
+                        'today': 'Idag',
+                        'thisweek': 'Denna vecka', 
+                        'future': 'Framtid',
+                        'past': 'Förflutit'
+                    };
+                    
+                    statusDiv.textContent = `Filtrerat: ${filteredNodes.length} kort (${categoryNames[category] || category})`;
+                    statusDiv.classList.add('visible');
+                    
+                    // Auto-hide after 5 seconds
+                    setTimeout(() => {
+                        statusDiv.classList.remove('visible');
+                    }, 5000);
+                }
+            }
+            
+            // Close the sort menu
+            closeSortMenu();
         }
         
         function extractDateFromId(nodeId) {
@@ -4249,6 +4365,9 @@
                 
                 newNode.grabify();
                 
+                // Apply time-based styling
+                applyTimeBasedStyling(newNode);
+                
                 // Force refresh of node styling
                 cy.style().update();
                 
@@ -5309,6 +5428,9 @@ Kan ha #taggar överallt.
                 node.data('text', newText);
                 node.data('tags', newTags);
                 
+                // Update time-based styling after text changes
+                applyTimeBasedStyling(node);
+                
                 refreshSearchAndFilter();
                 cleanup();
             };
@@ -5948,6 +6070,145 @@ Kan ha #taggar överallt.
                     }
                 };
             });
+        }
+        
+        // Time-based categorization system for @YYMMDD_HHMM syntax
+        
+        // Parse @YYMMDD_HHMM syntax from text
+        function parseTimeFromText(text) {
+            if (!text) return null;
+            
+            // Match @YYMMDD_HHMM pattern
+            const timeMatch = text.match(/@(\d{6})_(\d{4})/);
+            if (!timeMatch) return null;
+            
+            const [, dateStr, timeStr] = timeMatch;
+            
+            // Parse YYMMDD
+            const year = parseInt('20' + dateStr.substr(0, 2));  // YY -> 20YY
+            const month = parseInt(dateStr.substr(2, 2)) - 1;    // MM (0-indexed for Date)
+            const day = parseInt(dateStr.substr(4, 2));          // DD
+            
+            // Parse HHMM
+            const hours = parseInt(timeStr.substr(0, 2));        // HH
+            const minutes = parseInt(timeStr.substr(2, 2));      // MM
+            
+            // Create Date object
+            const eventDate = new Date(year, month, day, hours, minutes);
+            
+            return {
+                originalText: timeMatch[0],
+                datetime: eventDate,
+                timestamp: eventDate.getTime(),
+                formatted: eventDate.toLocaleString('sv-SE', {
+                    year: 'numeric',
+                    month: '2-digit', 
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                })
+            };
+        }
+        
+        // Categorize event based on timestamp
+        function categorizeEventTime(eventTimestamp) {
+            if (!eventTimestamp) return null;
+            
+            const now = Date.now();
+            const eventTime = eventTimestamp;
+            const dayMs = 24 * 60 * 60 * 1000;
+            
+            // Calculate week boundaries (Monday to Sunday)
+            const today = new Date();
+            const startOfWeek = new Date(today);
+            startOfWeek.setDate(today.getDate() - today.getDay() + 1); // Monday
+            startOfWeek.setHours(0, 0, 0, 0);
+            
+            const endOfWeek = new Date(startOfWeek);
+            endOfWeek.setDate(startOfWeek.getDate() + 6); // Sunday
+            endOfWeek.setHours(23, 59, 59, 999);
+            
+            // Categorization logic
+            if (eventTime < now - dayMs) return 'past';           // More than 1 day ago
+            if (Math.abs(eventTime - now) < dayMs) return 'today'; // Within 24h of now
+            if (eventTime >= startOfWeek.getTime() && eventTime <= endOfWeek.getTime()) return 'thisweek'; // This week
+            if (eventTime > now) return 'future';                // Future beyond this week
+            
+            return 'past'; // Fallback
+        }
+        
+        // Apply time-based styling to a node
+        function applyTimeBasedStyling(node) {
+            // Remove existing time classes
+            node.removeClass('time-past time-today time-thisweek time-future');
+            
+            // Parse time from node text
+            const text = node.data('text') || '';
+            const title = node.data('title') || '';
+            const fullText = title + ' ' + text;
+            
+            const timeInfo = parseTimeFromText(fullText);
+            if (!timeInfo) return; // No time found
+            
+            const category = categorizeEventTime(timeInfo.timestamp);
+            if (category) {
+                node.addClass(`time-${category}`);
+                
+                // Store event data in node
+                node.data('eventData', {
+                    datetime: timeInfo.datetime.toISOString(),
+                    timestamp: timeInfo.timestamp,
+                    category: category,
+                    originalText: timeInfo.originalText,
+                    formatted: timeInfo.formatted,
+                    isPast: category === 'past',
+                    isToday: category === 'today',
+                    isThisWeek: category === 'thisweek',
+                    isFuture: category === 'future'
+                });
+            }
+        }
+        
+        // Apply time styling to all nodes
+        function refreshAllTimeBasedStyling() {
+            cy.nodes().forEach(node => {
+                applyTimeBasedStyling(node);
+            });
+            console.log('Updated time-based styling for all nodes');
+        }
+        
+        // Get human-readable relative time
+        function getRelativeTimeString(timestamp) {
+            const now = Date.now();
+            const diff = timestamp - now;
+            const absDiff = Math.abs(diff);
+            
+            const minute = 60 * 1000;
+            const hour = 60 * minute;
+            const day = 24 * hour;
+            const week = 7 * day;
+            
+            if (absDiff < hour) {
+                const minutes = Math.floor(absDiff / minute);
+                return diff > 0 ? `Om ${minutes} minuter` : `${minutes} minuter sedan`;
+            } else if (absDiff < day) {
+                const hours = Math.floor(absDiff / hour);
+                return diff > 0 ? `Om ${hours} timmar` : `${hours} timmar sedan`;
+            } else if (absDiff < week) {
+                const days = Math.floor(absDiff / day);
+                if (days === 1) {
+                    return diff > 0 ? 'Imorgon' : 'Igår';
+                }
+                return diff > 0 ? `Om ${days} dagar` : `${days} dagar sedan`;
+            } else {
+                // Format as actual date/time
+                return new Date(timestamp).toLocaleString('sv-SE', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            }
         }
         
         // Helper functions for sync conflict resolution
@@ -7000,6 +7261,9 @@ Kan ha #taggar överallt.
                                 });
                             });
                             console.log(`Height calculations applied to ${cy.nodes().length} cards`);
+                            
+                            // Apply time-based styling to all loaded cards
+                            refreshAllTimeBasedStyling();
                         }, 150);
                     } else {
                         console.log('Skipped height updates - cards already properly sized from localStorage');
@@ -7369,6 +7633,9 @@ Kan ha #taggar överallt.
                             }
                             
                             console.log(`Auto-loaded ${boardData.cards.length} cards from localStorage`);
+                            
+                            // Apply time-based styling to auto-loaded cards
+                            refreshAllTimeBasedStyling();
                         }
                     } catch (e) {
                         console.log('Error auto-loading:', e);
