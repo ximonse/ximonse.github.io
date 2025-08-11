@@ -5602,24 +5602,54 @@ Kan ha #taggar överallt.
         let availableProjects = [];
         let projectsLoaded = false;
         
-        // Token management
+        // Token management with enhanced persistence
         let tokenExpiry = null;
+        let rememberMeEnabled = false;
         
-        // Save tokens to localStorage
-        function saveTokens() {
+        // Check user's remember preference
+        function checkRememberPreference() {
+            const remembered = localStorage.getItem('auth_remember_preference');
+            return remembered === 'true';
+        }
+        
+        // Save tokens with enhanced persistence options
+        function saveTokens(forceRemember = false) {
             if (accessToken) {
-                localStorage.setItem('google_access_token', accessToken);
-                localStorage.setItem('google_token_expiry', tokenExpiry?.toString() || '');
-                localStorage.setItem('google_current_project', currentProject);
-                console.log('Tokens saved to localStorage');
+                const storage = (rememberMeEnabled || forceRemember) ? localStorage : sessionStorage;
+                const prefix = (rememberMeEnabled || forceRemember) ? 'google_' : 'session_google_';
+                
+                storage.setItem(prefix + 'access_token', accessToken);
+                storage.setItem(prefix + 'token_expiry', tokenExpiry?.toString() || '');
+                storage.setItem(prefix + 'current_project', currentProject);
+                
+                if (rememberMeEnabled || forceRemember) {
+                    localStorage.setItem('auth_remember_preference', 'true');
+                    console.log('Tokens saved to localStorage (30-day persistence)');
+                } else {
+                    localStorage.setItem('auth_remember_preference', 'false');
+                    console.log('Tokens saved to sessionStorage (session only)');
+                }
             }
         }
         
-        // Load tokens from localStorage
+        // Load tokens from storage (localStorage or sessionStorage)
         function loadSavedTokens() {
-            const savedToken = localStorage.getItem('google_access_token');
-            const savedExpiry = localStorage.getItem('google_token_expiry');
-            const savedProject = localStorage.getItem('google_current_project');
+            // Check user preference for remember me
+            const rememberPreference = checkRememberPreference();
+            
+            // Try localStorage first (30-day persistence)
+            let savedToken = localStorage.getItem('google_access_token');
+            let savedExpiry = localStorage.getItem('google_token_expiry');
+            let savedProject = localStorage.getItem('google_current_project');
+            let source = 'localStorage (30-day)';
+            
+            // If no localStorage tokens, try sessionStorage
+            if (!savedToken) {
+                savedToken = sessionStorage.getItem('session_google_access_token');
+                savedExpiry = sessionStorage.getItem('session_google_token_expiry');
+                savedProject = sessionStorage.getItem('session_google_current_project');
+                source = 'sessionStorage (session)';
+            }
             
             if (savedToken && savedExpiry) {
                 const expiryTime = parseInt(savedExpiry);
@@ -5630,15 +5660,16 @@ Kan ha #taggar överallt.
                     accessToken = savedToken;
                     tokenExpiry = expiryTime;
                     isSignedIn = true;
+                    rememberMeEnabled = rememberPreference;
                     
                     if (savedProject) {
                         currentProject = savedProject;
                     }
                     
-                    console.log('Restored valid tokens from localStorage');
+                    console.log(`Restored valid tokens from ${source}`);
                     return true;
                 } else {
-                    console.log('Saved tokens expired, clearing localStorage');
+                    console.log(`Saved tokens expired, clearing ${source}`);
                     clearSavedTokens();
                 }
             }
@@ -5646,15 +5677,25 @@ Kan ha #taggar överallt.
             return false;
         }
         
-        // Clear saved tokens
+        // Clear saved tokens from both storage types
         function clearSavedTokens() {
+            // Clear localStorage tokens
             localStorage.removeItem('google_access_token');
             localStorage.removeItem('google_token_expiry');
             localStorage.removeItem('google_current_project');
+            
+            // Clear sessionStorage tokens
+            sessionStorage.removeItem('session_google_access_token');
+            sessionStorage.removeItem('session_google_token_expiry');
+            sessionStorage.removeItem('session_google_current_project');
+            
+            // Reset auth state
             accessToken = null;
             tokenExpiry = null;
             isSignedIn = false;
-            console.log('Cleared saved tokens');
+            rememberMeEnabled = false;
+            
+            console.log('Cleared saved tokens from both storage types');
         }
         
         // Check if token needs refresh
@@ -5664,6 +5705,87 @@ Kan ha #taggar överallt.
             const timeToExpiry = tokenExpiry - now;
             // Refresh if less than 10 minutes left
             return timeToExpiry < (10 * 60 * 1000);
+        }
+        
+        // Show remember me dialog before first login
+        function showRememberMeDialog() {
+            return new Promise((resolve) => {
+                // Check if user has already made a choice
+                const existingPreference = localStorage.getItem('auth_remember_preference');
+                if (existingPreference !== null) {
+                    rememberMeEnabled = existingPreference === 'true';
+                    resolve(rememberMeEnabled);
+                    return;
+                }
+                
+                // Create remember me dialog
+                const overlay = document.createElement('div');
+                overlay.style.cssText = `
+                    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                    background: rgba(0,0,0,0.7); z-index: 10000;
+                    display: flex; justify-content: center; align-items: center;
+                `;
+                
+                const dialog = document.createElement('div');
+                dialog.style.cssText = `
+                    background: white; padding: 30px; border-radius: 12px;
+                    box-shadow: 0 8px 32px rgba(0,0,0,0.3); max-width: 400px;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                `;
+                
+                dialog.innerHTML = `
+                    <h3 style="margin: 0 0 20px 0; color: #007acc; text-align: center;">
+                        🔐 Google Drive Inloggning
+                    </h3>
+                    <p style="margin: 0 0 20px 0; line-height: 1.5; color: #333;">
+                        Vill du att vi ska komma ihåg din inloggning på den här enheten?
+                    </p>
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        <p style="margin: 0 0 10px 0; font-weight: bold; color: #007acc;">📱 Kom ihåg i 30 dagar:</p>
+                        <ul style="margin: 0; padding-left: 20px; color: #666;">
+                            <li>Funkar på alla dina enheter (iPad, Android, dator)</li>
+                            <li>Automatisk synkronisering</li>
+                            <li>Mindre inloggningar</li>
+                        </ul>
+                        
+                        <p style="margin: 15px 0 5px 0; font-weight: bold; color: #666;">🔒 Bara denna session:</p>
+                        <ul style="margin: 0; padding-left: 20px; color: #666;">
+                            <li>Loggas ut när du stänger browsern</li>
+                            <li>Mer säkert på delade enheter</li>
+                        </ul>
+                    </div>
+                    <div style="display: flex; gap: 10px; justify-content: center;">
+                        <button id="rememberYes" style="
+                            padding: 12px 24px; background: #007acc; color: white; 
+                            border: none; border-radius: 6px; cursor: pointer;
+                            font-size: 16px; font-weight: bold;
+                        ">🔓 Kom ihåg i 30 dagar</button>
+                        <button id="rememberNo" style="
+                            padding: 12px 24px; background: #666; color: white; 
+                            border: none; border-radius: 6px; cursor: pointer;
+                            font-size: 16px;
+                        ">🔒 Bara denna session</button>
+                    </div>
+                `;
+                
+                overlay.appendChild(dialog);
+                document.body.appendChild(overlay);
+                
+                // Handle button clicks
+                dialog.querySelector('#rememberYes').onclick = () => {
+                    rememberMeEnabled = true;
+                    localStorage.setItem('auth_remember_preference', 'true');
+                    document.body.removeChild(overlay);
+                    resolve(true);
+                };
+                
+                dialog.querySelector('#rememberNo').onclick = () => {
+                    rememberMeEnabled = false;
+                    localStorage.setItem('auth_remember_preference', 'false');
+                    document.body.removeChild(overlay);
+                    resolve(false);
+                };
+            });
         }
         
         // Refresh token if needed before API calls
@@ -5711,6 +5833,21 @@ Kan ha #taggar överallt.
                 }
                 
                 console.log('Initializing Google Identity Services...');
+                
+                // Try to load saved tokens first
+                const hasValidTokens = loadSavedTokens();
+                if (hasValidTokens) {
+                    console.log('✅ Auto-signed in with saved tokens');
+                    updateAuthStatus();
+                    
+                    // Load available projects and current project
+                    setTimeout(async () => {
+                        await loadAvailableProjects();
+                        if (currentProject) {
+                            await loadFromGoogleDrive();
+                        }
+                    }, 1000);
+                }
                 
                 // Initialize Google Identity Services token client
                 tokenClient = google.accounts.oauth2.initTokenClient({
@@ -5815,7 +5952,7 @@ Kan ha #taggar överallt.
             }
         }
         
-        // Toggle Google Drive authentication
+        // Toggle Google Drive authentication with Remember Me option
         async function toggleGoogleDriveAuth() {
             if (!isGoogleApiLoaded || !tokenClient) {
                 updateSyncStatus('Google API not loaded yet...', 'loading');
@@ -5825,17 +5962,26 @@ Kan ha #taggar överallt.
             try {
                 if (isSignedIn && accessToken) {
                     // Sign out
-                    google.accounts.oauth2.revoke(accessToken, () => {
-                        console.log('Access token revoked');
-                    });
-                    
-                    // Clear all tokens and saved data
-                    clearSavedTokens();
-                    
-                    updateSyncStatus('Signed out from Google Drive', 'info');
-                    updateAuthStatus();
+                    if (confirm('Logga ut från Google Drive?\n\nDetta kommer att:\n• Stoppa automatisk synkronisering\n• Du behöver logga in igen för Drive-funktioner\n• Lokalt sparade kort påverkas inte')) {
+                        google.accounts.oauth2.revoke(accessToken, () => {
+                            console.log('Access token revoked');
+                        });
+                        
+                        // Clear all tokens and saved data
+                        clearSavedTokens();
+                        
+                        updateSyncStatus('Signed out from Google Drive', 'info');
+                        updateAuthStatus();
+                    }
                 } else {
-                    // Sign in - request access token
+                    // Show remember me dialog first
+                    updateSyncStatus('Förbereder inloggning...', 'loading');
+                    
+                    // Show remember me dialog and wait for user choice
+                    const rememberChoice = await showRememberMeDialog();
+                    console.log('User chose remember me:', rememberChoice);
+                    
+                    // Sign in - request access token  
                     updateSyncStatus('Signing in to Google Drive...', 'loading');
                     tokenClient.requestAccessToken({prompt: 'consent'});
                 }
