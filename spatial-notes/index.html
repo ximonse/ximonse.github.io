@@ -937,6 +937,7 @@
                 <button onclick="exportToJSON()">📋 Exportera JSON</button>
                 <button onclick="importFromJSON()">📁 Importera JSON</button>
                 <button onclick="importFromExtractor()">📥 Från PDF-Extractor</button>
+                <button onclick="showBulkEntryDialog()">📝 Bulk Anteckningar</button>
                 <button onclick="saveToGoogleDrive()" id="driveSaveBtn">☁️ Spara till Drive</button>
                 <button onclick="loadFromGoogleDrive()" id="driveLoadBtn">☁️ Ladda från Drive</button>
                 <button onclick="showProjectManager()" id="projectManagerBtn">📁 Hantera Projekt</button>
@@ -6074,24 +6075,32 @@ Kan ha #taggar överallt.
         
         // Time-based categorization system for @YYMMDD_HHMM syntax
         
-        // Parse @YYMMDD_HHMM syntax from text
+        // Parse @YYMMDD_HHMM syntax from text (supports both @YYMMDD_HHMM and @YYMMDD formats)
         function parseTimeFromText(text) {
             if (!text) return null;
             
-            // Match @YYMMDD_HHMM pattern
-            const timeMatch = text.match(/@(\d{6})_(\d{4})/);
+            // Match @YYMMDD_HHMM or @YYMMDD patterns
+            let timeMatch = text.match(/@(\d{6})_(\d{4})/); // @YYMMDD_HHMM
+            let hasTime = true;
+            
+            if (!timeMatch) {
+                timeMatch = text.match(/@(\d{6})/); // @YYMMDD only
+                hasTime = false;
+            }
+            
             if (!timeMatch) return null;
             
-            const [, dateStr, timeStr] = timeMatch;
+            const dateStr = timeMatch[1];
+            const timeStr = hasTime ? timeMatch[2] : null;
             
             // Parse YYMMDD
             const year = parseInt('20' + dateStr.substr(0, 2));  // YY -> 20YY
             const month = parseInt(dateStr.substr(2, 2)) - 1;    // MM (0-indexed for Date)
             const day = parseInt(dateStr.substr(4, 2));          // DD
             
-            // Parse HHMM
-            const hours = parseInt(timeStr.substr(0, 2));        // HH
-            const minutes = parseInt(timeStr.substr(2, 2));      // MM
+            // Parse HHMM (default to 00:00 if no time specified)
+            const hours = hasTime ? parseInt(timeStr.substr(0, 2)) : 0;
+            const minutes = hasTime ? parseInt(timeStr.substr(2, 2)) : 0;
             
             // Create Date object
             const eventDate = new Date(year, month, day, hours, minutes);
@@ -6209,6 +6218,320 @@ Kan ha #taggar överallt.
                     minute: '2-digit'
                 });
             }
+        }
+        
+        // Bulk entry system for multiple notes with @YYMMDD_HHMM @plats syntax
+        
+        // Parse bulk entry text into individual note objects  
+        function parseBulkEntryText(bulkText) {
+            if (!bulkText || !bulkText.trim()) return [];
+            
+            // Split text into sections starting with @YYMMDD
+            const sections = bulkText.split(/(?=@\d{6})/);
+            const notes = [];
+            
+            sections.forEach(section => {
+                const trimmedSection = section.trim();
+                if (!trimmedSection) return;
+                
+                // Parse each section
+                const note = parseSingleNoteSection(trimmedSection);
+                if (note) notes.push(note);
+            });
+            
+            return notes;
+        }
+        
+        // Parse a single note section: @YYMMDD_HHMM @plats \n TITEL \n innehåll \n #taggar
+        function parseSingleNoteSection(sectionText) {
+            const lines = sectionText.split('\n').map(line => line.trim()).filter(line => line);
+            if (lines.length === 0) return null;
+            
+            const firstLine = lines[0];
+            const note = {
+                originalText: sectionText,
+                eventTime: null,
+                location: null,
+                title: '',
+                content: '',
+                tags: [],
+                allTags: []
+            };
+            
+            // Parse @YYMMDD_HHMM and @plats from first line  
+            const timeMatch = firstLine.match(/@(\d{6}(?:_\d{4})?)/);
+            if (timeMatch) {
+                note.eventTime = parseTimeFromText(timeMatch[0]);
+            }
+            
+            const locationMatch = firstLine.match(/@([A-Za-zÅÄÖåäö0-9_-]+)(?!\d{6})/);
+            if (locationMatch && !locationMatch[0].match(/@\d{6}/)) {
+                note.location = locationMatch[1];
+            }
+            
+            // Find title line (first non-@ line)
+            let titleLineIndex = -1;
+            for (let i = 0; i < lines.length; i++) {
+                if (!lines[i].startsWith('@')) {
+                    titleLineIndex = i;
+                    break;
+                }
+            }
+            
+            if (titleLineIndex === -1) return null; // No title found
+            
+            note.title = lines[titleLineIndex];
+            
+            // Content is everything between title and tags  
+            const contentLines = [];
+            for (let i = titleLineIndex + 1; i < lines.length; i++) {
+                if (lines[i].startsWith('#')) break; // Stop at first tag line
+                contentLines.push(lines[i]);
+            }
+            note.content = contentLines.join('\n');
+            
+            // Extract hashtags from entire section
+            const hashtagMatches = sectionText.match(/#[A-Za-zÅÄÖåäö0-9_-]+/g) || [];
+            note.tags = hashtagMatches.map(tag => tag.substring(1)); // Remove #
+            
+            // Add location as tag if exists
+            if (note.location) {
+                note.allTags = [...note.tags, note.location];
+            } else {
+                note.allTags = [...note.tags];
+            }
+            
+            return note;
+        }
+        
+        // Create cards from parsed bulk entries
+        function createCardsFromBulkEntries(notes) {
+            if (!notes || notes.length === 0) return;
+            
+            const createdNodes = [];
+            const arrangePos = getArrangementPosition();
+            let currentX = arrangePos.x - 200; // Start left of center
+            let currentY = arrangePos.y - 100; // Start above center
+            
+            notes.forEach((note, index) => {
+                // Build full card text  
+                let cardText = '';
+                
+                // Add event time to text if exists
+                if (note.eventTime) {
+                    cardText += note.eventTime.originalText + ' ';
+                }
+                
+                // Add location to text if exists  
+                if (note.location) {
+                    cardText += '@' + note.location + '\n';
+                }
+                
+                cardText += note.title;
+                
+                if (note.content) {
+                    cardText += '\n' + note.content;
+                }
+                
+                // Add hashtags at the end
+                if (note.tags.length > 0) {
+                    cardText += '\n' + note.tags.map(tag => '#' + tag).join(' ');
+                }
+                
+                // Create new card
+                const newNode = cy.add({
+                    data: {
+                        id: generateCardId(),
+                        title: note.title,
+                        text: cardText,
+                        tags: note.allTags,
+                        hidden_tags: [],
+                        searchMatch: false,
+                        isManualCard: true,
+                        location: note.location || null
+                    },
+                    position: { 
+                        x: currentX + (index % 3) * 320, // 3 columns  
+                        y: currentY + Math.floor(index / 3) * 250 // New row every 3 cards
+                    }
+                });
+                
+                newNode.grabify();
+                
+                // Apply time-based styling
+                applyTimeBasedStyling(newNode);
+                
+                createdNodes.push(newNode);
+            });
+            
+            // Select all created cards
+            cy.nodes().unselect();
+            createdNodes.forEach(node => node.select());
+            
+            console.log(`Created ${createdNodes.length} cards from bulk entry`);
+            return createdNodes;
+        }
+        
+        // Show bulk entry dialog
+        function showBulkEntryDialog() {
+            // Clear any existing dialogs
+            const existingDialog = document.querySelector('.bulk-entry-dialog');
+            if (existingDialog) existingDialog.remove();
+            
+            // Create modal overlay
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.7); z-index: 3000;
+                display: flex; align-items: center; justify-content: center;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            `;
+            overlay.className = 'bulk-entry-dialog';
+            
+            // Create dialog
+            const dialog = document.createElement('div');
+            dialog.style.cssText = `
+                background: white; border-radius: 12px; max-width: 800px; width: 90%;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+                overflow: hidden; max-height: 85vh; display: flex; flex-direction: column;
+            `;
+            
+            dialog.innerHTML = `
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                           color: white; padding: 20px; text-align: center;">
+                    <h2 style="margin: 0; font-size: 24px;">📝 Bulk Anteckningar</h2>
+                    <p style="margin: 8px 0 0 0; opacity: 0.9;">Skriv eller klistra in flera anteckningar samtidigt</p>
+                </div>
+                
+                <div style="padding: 20px; overflow-y: auto; flex: 1;">
+                    <div style="background: #e3f2fd; border-left: 4px solid #2196F3; padding: 15px; 
+                               margin-bottom: 20px; border-radius: 4px;">
+                        <h4 style="margin: 0 0 10px 0; color: #1565C0;">💡 Format:</h4>
+                        <div style="font-family: 'SF Mono', Consolas, monospace; font-size: 14px; color: #333;">
+                            <strong>@YYMMDD_HHMM @plats</strong><br>
+                            Första raden (titel)<br>
+                            Sen kommer resten av texten<br>
+                            #tagg #tagg #tagg<br><br>
+                            
+                            <strong>@250821 @Hemma</strong><br>
+                            SLÄNGA SOPOR<br>
+                            Rensa i köket och ta med soporna<br>
+                            #todo #Gränna
+                        </div>
+                    </div>
+                    
+                    <textarea id="bulkEntryText" placeholder="@250821 @Hemma
+SLÄNGA SOPOR
+Rensa i köket och ta med soporna till bilen för att köra till sortergården.
+#sortergård #Gränna #todo
+
+@240513 @Ribbaskolan
+Jag mötte Josefin
+Det var fantastiskt fint!
+#good_times #lycka #Josefin
+
+@251011_2113 @telefon
+Ring Bosse om Elräkningen  
+#todo #ring" 
+                        style="width: 100%; height: 300px; padding: 15px; border: 1px solid #ddd; 
+                               border-radius: 8px; font-family: 'SF Mono', Consolas, monospace; 
+                               font-size: 14px; resize: vertical; line-height: 1.4;"></textarea>
+                               
+                    <div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center;">
+                        <div id="previewCount" style="color: #666; font-size: 14px;"></div>
+                        <div>
+                            <button id="previewBulk" style="background: #2196F3; color: white; border: none; 
+                                   padding: 10px 20px; border-radius: 6px; cursor: pointer; margin-right: 10px;">
+                                👁️ Förhandsgranska
+                            </button>
+                            <button id="createBulk" style="background: #4CAF50; color: white; border: none; 
+                                   padding: 10px 20px; border-radius: 6px; cursor: pointer; margin-right: 10px;">
+                                ✅ Skapa kort
+                            </button>
+                            <button id="cancelBulk" style="background: #666; color: white; border: none; 
+                                   padding: 10px 20px; border-radius: 6px; cursor: pointer;">
+                                ❌ Avbryt
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="bulkPreview" style="margin-top: 20px; display: none;"></div>
+                </div>
+            `;
+            
+            // Event handlers
+            const textarea = dialog.querySelector('#bulkEntryText');
+            const previewDiv = dialog.querySelector('#bulkPreview');
+            const countDiv = dialog.querySelector('#previewCount');
+            
+            // Real-time count update
+            const updateCount = () => {
+                const notes = parseBulkEntryText(textarea.value);
+                countDiv.textContent = `📊 ${notes.length} anteckningar identifierade`;
+            };
+            
+            textarea.addEventListener('input', updateCount);
+            updateCount();
+            
+            // Preview button
+            dialog.querySelector('#previewBulk').onclick = () => {
+                const notes = parseBulkEntryText(textarea.value);
+                if (notes.length === 0) {
+                    previewDiv.innerHTML = '<p style="color: #f44336;">Inga giltiga anteckningar hittade</p>';
+                    previewDiv.style.display = 'block';
+                    return;
+                }
+                
+                let previewHTML = '<h4>👁️ Förhandsgranskning:</h4>';
+                notes.forEach((note, index) => {
+                    const timeStr = note.eventTime ? note.eventTime.formatted : 'Ingen tid';
+                    const locationStr = note.location || 'Ingen plats';
+                    const tagsStr = note.tags.length > 0 ? note.tags.join(', ') : 'Inga taggar';
+                    
+                    previewHTML += `
+                        <div style="border: 1px solid #ddd; padding: 10px; margin: 10px 0; border-radius: 6px; background: #f9f9f9;">
+                            <strong>📝 ${index + 1}: ${note.title}</strong><br>
+                            🕒 ${timeStr} | 📍 ${locationStr}<br>
+                            📝 ${note.content || 'Inget innehåll'}<br>
+                            🏷️ ${tagsStr}
+                        </div>
+                    `;
+                });
+                
+                previewDiv.innerHTML = previewHTML;
+                previewDiv.style.display = 'block';
+            };
+            
+            // Create button  
+            dialog.querySelector('#createBulk').onclick = () => {
+                const notes = parseBulkEntryText(textarea.value);
+                if (notes.length === 0) {
+                    alert('Inga giltiga anteckningar att skapa');
+                    return;
+                }
+                
+                createCardsFromBulkEntries(notes);
+                document.body.removeChild(overlay);
+            };
+            
+            // Cancel button
+            dialog.querySelector('#cancelBulk').onclick = () => {
+                document.body.removeChild(overlay);
+            };
+            
+            // Add to DOM
+            overlay.appendChild(dialog);
+            document.body.appendChild(overlay);
+            
+            // Focus textarea
+            setTimeout(() => textarea.focus(), 100);
+            
+            // Close on overlay click
+            overlay.onclick = (e) => {
+                if (e.target === overlay) {
+                    document.body.removeChild(overlay);
+                }
+            };
         }
         
         // Helper functions for sync conflict resolution
