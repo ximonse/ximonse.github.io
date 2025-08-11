@@ -777,29 +777,51 @@
         }
         
         .mobile-btn {
-            width: 60px;
-            height: 60px;
+            width: 50px;
+            height: 50px;
             border-radius: 50%;
             border: none;
-            background: #007acc;
+            background: rgba(128, 128, 128, 0.7);
             color: white;
-            font-size: 24px;
+            font-size: 20px;
             cursor: pointer;
-            box-shadow: 0 4px 12px rgba(0,122,204,0.3);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
             transition: all 0.2s ease;
             -webkit-tap-highlight-color: transparent;
             user-select: none;
             touch-action: manipulation;
+            opacity: 0.8;
         }
         
         .mobile-btn:hover {
-            background: #0056b3;
-            transform: scale(1.1);
+            background: rgba(100, 100, 100, 0.9);
+            transform: scale(1.05);
+            opacity: 1;
         }
         
         .mobile-btn:active {
             transform: scale(0.95);
-            background: #0056b3;
+            background: rgba(100, 100, 100, 0.9);
+        }
+        
+        /* Dark theme discrete mobile buttons */
+        .dark-theme .mobile-btn {
+            background: rgba(80, 80, 80, 0.8);
+            color: #e0e0e0;
+        }
+        
+        .dark-theme .mobile-btn:hover {
+            background: rgba(100, 100, 100, 0.9);
+        }
+        
+        /* Sepia theme discrete mobile buttons */
+        .sepia-theme .mobile-btn {
+            background: rgba(139, 117, 86, 0.7);
+            color: #f4f1e8;
+        }
+        
+        .sepia-theme .mobile-btn:hover {
+            background: rgba(109, 90, 68, 0.9);
         }
         
         /* Show mobile controls on touch devices */
