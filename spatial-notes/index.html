@@ -3169,8 +3169,11 @@
             console.log(`G+T: Tight grid with 120px overlap - max ${maxCols} wide, ${rows} deep for ${selectedNodes.length} cards`);
         }
         
-        // Save board to localStorage
-        function saveBoard() {
+        // Enhanced board saving with sync metadata
+        function saveBoard(skipSync = false) {
+            const now = new Date();
+            const deviceId = getDeviceIdentifier();
+            
             const boardData = {
                 cards: cy.nodes().map(node => ({
                     id: node.id(),
@@ -3195,11 +3198,34 @@
                     zoom: cy.zoom(),
                     pan: cy.pan()
                 },
-                timestamp: new Date().toISOString(),
-                version: '1.0'
+                
+                // Enhanced sync metadata
+                timestamp: now.toISOString(),
+                lastModified: now.getTime(),
+                version: '2.0',
+                deviceInfo: {
+                    id: deviceId,
+                    name: getDeviceName(),
+                    platform: navigator.platform,
+                    userAgent: navigator.userAgent.substring(0, 100)
+                },
+                syncInfo: {
+                    hasUnsyncedChanges: !skipSync,
+                    lastSyncAttempt: getSyncState().lastSyncAttempt,
+                    lastSuccessfulSync: getSyncState().lastSuccessfulSync,
+                    conflictResolutionNeeded: false
+                }
             };
             
+            // Always save to localStorage first (offline-first)
             localStorage.setItem('spatial-notes-board', JSON.stringify(boardData));
+            
+            // Update sync state
+            updateSyncState({
+                hasLocalChanges: !skipSync,
+                lastLocalSave: now.getTime()
+            });
+            
             // Show saved message in status indicator
             const searchInfo = document.getElementById('searchInfo');
             searchInfo.textContent = 'Sparad ✓';
@@ -3207,6 +3233,13 @@
             setTimeout(() => {
                 searchInfo.classList.remove('visible');
             }, 2000);
+            
+            // Auto-sync to Drive if signed in and not explicitly skipped
+            if (!skipSync && isSignedIn && accessToken && navigator.onLine) {
+                setTimeout(() => {
+                    smartSyncToGoogleDrive();
+                }, 500);
+            }
         }
         
         
@@ -5602,6 +5635,557 @@ Kan ha #taggar överallt.
         let availableProjects = [];
         let projectsLoaded = false;
         
+        // ========================================
+        // SMART SYNC SYSTEM - OFFLINE-FIRST
+        // ========================================
+        
+        // Device identification for multi-device sync
+        function getDeviceIdentifier() {
+            let deviceId = localStorage.getItem('device_id');
+            if (!deviceId) {
+                // Create unique device ID
+                deviceId = 'device_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                localStorage.setItem('device_id', deviceId);
+            }
+            return deviceId;
+        }
+        
+        function getDeviceName() {
+            // Try to determine device type
+            const ua = navigator.userAgent;
+            if (/iPad/i.test(ua)) return 'iPad';
+            if (/iPhone/i.test(ua)) return 'iPhone';
+            if (/Android/i.test(ua)) return 'Android';
+            if (/Windows/i.test(ua)) return 'Windows';
+            if (/Mac/i.test(ua)) return 'Mac';
+            return 'Unknown Device';
+        }
+        
+        // Sync state management
+        function getSyncState() {
+            const saved = localStorage.getItem('sync_state');
+            return saved ? JSON.parse(saved) : {
+                hasLocalChanges: false,
+                lastLocalSave: null,
+                lastSyncAttempt: null,
+                lastSuccessfulSync: null,
+                lastConflictResolution: null,
+                connectionStatus: 'unknown'
+            };
+        }
+        
+        function updateSyncState(changes) {
+            const current = getSyncState();
+            const updated = { ...current, ...changes };
+            localStorage.setItem('sync_state', JSON.stringify(updated));
+            
+            // Update visual sync status
+            updateSyncStatusIndicator();
+        }
+        
+        // Smart sync to Google Drive with conflict detection
+        async function smartSyncToGoogleDrive() {
+            if (!isSignedIn || !accessToken || !navigator.onLine) {
+                updateSyncState({ 
+                    lastSyncAttempt: Date.now(),
+                    connectionStatus: navigator.onLine ? 'no_auth' : 'offline'
+                });
+                return false;
+            }
+            
+            try {
+                updateSyncState({ 
+                    lastSyncAttempt: Date.now(),
+                    connectionStatus: 'syncing'
+                });
+                
+                // Get local data
+                const localData = JSON.parse(localStorage.getItem('spatial-notes-board') || '{}');
+                if (!localData.lastModified) {
+                    console.log('No local changes to sync');
+                    return true;
+                }
+                
+                // Check for remote changes first
+                const remoteData = await fetchFromGoogleDrive();
+                
+                if (!remoteData) {
+                    // No remote file yet, safe to upload
+                    const success = await uploadToGoogleDrive(localData);
+                    if (success) {
+                        updateSyncState({ 
+                            lastSuccessfulSync: Date.now(),
+                            hasLocalChanges: false,
+                            connectionStatus: 'synced'
+                        });
+                        console.log('✅ Initial sync to Drive completed');
+                        return true;
+                    }
+                    return false;
+                }
+                
+                // Compare timestamps for conflict detection
+                const localTime = localData.lastModified || 0;
+                const remoteTime = remoteData.lastModified || 0;
+                const timeDiff = Math.abs(localTime - remoteTime);
+                
+                // If times are very close (< 5 seconds), consider them the same
+                if (timeDiff < 5000) {
+                    console.log('Local and remote are in sync');
+                    updateSyncState({ 
+                        lastSuccessfulSync: Date.now(),
+                        hasLocalChanges: false,
+                        connectionStatus: 'synced'
+                    });
+                    return true;
+                }
+                
+                // Conflict detection
+                if (remoteTime > localTime) {
+                    // Remote is newer - potential conflict
+                    const deviceName = remoteData.deviceInfo?.name || 'Unknown Device';
+                    const remoteDevice = remoteData.deviceInfo?.id;
+                    const localDevice = getDeviceIdentifier();
+                    
+                    if (remoteDevice !== localDevice) {
+                        console.log(`Conflict detected: Remote (${deviceName}) is newer than local`);
+                        await showConflictResolutionDialog(localData, remoteData);
+                        return true;
+                    }
+                }
+                
+                // Local is newer or same device, upload safely
+                const success = await uploadToGoogleDrive(localData);
+                if (success) {
+                    updateSyncState({ 
+                        lastSuccessfulSync: Date.now(),
+                        hasLocalChanges: false,
+                        connectionStatus: 'synced'
+                    });
+                    console.log('✅ Sync to Drive completed');
+                    return true;
+                }
+                
+                return false;
+                
+            } catch (error) {
+                console.error('Smart sync failed:', error);
+                updateSyncState({ 
+                    connectionStatus: 'error'
+                });
+                return false;
+            }
+        }
+        
+        // Show conflict resolution dialog when sync conflicts are detected
+        async function showConflictResolutionDialog(localData, remoteData) {
+            return new Promise((resolve) => {
+                // Create modal overlay
+                const overlay = document.createElement('div');
+                overlay.style.cssText = `
+                    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                    background: rgba(0,0,0,0.7); z-index: 3000;
+                    display: flex; align-items: center; justify-content: center;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                `;
+                
+                // Create conflict dialog
+                const dialog = document.createElement('div');
+                dialog.style.cssText = `
+                    background: white; border-radius: 12px; max-width: 800px; width: 90%;
+                    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+                    overflow: hidden; max-height: 80vh; display: flex; flex-direction: column;
+                `;
+                
+                const localDeviceName = getDeviceName();
+                const remoteDeviceName = remoteData.lastSyncDevice ? getDeviceName(remoteData.lastSyncDevice) : 'Annat device';
+                const localTime = new Date(localData.lastModified).toLocaleString('sv-SE');
+                const remoteTime = new Date(remoteData.lastModified).toLocaleString('sv-SE');
+                
+                dialog.innerHTML = `
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                               color: white; padding: 20px; text-align: center;">
+                        <h2 style="margin: 0; font-size: 24px;">⚠️ Sync Konflikt Upptäckt</h2>
+                        <p style="margin: 8px 0 0 0; opacity: 0.9;">Samma projekt har ändrats på flera devices</p>
+                    </div>
+                    
+                    <div style="padding: 20px; overflow-y: auto; flex: 1;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                            
+                            <div style="border: 2px solid #4CAF50; border-radius: 8px; padding: 15px; background: #f8fdf8;">
+                                <h3 style="margin: 0 0 10px 0; color: #2E7D32; display: flex; align-items: center;">
+                                    📱 Lokalt (${localDeviceName})
+                                </h3>
+                                <div style="color: #555; font-size: 14px; margin-bottom: 10px;">
+                                    Senast ändrat: ${localTime}
+                                </div>
+                                <div style="color: #333;">
+                                    <strong>${localData.cards ? localData.cards.length : 0}</strong> kort
+                                </div>
+                            </div>
+                            
+                            <div style="border: 2px solid #2196F3; border-radius: 8px; padding: 15px; background: #f8fbff;">
+                                <h3 style="margin: 0 0 10px 0; color: #1565C0; display: flex; align-items: center;">
+                                    ☁️ Remote (${remoteDeviceName})
+                                </h3>
+                                <div style="color: #555; font-size: 14px; margin-bottom: 10px;">
+                                    Senast ändrat: ${remoteTime}
+                                </div>
+                                <div style="color: #333;">
+                                    <strong>${remoteData.cards ? remoteData.cards.length : 0}</strong> kort
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="background: #fff3cd; border: 1px solid #ffeeba; border-radius: 6px; 
+                                   padding: 15px; margin-bottom: 20px;">
+                            <h4 style="margin: 0 0 8px 0; color: #856404;">⚠️ Vad vill du göra?</h4>
+                            <p style="margin: 0; color: #856404; font-size: 14px;">
+                                Välj vilken version du vill behålla. Den andra versionen kommer sparas som backup.
+                            </p>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <button id="keepLocal" style="
+                                background: #4CAF50; color: white; border: none; padding: 15px;
+                                border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold;
+                                transition: all 0.2s;">
+                                📱 Behåll Lokal Version<br>
+                                <span style="font-size: 12px; opacity: 0.9;">Ladda upp mina ändringar</span>
+                            </button>
+                            
+                            <button id="keepRemote" style="
+                                background: #2196F3; color: white; border: none; padding: 15px;
+                                border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold;
+                                transition: all 0.2s;">
+                                ☁️ Behåll Remote Version<br>
+                                <span style="font-size: 12px; opacity: 0.9;">Ladda ner från Drive</span>
+                            </button>
+                        </div>
+                        
+                        <button id="compareFirst" style="
+                            background: #FF9800; color: white; border: none; padding: 12px;
+                            border-radius: 8px; cursor: pointer; font-size: 14px; width: 100%;
+                            margin-top: 15px; transition: all 0.2s;">
+                            🔍 Jämför Versioner Först (kommer snart...)
+                        </button>
+                    </div>
+                `;
+                
+                // Add hover effects
+                const style = document.createElement('style');
+                style.textContent = `
+                    #keepLocal:hover { background: #45a049 !important; transform: translateY(-2px); }
+                    #keepRemote:hover { background: #1976D2 !important; transform: translateY(-2px); }
+                    #compareFirst:hover { background: #F57C00 !important; transform: translateY(-2px); }
+                `;
+                document.head.appendChild(style);
+                
+                // Event handlers
+                dialog.querySelector('#keepLocal').onclick = async () => {
+                    updateSyncStatus('Uploading local changes...', 'loading');
+                    
+                    // Backup remote version first
+                    await backupVersion(remoteData, 'remote');
+                    
+                    // Upload local data
+                    const success = await uploadToGoogleDrive(localData);
+                    if (success) {
+                        updateSyncState({ 
+                            lastSuccessfulSync: Date.now(),
+                            hasLocalChanges: false,
+                            connectionStatus: 'synced'
+                        });
+                        updateSyncStatus('✅ Local version kept', 'success');
+                    } else {
+                        updateSyncStatus('Failed to upload local version', 'error');
+                    }
+                    
+                    document.body.removeChild(overlay);
+                    document.head.removeChild(style);
+                    resolve();
+                };
+                
+                dialog.querySelector('#keepRemote').onclick = async () => {
+                    updateSyncStatus('Loading remote changes...', 'loading');
+                    
+                    // Backup local version first  
+                    await backupVersion(localData, 'local');
+                    
+                    // Load remote data
+                    const success = await loadRemoteData(remoteData);
+                    if (success) {
+                        updateSyncState({ 
+                            lastSuccessfulSync: Date.now(),
+                            hasLocalChanges: false,
+                            connectionStatus: 'synced'
+                        });
+                        updateSyncStatus('✅ Remote version loaded', 'success');
+                    } else {
+                        updateSyncStatus('Failed to load remote version', 'error');
+                    }
+                    
+                    document.body.removeChild(overlay);
+                    document.head.removeChild(style);
+                    resolve();
+                };
+                
+                dialog.querySelector('#compareFirst').onclick = () => {
+                    updateSyncStatus('Version comparison coming soon...', 'info');
+                    // Future: Show side-by-side comparison of versions
+                };
+                
+                // Add to DOM
+                overlay.appendChild(dialog);
+                document.body.appendChild(overlay);
+                
+                // Close on overlay click
+                overlay.onclick = (e) => {
+                    if (e.target === overlay) {
+                        document.body.removeChild(overlay);
+                        document.head.removeChild(style);
+                        resolve();
+                    }
+                };
+            });
+        }
+        
+        // Helper functions for sync conflict resolution
+        
+        // Fetch data from Google Drive
+        async function fetchFromGoogleDrive() {
+            if (!isSignedIn || !accessToken) {
+                throw new Error('Not signed in to Google Drive');
+            }
+            
+            try {
+                await ensureValidToken();
+                
+                // Find the spatial notes file
+                const fileId = await findSpatialNotesFile();
+                if (!fileId) {
+                    console.log('No remote file found');
+                    return null;
+                }
+                
+                // Download the file content
+                const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch from Drive: ${response.statusText}`);
+                }
+                
+                const content = await response.text();
+                return JSON.parse(content);
+                
+            } catch (error) {
+                console.error('Error fetching from Google Drive:', error);
+                throw error;
+            }
+        }
+        
+        // Upload data to Google Drive
+        async function uploadToGoogleDrive(data) {
+            if (!isSignedIn || !accessToken) {
+                throw new Error('Not signed in to Google Drive');
+            }
+            
+            try {
+                await ensureValidToken();
+                
+                // Add sync metadata to data
+                data.lastSyncDevice = getDeviceIdentifier();
+                data.lastSyncTime = Date.now();
+                
+                const filename = `spatial-notes-${currentProject}.json`;
+                const content = JSON.stringify(data, null, 2);
+                
+                // Find existing file or create new
+                const existingFileId = await findSpatialNotesFile();
+                
+                if (existingFileId) {
+                    // Update existing file
+                    const response = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${existingFileId}?uploadType=media`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: content
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`Failed to update file: ${response.statusText}`);
+                    }
+                } else {
+                    // Create new file
+                    const metadata = {
+                        name: filename,
+                        parents: ['appDataFolder']
+                    };
+                    
+                    const form = new FormData();
+                    form.append('metadata', new Blob([JSON.stringify(metadata)], {type: 'application/json'}));
+                    form.append('file', new Blob([content], {type: 'application/json'}));
+                    
+                    const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${accessToken}` },
+                        body: form
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`Failed to create file: ${response.statusText}`);
+                    }
+                }
+                
+                return true;
+                
+            } catch (error) {
+                console.error('Error uploading to Google Drive:', error);
+                return false;
+            }
+        }
+        
+        // Load remote data into the current board
+        async function loadRemoteData(remoteData) {
+            try {
+                // Clear current board
+                cy.nodes().remove();
+                
+                // Load cards from remote data
+                if (remoteData.cards && remoteData.cards.length > 0) {
+                    remoteData.cards.forEach(cardData => {
+                        const newNode = cy.add({
+                            data: {
+                                id: cardData.id,
+                                title: cardData.title,
+                                text: cardData.text,
+                                tags: cardData.tags || [],
+                                hidden_tags: cardData.hidden_tags || [],
+                                searchMatch: false,
+                                isManualCard: cardData.isManualCard || false,
+                                cardColor: cardData.cardColor || null,
+                                export_timestamp: cardData.export_timestamp || null,
+                                export_session: cardData.export_session || null,
+                                export_source: cardData.export_source || null,
+                                source_file: cardData.source_file || null,
+                                page_number: cardData.page_number || null,
+                                matched_terms: cardData.matched_terms || null,
+                                card_index: cardData.card_index || null
+                            },
+                            position: cardData.position || { x: 100, y: 100 }
+                        });
+                        
+                        // Apply styling
+                        newNode.style({
+                            'height': getMeasuredTextHeight(newNode) + 'px'
+                        });
+                        
+                        if (cardData.cardColor) {
+                            newNode.style('background-color', cardData.cardColor);
+                        }
+                        
+                        if (cardData.pinned) {
+                            newNode.addClass('pinned');
+                        }
+                        
+                        newNode.grabify();
+                    });
+                    
+                    // Restore viewport if available
+                    if (remoteData.viewport) {
+                        cy.zoom(remoteData.viewport.zoom);
+                        cy.pan(remoteData.viewport.pan);
+                    }
+                    
+                    // Save to localStorage as backup
+                    localStorage.setItem('spatial-notes-board', JSON.stringify(remoteData));
+                    
+                    return true;
+                } else {
+                    console.log('No cards found in remote data');
+                    return false;
+                }
+                
+            } catch (error) {
+                console.error('Error loading remote data:', error);
+                return false;
+            }
+        }
+        
+        // Backup version to localStorage with timestamp
+        async function backupVersion(data, type) {
+            try {
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                const deviceName = getDeviceName();
+                const backupKey = `spatial-notes-backup-${type}-${deviceName}-${timestamp}`;
+                
+                localStorage.setItem(backupKey, JSON.stringify(data));
+                
+                console.log(`Backup saved: ${backupKey}`);
+                
+                // Keep only last 5 backups to prevent storage overflow
+                const allKeys = Object.keys(localStorage);
+                const backupKeys = allKeys.filter(key => key.startsWith('spatial-notes-backup-'))
+                    .sort().reverse().slice(5);  // Keep newest 5
+                
+                // Remove older backups
+                allKeys.filter(key => key.startsWith('spatial-notes-backup-') && !backupKeys.includes(key))
+                    .forEach(key => localStorage.removeItem(key));
+                
+                return true;
+                
+            } catch (error) {
+                console.error('Error creating backup:', error);
+                return false;
+            }
+        }
+        
+        // Update sync status indicator (visual feedback)
+        function updateSyncStatusIndicator() {
+            const syncState = getSyncState();
+            const statusEl = document.querySelector('.search-results-info');
+            
+            if (!statusEl) return;
+            
+            // Determine status color and message based on sync state
+            let statusColor = '#666';  // default gray
+            let statusMessage = 'Offline';
+            
+            if (!navigator.onLine) {
+                statusColor = '#ff9800';  // orange for offline
+                statusMessage = 'Offline Mode';
+            } else if (syncState.connectionStatus === 'synced') {
+                statusColor = '#4caf50';  // green for synced
+                const lastSync = new Date(syncState.lastSuccessfulSync);
+                const timeDiff = Date.now() - syncState.lastSuccessfulSync;
+                
+                if (timeDiff < 60000) {  // less than 1 minute
+                    statusMessage = 'Synced just now';
+                } else if (timeDiff < 3600000) {  // less than 1 hour
+                    const minutes = Math.floor(timeDiff / 60000);
+                    statusMessage = `Synced ${minutes}m ago`;
+                } else {
+                    statusMessage = `Synced ${lastSync.toLocaleTimeString('sv-SE', {hour: '2-digit', minute: '2-digit'})}`;
+                }
+            } else if (syncState.connectionStatus === 'error') {
+                statusColor = '#f44336';  // red for error
+                statusMessage = 'Sync Error';
+            } else if (syncState.hasLocalChanges) {
+                statusColor = '#ff9800';  // orange for unsaved changes
+                statusMessage = 'Unsaved Changes';
+            } else if (syncState.connectionStatus === 'no_auth') {
+                statusColor = '#9e9e9e';  // gray for no auth
+                statusMessage = 'Not Signed In';
+            }
+            
+            // Update visual indicator (reuse existing status area)
+            statusEl.style.borderLeft = `4px solid ${statusColor}`;
+        }
+        
         // Token management with enhanced persistence
         let tokenExpiry = null;
         let rememberMeEnabled = false;
@@ -5667,6 +6251,10 @@ Kan ha #taggar överallt.
                     }
                     
                     console.log(`Restored valid tokens from ${source}`);
+                    
+                    // Start auto-sync when tokens are successfully restored
+                    startAutoSync();
+                    
                     return true;
                 } else {
                     console.log(`Saved tokens expired, clearing ${source}`);
@@ -5868,6 +6456,9 @@ Kan ha #taggar överallt.
                             console.log('Token expires at:', new Date(tokenExpiry).toLocaleString());
                             updateAuthStatus();
                             
+                            // Start auto-sync when successfully signed in
+                            startAutoSync();
+                            
                             // Load available projects and then current project
                             setTimeout(async () => {
                                 await loadAvailableProjects();
@@ -5969,6 +6560,9 @@ Kan ha #taggar överallt.
                         
                         // Clear all tokens and saved data
                         clearSavedTokens();
+                        
+                        // Stop auto-sync when signing out
+                        stopAutoSync();
                         
                         updateSyncStatus('Signed out from Google Drive', 'info');
                         updateAuthStatus();
@@ -6599,23 +7193,88 @@ Kan ha #taggar överallt.
             }
         }
         
-        // Auto-sync functionality
+        // Enhanced connection-aware auto-sync functionality
         let autoSyncInterval;
+        let connectionCheckInterval;
+        let lastOnlineStatus = navigator.onLine;
+        
         function startAutoSync() {
             if (!isSignedIn || !accessToken) return;
             
-            // Auto-save to Drive every 30 seconds when signed in
+            // Smart auto-sync every 30 seconds when signed in and online
             autoSyncInterval = setInterval(async () => {
-                if (isSignedIn && accessToken) {
-                    await saveToGoogleDrive();
+                if (isSignedIn && accessToken && navigator.onLine) {
+                    const syncState = getSyncState();
+                    
+                    // Only sync if we have local changes or it's been a while since last sync
+                    const timeSinceLastSync = Date.now() - (syncState.lastSuccessfulSync || 0);
+                    const shouldSync = syncState.hasLocalChanges || timeSinceLastSync > 300000; // 5 minutes
+                    
+                    if (shouldSync) {
+                        console.log('Auto-sync: Syncing changes to Drive...');
+                        await smartSyncToGoogleDrive();
+                    }
+                } else if (!navigator.onLine) {
+                    updateSyncState({
+                        connectionStatus: 'offline'
+                    });
                 }
-            }, 30000);
+            }, 30000);  // Check every 30 seconds
+            
+            console.log('Auto-sync started');
         }
         
         function stopAutoSync() {
             if (autoSyncInterval) {
                 clearInterval(autoSyncInterval);
                 autoSyncInterval = null;
+                console.log('Auto-sync stopped');
+            }
+        }
+        
+        // Monitor connection status changes
+        function startConnectionMonitoring() {
+            // Listen for online/offline events
+            window.addEventListener('online', handleOnlineStatusChange);
+            window.addEventListener('offline', handleOnlineStatusChange);
+            
+            // Also poll connection status periodically (for mobile reliability)
+            connectionCheckInterval = setInterval(handleOnlineStatusChange, 10000); // Check every 10 seconds
+        }
+        
+        function stopConnectionMonitoring() {
+            window.removeEventListener('online', handleOnlineStatusChange);
+            window.removeEventListener('offline', handleOnlineStatusChange);
+            
+            if (connectionCheckInterval) {
+                clearInterval(connectionCheckInterval);
+                connectionCheckInterval = null;
+            }
+        }
+        
+        function handleOnlineStatusChange() {
+            const isOnline = navigator.onLine;
+            
+            if (isOnline !== lastOnlineStatus) {
+                lastOnlineStatus = isOnline;
+                
+                if (isOnline) {
+                    console.log('Connection restored - attempting sync...');
+                    updateSyncStatus('Connection restored', 'info');
+                    
+                    // Try to sync when coming back online
+                    if (isSignedIn && accessToken) {
+                        setTimeout(() => smartSyncToGoogleDrive(), 2000); // Wait 2 seconds for connection to stabilize
+                    }
+                } else {
+                    console.log('Connection lost - entering offline mode');
+                    updateSyncState({
+                        connectionStatus: 'offline'
+                    });
+                    updateSyncStatus('Offline Mode - changes saved locally', 'warning');
+                }
+                
+                updateSyncStatusIndicator();
             }
         }
         
@@ -6630,6 +7289,12 @@ Kan ha #taggar överallt.
                 currentProject = savedProject;
                 console.log(`Restored current project: ${currentProject}`);
             }
+            
+            // Start connection monitoring immediately
+            startConnectionMonitoring();
+            
+            // Initialize sync status indicator
+            updateSyncStatusIndicator();
             
             // Initialize Google Drive API (wait for gapi to load)
             setTimeout(() => initializeGoogleAPI(), 3000);
