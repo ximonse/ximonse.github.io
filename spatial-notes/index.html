@@ -3455,8 +3455,8 @@
                 pinned: node.hasClass('pinned') || false
             }));
             
-            const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-            const filename = prompt('Namn på HTML-fil:', `spatial-notes-${timestamp}`) || `spatial-notes-${timestamp}`;
+            const suggestedFilename = `spatial-notes-${currentProject}`;
+            const filename = prompt('Namn på HTML-fil:', suggestedFilename) || suggestedFilename;
             
             // Check if running locally (file://) - fetch won't work due to CORS
             if (window.location.protocol === 'file:') {
@@ -3542,9 +3542,9 @@
                     }))
                 };
                 
-                // Generate filename with timestamp
-                const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-                const filename = prompt('Namn på JSON-fil:', `spatial-notes-${timestamp}`) || `spatial-notes-${timestamp}`;
+                // Generate filename with current project name (same as Google Drive)
+                const suggestedFilename = `spatial-notes-${currentProject}`;
+                const filename = prompt('Namn på JSON-fil:', suggestedFilename) || suggestedFilename;
                 
                 if (!filename) return; // User cancelled
                 
