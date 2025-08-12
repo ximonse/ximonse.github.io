@@ -3412,6 +3412,20 @@
                         newNode.style('background-color', getCardColorValue(cardData.cardColor, getCurrentTheme()));
                     }
                     
+                    // Restore eventData and time-based styling
+                    if (cardData.eventData) {
+                        newNode.data('eventData', cardData.eventData);
+                        newNode.addClass(`time-${cardData.eventData.category}`);
+                    } else {
+                        // Fallback: try to parse time from text
+                        applyTimeBasedStyling(newNode);
+                    }
+                    
+                    // Restore location data
+                    if (cardData.location) {
+                        newNode.data('location', cardData.location);
+                    }
+                    
                     newNode.grabify();
                 });
                 
@@ -6387,8 +6401,29 @@ Kan ha #taggar överallt.
                 
                 newNode.grabify();
                 
-                // Apply time-based styling
-                applyTimeBasedStyling(newNode);
+                // Apply time-based styling - säkerställ att eventData sparas korrekt
+                if (note.eventTime) {
+                    const category = categorizeEventTime(note.eventTime.timestamp);
+                    if (category) {
+                        newNode.addClass(`time-${category}`);
+                        
+                        // Store event data directly
+                        newNode.data('eventData', {
+                            datetime: note.eventTime.datetime.toISOString(),
+                            timestamp: note.eventTime.timestamp,
+                            category: category,
+                            originalText: note.eventTime.originalText,
+                            formatted: note.eventTime.formatted,
+                            isPast: category === 'past',
+                            isToday: category === 'today',
+                            isThisWeek: category === 'thisweek',
+                            isFuture: category === 'future'
+                        });
+                    }
+                } else {
+                    // Fallback: try regular time parsing
+                    applyTimeBasedStyling(newNode);
+                }
                 
                 createdNodes.push(newNode);
             });
@@ -7409,17 +7444,23 @@ Ring Bosse om Elräkningen
                         title: node.data('title') || '',
                         text: node.data('text') || '',
                         tags: node.data('tags') || [],
-                        x: node.position('x'),
-                        y: node.position('y'),
+                        position: { x: node.position('x'), y: node.position('y') }, // Sparar som position objekt
                         cardColor: node.data('cardColor') || '',
                         export_source: node.data('export_source') || '',
                         source_file: node.data('source_file') || '',
                         matched_terms: node.data('matched_terms') || '',
                         isManualCard: node.data('isManualCard') || false,
-                        isPinned: node.data('isPinned') || false
+                        pinned: node.hasClass('pinned'), // Sparar pinning korrekt
+                        // Spara eventData för tidskategorisering
+                        eventData: node.data('eventData') || null,
+                        location: node.data('location') || null
                     })),
                     timestamp: new Date().toISOString(),
-                    version: '2.0'
+                    version: '2.0',
+                    viewport: {
+                        zoom: cy.zoom(),
+                        pan: cy.pan()
+                    }
                 };
                 
                 const fileContent = JSON.stringify(boardData, null, 2);
