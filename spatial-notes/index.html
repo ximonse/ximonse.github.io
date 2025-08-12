@@ -7635,32 +7635,11 @@ Ring Bosse om Elräkningen
                     console.log('All cards loaded successfully');
                     updateSyncStatus(`✅ Loaded ${boardData.cards.length} cards from "${currentProject}"`, 'success');
                     
-                    // Skip height updates if cards were already loaded from localStorage 
-                    // to prevent visual jumping during Drive sync
-                    if (existingCards === 0) {
-                        // Only update heights for first load (no localStorage data)
-                        console.log('First load - applying height calculations');
-                        setTimeout(() => {
-                            cy.batch(() => {
-                                cy.nodes().forEach(node => {
-                                    try {
-                                        const heightInfo = getMeasuredTextHeight(node);
-                                        node.style('height', heightInfo + 'px');
-                                    } catch (error) {
-                                        const textLength = (node.data('text') || '').length;
-                                        const fallbackHeight = Math.max(140, textLength * 0.8 + 60);
-                                        node.style('height', fallbackHeight + 'px');
-                                    }
-                                });
-                            });
-                            console.log(`Height calculations applied to ${cy.nodes().length} cards`);
-                            
-                            // Apply time-based styling to all loaded cards
-                            refreshAllTimeBasedStyling();
-                        }, 150);
-                    } else {
-                        console.log('Skipped height updates - cards already properly sized from localStorage');
-                    }
+                    // Skip height updates för Google Drive loads - positionerna är redan korrekt sparade
+                    console.log('Google Drive load completed - skipping height calculations to preserve positions');
+                    
+                    // Apply time-based styling immediately utan height changes
+                    refreshAllTimeBasedStyling();
                     
                     // Auto-save to localStorage as backup
                     setTimeout(() => saveBoard(), 500);
