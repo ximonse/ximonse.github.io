@@ -81,6 +81,27 @@
             border-color: #007acc;
         }
         
+        .search-select-btn {
+            margin-left: 8px;
+            padding: 8px 12px;
+            background: #007acc;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            font-size: 13px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background-color 0.2s;
+        }
+        
+        .search-select-btn:hover {
+            background: #005a9e;
+        }
+        
+        .search-select-btn:active {
+            background: #004080;
+        }
+        
         .add-card-btn {
             background: #007acc;
             color: white;
@@ -311,6 +332,14 @@
             border-color: #4da6ff;
         }
         
+        .dark-theme .search-select-btn {
+            background: #4da6ff;
+        }
+        
+        .dark-theme .search-select-btn:hover {
+            background: #66b3ff;
+        }
+        
         .dark-theme .add-card-btn {
             background: #4da6ff;
             color: #1a1a1a;
@@ -396,6 +425,14 @@
         
         .sepia-theme .search-input:focus {
             border-color: #8b7556;
+        }
+        
+        .sepia-theme .search-select-btn {
+            background: #8b7556;
+        }
+        
+        .sepia-theme .search-select-btn:hover {
+            background: #6d5a42;
         }
         
         .sepia-theme .add-card-btn {
@@ -1001,6 +1038,9 @@
     <div class="toolbar">
         <div class="search-box">
             <input type="text" class="search-input" placeholder='Sök: "bias and social" OR "not psychology"' id="searchInput">
+            <button class="search-select-btn" id="searchSelectBtn" onclick="selectSearchResults()" style="display: none;">
+                📍 Markera funna
+            </button>
         </div>
         <div class="tag-filter-box">
             <input type="text" class="tag-filter-input" placeholder="Filter på tags: tech, psychology..." id="tagFilterInput">
@@ -2335,6 +2375,14 @@
             const searchInfo = document.getElementById('searchInfo');
             searchInfo.textContent = `${matchCount} kort hittade`;
             searchInfo.classList.add('visible');
+            
+            // Show/hide mobile select button
+            const selectBtn = document.getElementById('searchSelectBtn');
+            if (matchCount > 0) {
+                selectBtn.style.display = 'inline-block';
+            } else {
+                selectBtn.style.display = 'none';
+            }
         }
         
         // Boolean query evaluation
@@ -3095,6 +3143,10 @@
             
             const searchInfo = document.getElementById('searchInfo');
             searchInfo.classList.remove('visible');
+            
+            // Hide mobile select button
+            const selectBtn = document.getElementById('searchSelectBtn');
+            selectBtn.style.display = 'none';
         }
         
         // Tag filtering functions
@@ -3232,7 +3284,7 @@
         // SORTING SYSTEM - EASY TO FIND
         // ========================================
         // Global sorting state
-        let sortMode = null; // null, 'textLength-asc', 'textLength-desc', 'alphabetic-asc', 'alphabetic-desc', 'color', 'date-asc', 'date-desc', 'tagCount'
+        let sortMode = null; // null, 'textLength-asc', 'textLength-desc', 'alphabetic-asc', 'alphabetic-desc', 'color', 'date-asc', 'date-desc', 'temporal-asc', 'temporal-desc', 'tagCount'
         
         function showSortMenu(event) {
             event.preventDefault();
@@ -3266,8 +3318,10 @@
                     <button onclick="setSortMode('alphabetic-asc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🔤 A → Z</button>
                     <button onclick="setSortMode('alphabetic-desc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🔤 Z → A</button>
                     <button onclick="setSortMode('color')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🎨 Färg 1→6</button>
-                    <button onclick="setSortMode('date-asc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">📅 Äldst → Nyast</button>
-                    <button onclick="setSortMode('date-desc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">📅 Nyast → Äldst</button>
+                    <button onclick="setSortMode('date-asc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">📅 Skapande: Äldst → Nyast</button>
+                    <button onclick="setSortMode('date-desc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">📅 Skapande: Nyast → Äldst</button>
+                    <button onclick="setSortMode('temporal-asc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🕒 Datum: Tidigare → Senare</button>
+                    <button onclick="setSortMode('temporal-desc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🕒 Datum: Senare → Tidigare</button>
                     <button onclick="setSortMode('tagCount')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🏷️ Färre → Fler taggar</button>
                 </div>
                 <div style="text-align: center; margin-top: 15px;">
@@ -3322,8 +3376,10 @@
                 case 'alphabetic-asc': return 'Alfabetisk A → Z';
                 case 'alphabetic-desc': return 'Alfabetisk Z → A';
                 case 'color': return 'Färg 1 → 6';
-                case 'date-asc': return 'Äldst → nyast';
-                case 'date-desc': return 'Nyast → äldst';
+                case 'date-asc': return 'Skapande: Äldst → nyast';
+                case 'date-desc': return 'Skapande: Nyast → äldst';
+                case 'temporal-asc': return 'Datum: Tidigare → senare';
+                case 'temporal-desc': return 'Datum: Senare → tidigare';
                 case 'tagCount': return 'Färre → fler taggar';
                 default: return 'Okänt';
             }
@@ -3368,6 +3424,16 @@
                         const aDateDesc = extractDateFromId(a.id());
                         const bDateDesc = extractDateFromId(b.id());
                         return bDateDesc - aDateDesc;
+                        
+                    case 'temporal-asc':
+                        const aTemporalDate = getEarliestDateFromContent(a);
+                        const bTemporalDate = getEarliestDateFromContent(b);
+                        return aTemporalDate - bTemporalDate;
+                        
+                    case 'temporal-desc':
+                        const aTemporalDateDesc = getEarliestDateFromContent(a);
+                        const bTemporalDateDesc = getEarliestDateFromContent(b);
+                        return bTemporalDateDesc - aTemporalDateDesc;
                         
                     case 'tagCount':
                         const aTagCount = (a.data('tags') || []).length;
@@ -3494,6 +3560,320 @@
             // Fallback for older IDs - return very old date
             return new Date(2020, 0, 1).getTime();
         }
+
+        // ========================================
+        // DATE-BASED AUTO-MARKING SYSTEM
+        // ========================================
+        
+        // Parse date from @YYMMDD format (e.g., @250816)
+        function parseDateFromContent(content) {
+            const datePatterns = [];
+            
+            // Pattern 1: @YYMMDD (e.g., @250816)
+            const yymmddPattern = /@(\d{6})/g;
+            let match;
+            while ((match = yymmddPattern.exec(content)) !== null) {
+                const dateStr = match[1];
+                const year = 2000 + parseInt(dateStr.substr(0, 2));
+                const month = parseInt(dateStr.substr(2, 2)) - 1; // Month is 0-indexed
+                const day = parseInt(dateStr.substr(4, 2));
+                
+                // Validate date
+                if (month >= 0 && month <= 11 && day >= 1 && day <= 31) {
+                    datePatterns.push({
+                        type: 'date',
+                        date: new Date(year, month, day),
+                        match: match[0]
+                    });
+                }
+            }
+            
+            // Pattern 2: @YYwWW (e.g., @25w33)
+            const weekPattern = /@(\d{2})w(\d{1,2})/g;
+            while ((match = weekPattern.exec(content)) !== null) {
+                const year = 2000 + parseInt(match[1]);
+                const week = parseInt(match[2]);
+                
+                // Calculate date from week number
+                if (week >= 1 && week <= 53) {
+                    const weekDate = getDateFromWeek(year, week);
+                    datePatterns.push({
+                        type: 'week',
+                        date: weekDate,
+                        week: week,
+                        year: year,
+                        match: match[0]
+                    });
+                }
+            }
+            
+            return datePatterns;
+        }
+        
+        // Get date from ISO week number
+        function getDateFromWeek(year, week) {
+            const januaryFirst = new Date(year, 0, 1);
+            const daysToFirstMonday = (8 - januaryFirst.getDay()) % 7;
+            const firstMonday = new Date(year, 0, 1 + daysToFirstMonday);
+            const targetDate = new Date(firstMonday.getTime() + (week - 1) * 7 * 24 * 60 * 60 * 1000);
+            return targetDate;
+        }
+        
+        // Get ISO week number from date
+        function getWeekNumber(date) {
+            const target = new Date(date.valueOf());
+            const dayNr = (date.getDay() + 6) % 7;
+            target.setDate(target.getDate() - dayNr + 3);
+            const firstThursday = target.valueOf();
+            target.setMonth(0, 1);
+            if (target.getDay() !== 4) {
+                target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+            }
+            return 1 + Math.ceil((firstThursday - target) / 604800000);
+        }
+        
+        // Check if content has #todo tag
+        function hasTodoTag(content) {
+            return /#todo\b/i.test(content);
+        }
+        
+        // Calculate temporal relevance and get marking intensity
+        function getTemporalMarking(datePatterns, hasTodo, today = new Date()) {
+            if (!datePatterns || datePatterns.length === 0) {
+                return null;
+            }
+            
+            const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+            const currentWeek = getWeekNumber(today);
+            const currentYear = today.getFullYear();
+            
+            let strongestMarking = null;
+            
+            datePatterns.forEach(pattern => {
+                let marking = null;
+                
+                if (pattern.type === 'date') {
+                    const targetDate = new Date(pattern.date.getFullYear(), pattern.date.getMonth(), pattern.date.getDate());
+                    const daysDiff = Math.floor((targetDate - todayStart) / (24 * 60 * 60 * 1000));
+                    
+                    if (daysDiff === 0) {
+                        // Today - strongest marking
+                        marking = { intensity: 1.0, color: 'today', reason: 'Today' };
+                    } else if (daysDiff === 1 && hasTodo) {
+                        // Tomorrow + #todo - strong marking
+                        marking = { intensity: 0.9, color: 'tomorrow-todo', reason: 'Tomorrow + #todo' };
+                    } else if (daysDiff >= 2 && daysDiff <= 14) {
+                        // 2-14 days future - gradual fade
+                        const intensity = 0.8 - ((daysDiff - 2) / 12) * 0.6; // 0.8 -> 0.2
+                        marking = { intensity, color: 'future', reason: `${daysDiff} days ahead` };
+                    } else if (daysDiff < 0 && hasTodo) {
+                        // Past + #todo - persistent marking
+                        marking = { intensity: 0.85, color: 'past-todo', reason: 'Past + #todo' };
+                    }
+                } else if (pattern.type === 'week') {
+                    if (pattern.year === currentYear && pattern.week === currentWeek) {
+                        // Current week - strong marking
+                        marking = { intensity: 0.8, color: 'current-week', reason: 'Current week' };
+                    } else if (pattern.year === currentYear && pattern.week === currentWeek + 1) {
+                        // Next week - milder but with #todo boost
+                        const intensity = hasTodo ? 0.7 : 0.5;
+                        marking = { intensity, color: 'next-week', reason: 'Next week' + (hasTodo ? ' + #todo' : '') };
+                    }
+                }
+                
+                // Keep strongest marking
+                if (marking && (!strongestMarking || marking.intensity > strongestMarking.intensity)) {
+                    strongestMarking = marking;
+                }
+            });
+            
+            return strongestMarking;
+        }
+        
+        // Get border style for temporal marking (Cytoscape format)
+        function getTemporalBorderStyle(marking) {
+            if (!marking) return null;
+            
+            const baseWidth = Math.ceil(marking.intensity * 6); // 1-6px width based on intensity
+            
+            const colorMap = {
+                'today': '#ff4500', // Red-orange for today
+                'tomorrow-todo': '#ff8c00', // Orange for tomorrow+todo
+                'future': '#1e90ff', // Blue for future dates
+                'past-todo': '#dc143c', // Crimson for past+todo
+                'current-week': '#32cd32', // Lime green for current week
+                'next-week': '#9370db' // Medium slate blue for next week
+            };
+            
+            const color = colorMap[marking.color] || '#808080';
+            
+            return {
+                'border-width': baseWidth,
+                'border-color': color
+            };
+        }
+        
+        // Apply temporal markings to all cards
+        function applyTemporalMarkings() {
+            const today = new Date();
+            console.log('🕒 Applying temporal markings for date:', today.toDateString());
+            
+            let markedCount = 0;
+            
+            cy.nodes().forEach(node => {
+                const title = node.data('title') || '';
+                const text = node.data('text') || '';
+                const fullContent = title + ' ' + text;
+                
+                console.log(`Checking card "${title}": "${fullContent}"`);
+                
+                // Parse dates and check for todo
+                const datePatterns = parseDateFromContent(fullContent);
+                const hasTodo = hasTodoTag(fullContent);
+                
+                console.log(`  - Date patterns found:`, datePatterns);
+                console.log(`  - Has #todo:`, hasTodo);
+                
+                // Get temporal marking
+                const marking = getTemporalMarking(datePatterns, hasTodo, today);
+                console.log(`  - Temporal marking:`, marking);
+                
+                if (marking) {
+                    // Apply border styling via node data and class
+                    const borderStyle = getTemporalBorderStyle(marking);
+                    if (borderStyle) {
+                        console.log(`  - Applying border style:`, borderStyle);
+                        
+                        // Store temporal styling in node data
+                        node.data('temporalBorderWidth', borderStyle['border-width']);
+                        node.data('temporalBorderColor', borderStyle['border-color']);
+                        
+                        // Add temporal marking class to trigger stylesheet
+                        node.addClass('temporal-marked');
+                        
+                        markedCount++;
+                        console.log(`🎯 Marked card ${node.id()}: ${marking.reason} (intensity: ${marking.intensity.toFixed(2)}, color: ${borderStyle['border-color']}, width: ${borderStyle['border-width']})`);
+                    }
+                } else {
+                    // Remove temporal marking
+                    node.removeClass('temporal-marked');
+                    node.removeData('temporalBorderWidth');
+                    node.removeData('temporalBorderColor');
+                }
+            });
+            
+            // Force Cytoscape to update styling
+            cy.style().update();
+            
+            console.log(`✅ Temporal marking complete: ${markedCount} cards marked`);
+            return markedCount;
+        }
+        
+        // Test function for temporal markings - call this in console
+        function testTemporalMarkings() {
+            // Create test cards with different date scenarios
+            const testData = [
+                { id: 'test-today', title: 'Today Test', text: 'Meeting @250816', x: 100, y: 100 },
+                { id: 'test-tomorrow', title: 'Tomorrow Test', text: 'Task @250817 #todo', x: 300, y: 100 },
+                { id: 'test-future', title: 'Future Test', text: 'Event @250820', x: 500, y: 100 },
+                { id: 'test-week', title: 'Week Test', text: 'Week meeting @25w33', x: 700, y: 100 },
+                { id: 'test-past', title: 'Past Test', text: 'Old task @250815 #todo', x: 900, y: 100 }
+            ];
+            
+            // Add test cards
+            testData.forEach(card => {
+                // Remove if exists
+                const existing = cy.getElementById(card.id);
+                if (existing.length > 0) {
+                    existing.remove();
+                }
+                
+                const node = cy.add({
+                    data: {
+                        id: card.id,
+                        title: card.title,
+                        text: card.text,
+                        tags: [],
+                        searchMatch: false
+                    },
+                    position: { x: card.x, y: card.y }
+                });
+                node.grabify();
+            });
+            
+            // Apply temporal markings
+            setTimeout(() => {
+                applyTemporalMarkings();
+            }, 500);
+            
+            console.log('🧪 Test cards created! Check console for marking details.');
+        }
+        
+        // Get earliest date from card content for sorting
+        function getEarliestDateFromContent(node) {
+            const title = node.data('title') || '';
+            const text = node.data('text') || '';
+            const fullContent = title + ' ' + text;
+            
+            const datePatterns = parseDateFromContent(fullContent);
+            
+            if (!datePatterns || datePatterns.length === 0) {
+                // No dates found - use card creation date as fallback
+                return extractDateFromId(node.id());
+            }
+            
+            // Find earliest date from content
+            let earliestDate = null;
+            datePatterns.forEach(pattern => {
+                const dateTime = pattern.date.getTime();
+                if (!earliestDate || dateTime < earliestDate) {
+                    earliestDate = dateTime;
+                }
+            });
+            
+            return earliestDate || extractDateFromId(node.id());
+        }
+        
+        // ========================================
+        // MOBILE SEARCH SUPPORT
+        // ========================================
+        
+        // Function to select search results (mobile-friendly alternative to Enter key)
+        function selectSearchResults() {
+            const searchMatches = cy.$('.search-match');
+            console.log('Mobile select button pressed, found matches:', searchMatches.length);
+            
+            if (searchMatches.length > 0) {
+                // Convert search matches to selected cards
+                searchMatches.select();
+                console.log('Selected search matches via mobile button');
+                
+                // Clear search visuals but keep cards selected
+                searchActive = false;
+                cy.nodes().removeClass('search-match');
+                cy.nodes().data('searchMatch', false);
+                
+                const searchInfo = document.getElementById('searchInfo');
+                searchInfo.classList.remove('visible');
+                
+                // Hide the select button
+                const selectBtn = document.getElementById('searchSelectBtn');
+                selectBtn.style.display = 'none';
+                
+                // Blur the search input so keyboard shortcuts work
+                const searchInput = document.getElementById('searchInput');
+                searchInput.blur();
+                
+                console.log(`✅ Selected ${searchMatches.length} search results via mobile button`);
+            }
+        }
+        
+        // ========================================
+        // END MOBILE SEARCH SUPPORT  
+        // ========================================
+        // ========================================
+        // END DATE-BASED AUTO-MARKING SYSTEM
+        // ========================================
         // ========================================
         // END SORTING SYSTEM
         // ========================================
@@ -4709,6 +5089,11 @@
                 
                 // Removed annoying "Laddade X kort!" alert - user can see the cards loaded
                 
+                // Apply temporal markings after data is loaded
+                setTimeout(() => {
+                    applyTemporalMarkings();
+                }, 200);
+                
             } catch (error) {
                 console.error('Error loading board data:', error);
                 throw error;
@@ -5524,6 +5909,14 @@
                             'border-width': 4,
                             'box-shadow': '0 0 15px rgba(76, 175, 80, 0.6)'
                         })
+                        .selector('node.temporal-marked').style({
+                            'border-width': function(node) {
+                                return node.data('temporalBorderWidth') || 6;
+                            },
+                            'border-color': function(node) {
+                                return node.data('temporalBorderColor') || '#ff4500';
+                            }
+                        })
                         .update();
                 } else if (theme === 'sepia') {
                     // Sepia theme styling
@@ -5555,6 +5948,14 @@
                             'border-width': 4,
                             'box-shadow': '0 0 15px rgba(143, 188, 143, 0.6)'
                         })
+                        .selector('node.temporal-marked').style({
+                            'border-width': function(node) {
+                                return node.data('temporalBorderWidth') || 6;
+                            },
+                            'border-color': function(node) {
+                                return node.data('temporalBorderColor') || '#ff4500';
+                            }
+                        })
                         .update();
                 } else {
                     // Light theme styling (default)
@@ -5585,6 +5986,14 @@
                             'border-color': '#2e7d32',
                             'border-width': 4,
                             'box-shadow': '0 0 15px rgba(46, 125, 50, 0.6)'
+                        })
+                        .selector('node.temporal-marked').style({
+                            'border-width': function(node) {
+                                return node.data('temporalBorderWidth') || 6;
+                            },
+                            'border-color': function(node) {
+                                return node.data('temporalBorderColor') || '#ff4500';
+                            }
                         })
                         .update();
                 }
@@ -6451,6 +6860,11 @@
             
             newNode.grabify();
             console.log(`Created card via form: ${title || 'Untitled'} ${selectedColor ? 'with color ' + selectedColor : ''}`);
+            
+            // Apply temporal markings to newly created card
+            setTimeout(() => {
+                applyTemporalMarkings();
+            }, 100);
         }
         
         // Code syntax dialog for quick card creation
@@ -6578,6 +6992,11 @@ Skriv ditt innehåll här...
             
             newNode.grabify();
             console.log(`Created card via code syntax: ${title || 'Untitled'}`);
+            
+            // Apply temporal markings to newly created card
+            setTimeout(() => {
+                applyTemporalMarkings();
+            }, 100);
         }
         
         // G+T: Copy cards in top-aligned grid
@@ -8290,6 +8709,11 @@ Kan ha #taggar överallt.
                             window.alert = originalAlert;
                             
                             console.log(`✅ Auto-loaded ${boardData.cards.length} cards and ${(boardData.edges || []).length} edges from localStorage`);
+                            
+                            // Apply temporal markings after loading
+                            setTimeout(() => {
+                                applyTemporalMarkings();
+                            }, 500);
                         }
                     } catch (e) {
                         console.log('Error auto-loading:', e);
@@ -8672,6 +9096,16 @@ Kan ha #taggar överallt.
                     dropdown.classList.toggle('active');
                 });
                 
+            });
+            
+            // Close dropdowns when clicking inside dropdown buttons (Android fix)
+            document.querySelectorAll('.dropdown-content button').forEach(button => {
+                button.addEventListener('click', function(e) {
+                    // Close all dropdowns when any dropdown button is clicked
+                    document.querySelectorAll('.menu-dropdown').forEach(dropdown => {
+                        dropdown.classList.remove('active');
+                    });
+                });
             });
             
             // Close dropdowns when clicking outside or on cytoscape canvas
