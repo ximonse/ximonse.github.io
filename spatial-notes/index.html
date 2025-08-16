@@ -4421,19 +4421,9 @@
         }
         
         
-        // Load board from localStorage
-        function loadBoard() {
-            // Clear any stray edit dialogs first
-            clearAllEditDialogs();
-            
-            const savedData = localStorage.getItem('spatial-notes-board');
-            if (!savedData) {
-                alert('Ingen sparad bräda hittades!');
-                return;
-            }
-            
+        // Load board data (internal function without UI alerts)
+        function loadBoardFromData(boardData) {
             try {
-                const boardData = JSON.parse(savedData);
                 
                 // Clear existing nodes
                 cy.nodes().remove();
@@ -4577,6 +4567,27 @@
                 
                 // Removed annoying "Laddade X kort!" alert - user can see the cards loaded
                 
+            } catch (error) {
+                console.error('Error loading board data:', error);
+                throw error;
+            }
+        }
+        
+        // Load board from localStorage (public function with UI alerts)
+        function loadBoard() {
+            // Clear any stray edit dialogs first
+            clearAllEditDialogs();
+            
+            const savedData = localStorage.getItem('spatial-notes-board');
+            if (!savedData) {
+                alert('Ingen sparad bräda hittades!');
+                return;
+            }
+            
+            try {
+                const boardData = JSON.parse(savedData);
+                loadBoardFromData(boardData);
+                console.log(`Manual load completed: ${boardData.cards.length} cards and ${(boardData.edges || []).length} edges`);
             } catch (error) {
                 alert('Fel vid laddning av bräda: ' + error.message);
             }
@@ -8113,60 +8124,30 @@ Kan ha #taggar överallt.
                 }
             }, 100);
             
-            // Auto-load from localStorage if data exists
+            // Auto-load from localStorage if data exists (silent load)
             setTimeout(() => {
                 const savedData = localStorage.getItem('spatial-notes-board');
                 if (savedData) {
                     try {
                         const boardData = JSON.parse(savedData);
                         if (boardData.cards && boardData.cards.length > 0) {
-                            // Silent load without alert
+                            console.log(`Auto-loading ${boardData.cards.length} cards from localStorage...`);
+                            
+                            // Clear any existing content first
                             cy.nodes().remove();
-                            boardData.cards.forEach(cardData => {
-                                const newNode = cy.add({
-                                    data: {
-                                        id: cardData.id,
-                                        title: cardData.title,
-                                        text: cardData.text,
-                                        tags: cardData.tags || [],
-                                        hidden_tags: cardData.hidden_tags || [],
-                                        searchMatch: false,
-                                        isManualCard: cardData.isManualCard || false,
-                                        cardColor: cardData.cardColor || null,
-                                        export_timestamp: cardData.export_timestamp || null,
-                                        export_session: cardData.export_session || null,
-                                        export_source: cardData.export_source || null,
-                                        source_file: cardData.source_file || null,
-                                        page_number: cardData.page_number || null,
-                                        matched_terms: cardData.matched_terms || null,
-                                        card_index: cardData.card_index || null
-                                    },
-                                    position: cardData.position
-                                });
-                                
-                                // Restore pinned state
-                                if (cardData.pinned) {
-                                    newNode.addClass('pinned');
-                                }
-                                
-                                // Restore card color
-                                if (cardData.cardColor) {
-                                    newNode.style('background-color', getCardColorValue(cardData.cardColor, getCurrentTheme()));
-                                }
-                                
-                                newNode.grabify();
-                            });
+                            cy.edges().remove();
                             
-                            // Update card counter
-                            // Card IDs are now timestamp-based, no counter needed
+                            // Use the full loadBoard functionality but suppress alerts
+                            const originalAlert = window.alert;
+                            window.alert = () => {}; // Temporarily disable alerts
                             
-                            // Restore viewport if saved
-                            if (boardData.viewport) {
-                                cy.zoom(boardData.viewport.zoom);
-                                cy.pan(boardData.viewport.pan);
-                            }
+                            // Manually trigger the full load process
+                            loadBoardFromData(boardData);
                             
-                            console.log(`Auto-loaded ${boardData.cards.length} cards from localStorage`);
+                            // Restore alert function
+                            window.alert = originalAlert;
+                            
+                            console.log(`✅ Auto-loaded ${boardData.cards.length} cards and ${(boardData.edges || []).length} edges from localStorage`);
                         }
                     } catch (e) {
                         console.log('Error auto-loading:', e);
