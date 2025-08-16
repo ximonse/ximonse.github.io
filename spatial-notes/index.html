@@ -4719,9 +4719,12 @@
                 
                 // Generate filename with timestamp
                 const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-                const filename = prompt('Namn på JSON-fil:', `spatial-notes-${timestamp}`) || `spatial-notes-${timestamp}`;
+                const filename = prompt('Namn på JSON-fil:', `spatial-notes-${timestamp}.json`) || `spatial-notes-${timestamp}.json`;
                 
                 if (!filename) return; // User cancelled
+                
+                // Ensure .json extension
+                const finalFilename = filename.endsWith('.json') ? filename : filename + '.json';
                 
                 // Create and download JSON file
                 const jsonString = JSON.stringify(exportData, null, 2);
@@ -4729,7 +4732,7 @@
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = filename.endsWith('.json') ? filename : filename + '.json';
+                a.download = finalFilename;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -4737,13 +4740,13 @@
                 
                 // Show confirmation
                 const searchInfo = document.getElementById('searchInfo');
-                searchInfo.textContent = `📋 JSON-fil exporterad: ${a.download} (${exportData.cards.length} kort, ${exportData.edges.length} pilar)`;
+                searchInfo.textContent = `📋 JSON-fil exporterad: ${finalFilename} (${exportData.cards.length} kort, ${exportData.edges.length} pilar)`;
                 searchInfo.classList.add('visible');
                 setTimeout(() => {
                     searchInfo.classList.remove('visible');
                 }, 3000);
                 
-                console.log(`JSON export completed: ${a.download} with ${exportData.cards.length} cards and ${exportData.edges.length} edges`);
+                console.log(`JSON export completed: ${finalFilename} with ${exportData.cards.length} cards and ${exportData.edges.length} edges`);
                 
             } catch (error) {
                 console.error('Error exporting JSON:', error);
@@ -4784,6 +4787,9 @@
                                           String(now.getMonth() + 1).padStart(2, '0') + 
                                           String(now.getDate()).padStart(2, '0');
                         
+                        // Create ID mapping for edges
+                        const idMapping = new Map();
+                        
                         importData.cards.forEach(cardData => {
                             // Save original ID for origin tag
                             const originalId = cardData.id;
@@ -4794,6 +4800,9 @@
                             const newId = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}-${random}`;
                             
                             cardData.id = newId;
+                            
+                            // Store ID mapping for edge updates
+                            idMapping.set(originalId, newId);
                             
                             // Create hidden tags for import tracking
                             const hiddenTags = cardData.hidden_tags || [];
@@ -4892,28 +4901,42 @@
                         let importedEdges = 0;
                         if (importData.edges && Array.isArray(importData.edges)) {
                             importData.edges.forEach(edgeData => {
-                                const newEdge = cy.add({
-                                    data: {
-                                        id: edgeData.id,
-                                        source: edgeData.source,
-                                        target: edgeData.target,
-                                        isAnnotation: edgeData.isAnnotation || false,
-                                        annotationType: edgeData.annotationType || null,
-                                        customColor: edgeData.customColor || null
+                                // Map old IDs to new IDs
+                                const newSourceId = idMapping.get(edgeData.source);
+                                const newTargetId = idMapping.get(edgeData.target);
+                                
+                                // Only create edge if both source and target exist
+                                if (newSourceId && newTargetId) {
+                                    // Generate new edge ID
+                                    const timestamp = Date.now();
+                                    const random = Math.random().toString(36).substr(2, 9);
+                                    const newEdgeId = `edge-${timestamp}-${random}`;
+                                    
+                                    const newEdge = cy.add({
+                                        data: {
+                                            id: newEdgeId,
+                                            source: newSourceId,
+                                            target: newTargetId,
+                                            isAnnotation: edgeData.isAnnotation || false,
+                                            annotationType: edgeData.annotationType || null,
+                                            customColor: edgeData.customColor || null
+                                        }
+                                    });
+                                
+                                    // Apply annotation classes for styling
+                                    if (edgeData.isAnnotation) {
+                                        newEdge.addClass('annotation-connection');
                                     }
-                                });
-                                
-                                // Apply annotation classes for styling
-                                if (edgeData.isAnnotation) {
-                                    newEdge.addClass('annotation-connection');
+                                    
+                                    // Restore all visual styling
+                                    if (edgeData.style) {
+                                        newEdge.style(edgeData.style);
+                                    }
+                                    
+                                    importedEdges++;
+                                } else {
+                                    console.warn('Skipping edge - source or target not found:', edgeData.source, '->', edgeData.target);
                                 }
-                                
-                                // Restore all visual styling
-                                if (edgeData.style) {
-                                    newEdge.style(edgeData.style);
-                                }
-                                
-                                importedEdges++;
                             });
                         }
                         
