@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Spatial Notes - Sök och Klunga</title>
     <script src="https://unpkg.com/cytoscape@3.26.0/dist/cytoscape.min.js"></script>
+    <script src="https://unpkg.com/jquery@3.6.0/dist/jquery.min.js"></script>
+    <!-- Removed Konva - not needed for simple resize system -->
+    <!-- Removed problematic node-editing extension -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
         body {
@@ -776,6 +779,99 @@
             }
         }
         
+        /* Annotation Toolbar */
+        .annotation-toolbar {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            padding: 12px;
+            display: none;
+            z-index: 1001;
+            border: 1px solid #ddd;
+        }
+
+        .annotation-toolbar.active {
+            display: block;
+        }
+
+        .annotation-tool-group {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .annotation-tool-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .annotation-tool {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 6px 10px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+            user-select: none;
+        }
+
+        .annotation-tool:hover {
+            background: #e9ecef;
+            border-color: #adb5bd;
+        }
+
+        .annotation-tool.active {
+            background: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+
+        .annotation-separator {
+            width: 1px;
+            height: 20px;
+            background: #ddd;
+            margin: 0 4px;
+        }
+
+        .dark-theme .annotation-toolbar {
+            background: #2d2d2d;
+            border-color: #444;
+            color: #e0e0e0;
+        }
+
+        .dark-theme .annotation-tool {
+            background: #3d3d3d;
+            border-color: #555;
+            color: #e0e0e0;
+        }
+
+        .dark-theme .annotation-tool:hover {
+            background: #4d4d4d;
+            border-color: #666;
+        }
+
+        .sepia-theme .annotation-toolbar {
+            background: #f4f1ec;
+            border-color: #d4c4a8;
+            color: #5d4e37;
+        }
+
+        .sepia-theme .annotation-tool {
+            background: #e8ddd4;
+            border-color: #c8a882;
+            color: #5d4e37;
+        }
+
+        .sepia-theme .annotation-tool:hover {
+            background: #ddd2c4;
+            border-color: #b8986c;
+        }
+
         .mobile-btn {
             width: 50px;
             height: 50px;
@@ -920,6 +1016,9 @@
             <span>📱</span>
             <span id="driveButtonText">Google Drive</span>
         </button>
+        <button class="google-drive-btn" id="annotationToggleBtn" onclick="toggleAnnotationToolbar()" title="Aktivera/inaktivera annotation-verktyg">
+            🎨
+        </button>
         
         <!-- Mobile controls (hidden on desktop) -->
         <div class="mobile-controls">
@@ -937,7 +1036,6 @@
                 <button onclick="exportToJSON()">📋 Exportera JSON</button>
                 <button onclick="importFromJSON()">📁 Importera JSON</button>
                 <button onclick="importFromExtractor()">📥 Från PDF-Extractor</button>
-                <button onclick="showBulkEntryDialog()">📝 Bulk Anteckningar</button>
                 <button onclick="saveToGoogleDrive()" id="driveSaveBtn">☁️ Spara till Drive</button>
                 <button onclick="loadFromGoogleDrive()" id="driveLoadBtn">☁️ Ladda från Drive</button>
                 <button onclick="showProjectManager()" id="projectManagerBtn">📁 Hantera Projekt</button>
@@ -987,11 +1085,49 @@
     
     <div id="cy"></div>
 
+    <!-- Annotation Toolbar -->
+    <div class="annotation-toolbar" id="annotationToolbar">
+        <div class="annotation-tool-group">
+            <div class="annotation-tool active" data-tool="select" title="Välj och flytta">🔍 Välj</div>
+            <div class="annotation-separator"></div>
+            <div class="annotation-tool" data-tool="rect" title="Rektangel">⬜</div>
+            <div class="annotation-tool" data-tool="circle" title="Cirkel">⭕</div>
+            <div class="annotation-tool" data-tool="triangle" title="Triangel">🔺</div>
+            <div class="annotation-tool" data-tool="diamond" title="Diamant">💎</div>
+            <div class="annotation-tool" data-tool="star" title="Stjärna">⭐</div>
+            <div class="annotation-tool" data-tool="hexagon" title="Hexagon">⬡</div>
+        </div>
+        <div class="annotation-tool-group">
+            <div class="annotation-tool" data-tool="text-small" title="Liten text">🅰️ S</div>
+            <div class="annotation-tool" data-tool="text-medium" title="Medium text">🅰️ M</div>
+            <div class="annotation-tool" data-tool="text-large" title="Stor text">🅰️ L</div>
+            <div class="annotation-separator"></div>
+            <div class="annotation-tool" data-tool="arrow" title="Pil mellan objekt">➡️</div>
+            <div class="annotation-tool" data-tool="line" title="Linje mellan objekt">➖</div>
+            <div class="annotation-separator"></div>
+            <div class="annotation-tool" data-tool="resize" title="Aktivera storleksändring (högerklick på figur)">↗️</div>
+        </div>
+        <div class="annotation-tool-group">
+            <div class="annotation-tool" data-tool="color-red" title="Röd färg" style="background: #ff6b6b; color: white;">●</div>
+            <div class="annotation-tool" data-tool="color-blue" title="Blå färg" style="background: #4ecdc4; color: white;">●</div>
+            <div class="annotation-tool" data-tool="color-green" title="Grön färg" style="background: #45b7d1; color: white;">●</div>
+            <div class="annotation-tool" data-tool="color-yellow" title="Gul färg" style="background: #f9ca24; color: white;">●</div>
+            <div class="annotation-tool" data-tool="color-purple" title="Lila färg" style="background: #a55eea; color: white;">●</div>
+        </div>
+    </div>
+
     <script>
         // Global variables
         let cy;
         let searchActive = false;
         let copiedCards = []; // Store copied cards for arrangement commands
+        
+        // Annotation system variables
+        let annotationMode = 'select';
+        let annotationColor = '#ff6b6b';
+        let connectionStartNode = null;
+        let annotationToolbarVisible = false;
+        let resizeMode = false;
         
         // Mouse position tracking
         let lastMousePosition = { x: null, y: null };
@@ -1025,6 +1161,346 @@
             }
             
             return uniqueId;
+        }
+        
+        // ====================================================================================================
+        // 🔧 FALLBACK RESIZE FUNCTIONALITY
+        // ====================================================================================================
+        
+        function setupFallbackResize() {
+            console.log('🛠️ Setting up simple resize with Ctrl+click...');
+            
+            // Add Ctrl+click OR right-click resize for annotation nodes
+            cy.on('cxttap', 'node', function(evt) {
+                const node = evt.target;
+                console.log('🖱️ Right-click on node:', node.id(), 'isAnnotation:', node.data('isAnnotation'), 'resizeMode:', resizeMode, 'classes:', node.classes());
+                
+                if (node.data('isAnnotation') && resizeMode) {
+                    console.log('🎯 Processing right-click resize for annotation node...');
+                    evt.stopPropagation();
+                    evt.preventDefault();
+                    
+                    const currentWidth = node.data('customWidth') || 120;
+                    const currentHeight = node.data('customHeight') || 120;
+                    
+                    console.log('📐 Current size:', currentWidth, 'x', currentHeight);
+                    
+                    // Simple resize: cycle through 4 sizes
+                    let newWidth, newHeight;
+                    
+                    if (currentWidth <= 80) {
+                        newWidth = 120;
+                        newHeight = 120;
+                    } else if (currentWidth <= 120) {
+                        newWidth = 160;
+                        newHeight = 160;
+                    } else if (currentWidth <= 160) {
+                        newWidth = 200;
+                        newHeight = 200;
+                    } else {
+                        newWidth = 80;
+                        newHeight = 80;
+                    }
+                    
+                    console.log('📏 Resizing to:', newWidth, 'x', newHeight);
+                    
+                    // Update the data properties and force style refresh
+                    node.data('customWidth', newWidth);
+                    node.data('customHeight', newHeight);
+                    
+                    // Force Cytoscape to recalculate styles by triggering style refresh
+                    node.removeStyle('width height');
+                    node.trigger('data');
+                    cy.style().update();
+                    
+                    console.log(`✅ Resized annotation ${node.id()} to ${newWidth}x${newHeight}`);
+                    return false;
+                }
+            });
+            
+            // Backup: Also try Ctrl+click 
+            cy.on('click', 'node', function(evt) {
+                const node = evt.target;
+                console.log('🖱️ Node clicked:', node.id(), 'isAnnotation:', node.data('isAnnotation'), 'resizeMode:', resizeMode, 'ctrlKey:', evt.originalEvent?.ctrlKey);
+                
+                if (node.data('isAnnotation') && resizeMode && evt.originalEvent?.ctrlKey) {
+                    console.log('🎯 Processing Ctrl+click resize for annotation node...');
+                    evt.stopPropagation();
+                    evt.preventDefault();
+                    
+                    const currentWidth = node.data('customWidth') || 120;
+                    const currentHeight = node.data('customHeight') || 120;
+                    
+                    console.log('📐 Current size:', currentWidth, 'x', currentHeight);
+                    
+                    // Simple resize: cycle through 4 sizes
+                    let newWidth, newHeight;
+                    
+                    if (currentWidth <= 80) {
+                        newWidth = 120;
+                        newHeight = 120;
+                    } else if (currentWidth <= 120) {
+                        newWidth = 160;
+                        newHeight = 160;
+                    } else if (currentWidth <= 160) {
+                        newWidth = 200;
+                        newHeight = 200;
+                    } else {
+                        newWidth = 80;
+                        newHeight = 80;
+                    }
+                    
+                    console.log('📏 Resizing to:', newWidth, 'x', newHeight);
+                    
+                    // Update the data properties and force style refresh
+                    node.data('customWidth', newWidth);
+                    node.data('customHeight', newHeight);
+                    
+                    // Force Cytoscape to recalculate styles by triggering style refresh
+                    node.removeStyle('width height');
+                    node.trigger('data');
+                    cy.style().update();
+                    
+                    console.log(`✅ Resized annotation ${node.id()} to ${newWidth}x${newHeight}`);
+                    return false; // Prevent further event handling
+                }
+            });
+            
+            console.log('✅ Fallback resize setup complete - Ctrl+click annotations in resize mode');
+        }
+        
+        // ====================================================================================================
+        // 🎨 ANNOTATION SYSTEM FUNCTIONS
+        // ====================================================================================================
+        
+        // Toggle annotation toolbar visibility
+        function toggleAnnotationToolbar() {
+            annotationToolbarVisible = !annotationToolbarVisible;
+            const toolbar = document.getElementById('annotationToolbar');
+            const toggleBtn = document.getElementById('annotationToggleBtn');
+            
+            if (annotationToolbarVisible) {
+                toolbar.classList.add('active');
+                toggleBtn.style.background = '#28a745';
+                console.log('🎨 Annotation toolbar activated');
+            } else {
+                toolbar.classList.remove('active');
+                toggleBtn.style.background = '';
+                setAnnotationMode('select');
+                console.log('📐 Annotation toolbar deactivated');
+            }
+        }
+        
+        // Set annotation mode and update UI
+        function setAnnotationMode(mode) {
+            annotationMode = mode;
+            connectionStartNode = null;
+            
+            // Update tool buttons
+            document.querySelectorAll('.annotation-tool').forEach(tool => {
+                tool.classList.remove('active');
+            });
+            
+            const activeTool = document.querySelector(`[data-tool="${mode}"]`);
+            if (activeTool) {
+                activeTool.classList.add('active');
+            }
+            
+            console.log('🎯 Annotation mode set to:', mode);
+        }
+        
+        // Set annotation color
+        function setAnnotationColor(color) {
+            annotationColor = color;
+            console.log('🎨 Annotation color set to:', color);
+        }
+        
+        // Toggle resize mode for annotations
+        function toggleResizeMode() {
+            resizeMode = !resizeMode;
+            
+            console.log('↗️ Resize mode:', resizeMode ? 'enabled' : 'disabled');
+            
+            // Show user-friendly status message
+            if (window.showBriefMessage) {
+                if (resizeMode) {
+                    window.showBriefMessage('↗️ Storleksändring aktiverad - Högerklicka på annotations för att ändra storlek');
+                } else {
+                    window.showBriefMessage('📐 Storleksändring avstängd');
+                }
+            }
+        }
+        
+        // Create geometric shape annotation
+        function createShapeAnnotation(shape, position) {
+            const id = generateCardId();
+            const shapes = {
+                'rect': { shape: 'rectangle', label: '⬜' },
+                'circle': { shape: 'ellipse', label: '⭕' },
+                'triangle': { shape: 'triangle', label: '🔺' },
+                'diamond': { shape: 'diamond', label: '💎' },
+                'star': { shape: 'star', label: '⭐' },
+                'hexagon': { shape: 'hexagon', label: '⬡' }
+            };
+            
+            const shapeInfo = shapes[shape] || shapes.rect;
+            
+            cy.add({
+                data: {
+                    id: id,
+                    label: shapeInfo.label,
+                    isAnnotation: true,
+                    annotationType: 'shape',
+                    shape: shape
+                },
+                position: position,
+                classes: 'annotation-shape'
+            });
+            
+            // Apply color immediately
+            const node = cy.getElementById(id);
+            node.style('background-color', annotationColor);
+            
+            console.log(`🔷 Created ${shape} annotation at`, position);
+            return node;
+        }
+        
+        // Create text annotation
+        function createTextAnnotation(size, position) {
+            const id = generateCardId();
+            const sizes = {
+                'text-small': { fontSize: '16px', label: 'Liten text' },
+                'text-medium': { fontSize: '22px', label: 'Medium text' },
+                'text-large': { fontSize: '28px', label: 'Stor text' }
+            };
+            
+            const sizeInfo = sizes[size] || sizes['text-medium'];
+            
+            cy.add({
+                data: {
+                    id: id,
+                    label: sizeInfo.label,
+                    isAnnotation: true,
+                    annotationType: 'text',
+                    textSize: size
+                },
+                position: position,
+                classes: 'annotation-text'
+            });
+            
+            const node = cy.getElementById(id);
+            node.style({
+                'font-size': sizeInfo.fontSize,
+                'background-color': annotationColor,
+                'shape': 'rectangle'
+            });
+            
+            console.log(`📝 Created ${size} text annotation at`, position);
+            return node;
+        }
+        
+        // Create connection (arrow or line) between nodes
+        function createConnection(sourceNode, targetNode, type) {
+            const id = generateCardId();
+            const isArrow = type === 'arrow';
+            
+            cy.add({
+                data: {
+                    id: id,
+                    source: sourceNode.id(),
+                    target: targetNode.id(),
+                    isAnnotation: true,
+                    annotationType: 'connection',
+                    connectionType: type
+                },
+                classes: 'annotation-connection'
+            });
+            
+            const edge = cy.getElementById(id);
+            edge.style({
+                'line-color': annotationColor,
+                'target-arrow-color': annotationColor,
+                'target-arrow-shape': isArrow ? 'triangle' : 'none',
+                'curve-style': 'bezier',
+                'width': 3
+            });
+            
+            console.log(`🔗 Created ${type} connection between`, sourceNode.id(), 'and', targetNode.id());
+            return edge;
+        }
+        
+        // Edit annotation text function
+        function editAnnotationText(node) {
+            const currentText = node.data('label') || 'Text';
+            
+            // Create overlay for editing
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.7); z-index: 10000;
+                display: flex; justify-content: center; align-items: center;
+            `;
+            
+            const dialog = document.createElement('div');
+            dialog.style.cssText = `
+                background: white; padding: 20px; border-radius: 10px;
+                max-width: 400px; width: 90%; max-height: 80vh;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                box-sizing: border-box;
+            `;
+            
+            dialog.innerHTML = `
+                <h3 style="margin-top: 0; color: #333; font-size: 18px;">Redigera annotation text</h3>
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #555;">Text:</label>
+                    <textarea id="editAnnotationText" 
+                        style="width: 100%; height: 120px; font-family: inherit; font-size: 14px; 
+                               border: 1px solid #ccc; border-radius: 4px; padding: 8px;
+                               box-sizing: border-box; resize: vertical;">${currentText}</textarea>
+                </div>
+                <div style="text-align: right;">
+                    <button id="cancelAnnotationEdit" style="margin-right: 10px; padding: 8px 16px; 
+                           background: #ccc; border: none; border-radius: 4px; cursor: pointer;">Avbryt</button>
+                    <button id="saveAnnotationEdit" style="padding: 8px 16px; 
+                           background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Spara</button>
+                </div>
+            `;
+            
+            overlay.appendChild(dialog);
+            document.body.appendChild(overlay);
+            
+            // Focus on text area and select all
+            const textArea = document.getElementById('editAnnotationText');
+            textArea.focus();
+            textArea.select();
+            
+            // Event listeners
+            document.getElementById('saveAnnotationEdit').addEventListener('click', function() {
+                const newText = textArea.value.trim();
+                if (newText) {
+                    node.data('label', newText);
+                    console.log('✅ Updated annotation text to:', newText);
+                }
+                document.body.removeChild(overlay);
+            });
+            
+            document.getElementById('cancelAnnotationEdit').addEventListener('click', function() {
+                document.body.removeChild(overlay);
+            });
+            
+            // Close on ESC key
+            overlay.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    document.body.removeChild(overlay);
+                }
+            });
+            
+            // Close on overlay click (outside dialog)
+            overlay.addEventListener('click', function(e) {
+                if (e.target === overlay) {
+                    document.body.removeChild(overlay);
+                }
+            });
         }
         
         // MINIMAL UNDO/REDO SYSTEM - Define early so functions can use it
@@ -1385,10 +1861,19 @@
                             'border-width': 2,
                             'border-color': '#ddd',
                             'width': function(node) {
+                                // Skip width override for annotation nodes (they have their own sizing)
+                                if (node.data('isAnnotation')) {
+                                    return node.data('customWidth') || 120;
+                                }
                                 // Fixed width for all cards to ensure consistency
                                 return 300;
                             },
                             'height': function(node) {
+                                // Skip height override for annotation nodes (they have their own sizing)
+                                if (node.data('isAnnotation')) {
+                                    return node.data('customHeight') || 120;
+                                }
+                                
                                 const isManualCard = node.data('isManualCard') || false;
                                 
                                 if (isManualCard) {
@@ -1496,42 +1981,79 @@
                             'box-shadow': '0 0 12px rgba(46, 125, 50, 0.5)'
                         }
                     },
-                    // Time-based categorization styles
+                    // ====================================================================================================
+                    // 🎨 ANNOTATION STYLES
+                    // ====================================================================================================
                     {
-                        selector: 'node.time-past',
+                        selector: 'node.annotation-shape',
                         style: {
-                            'border-color': '#666666',
-                            'border-width': 2,
-                            'opacity': 0.8,
-                            'background-color': '#f5f5f5',
-                            'color': '#888888'
-                        }
-                    },
-                    {
-                        selector: 'node.time-today',
-                        style: {
-                            'border-color': '#ff4444',
+                            'width': function(node) {
+                                // Allow dynamic width for annotation shapes
+                                return node.data('customWidth') || 120;
+                            },
+                            'height': function(node) {
+                                // Allow dynamic height for annotation shapes
+                                return node.data('customHeight') || 120;
+                            },
+                            'background-color': '#ff6b6b',
                             'border-width': 3,
-                            'background-color': '#ffebee',
-                            'box-shadow': '0 0 8px rgba(255, 68, 68, 0.4)'
+                            'border-color': '#444',
+                            'label': 'data(label)',
+                            'text-valign': 'center',
+                            'text-halign': 'center',
+                            'font-size': '32px',
+                            'color': '#333',
+                            'text-wrap': 'none',
+                            'shape': function(node) {
+                                const shape = node.data('shape') || 'rectangle';
+                                const shapeMap = {
+                                    'rect': 'rectangle',
+                                    'circle': 'ellipse',
+                                    'triangle': 'triangle',
+                                    'diamond': 'diamond',
+                                    'star': 'star',
+                                    'hexagon': 'hexagon'
+                                };
+                                return shapeMap[shape] || 'rectangle';
+                            }
                         }
                     },
                     {
-                        selector: 'node.time-thisweek',
+                        selector: 'node.annotation-text',
                         style: {
-                            'border-color': '#ff8800',
+                            'width': function(node) {
+                                // Allow dynamic width for annotation text
+                                return node.data('customWidth') || 180;
+                            },
+                            'height': function(node) {
+                                // Allow dynamic height for annotation text
+                                return node.data('customHeight') || 90;
+                            },
+                            'background-color': '#fff',
                             'border-width': 2,
-                            'background-color': '#fff3e0',
-                            'box-shadow': '0 0 6px rgba(255, 136, 0, 0.3)'
+                            'border-color': '#ccc',
+                            'label': 'data(label)',
+                            'text-valign': 'center',
+                            'text-halign': 'center',
+                            'font-size': '18px',
+                            'color': '#333',
+                            'text-wrap': 'wrap',
+                            'text-max-width': function(node) {
+                                // Adjust text width based on node width
+                                const width = node.data('customWidth') || 180;
+                                return (width - 10) + 'px';
+                            },
+                            'shape': 'rectangle'
                         }
                     },
                     {
-                        selector: 'node.time-future',
+                        selector: 'edge.annotation-connection',
                         style: {
-                            'border-color': '#4444ff',
-                            'border-width': 2,
-                            'background-color': '#e3f2fd',
-                            'box-shadow': '0 0 6px rgba(68, 68, 255, 0.3)'
+                            'width': 3,
+                            'line-color': '#ff6b6b',
+                            'target-arrow-color': '#ff6b6b',
+                            'curve-style': 'bezier',
+                            'control-point-step-size': 40
                         }
                     }
                 ],
@@ -1566,7 +2088,16 @@
             
             // Double-click to edit card
             cy.on('dblclick', 'node', function(evt) {
-                editCard(evt.target);
+                const node = evt.target;
+                console.log('🖱️ Double-click on node:', node.id(), 'isAnnotation:', node.data('isAnnotation'), 'classes:', node.classes());
+                
+                if (node.data('isAnnotation') && node.hasClass('annotation-text')) {
+                    console.log('📝 Opening text editor for annotation text...');
+                    editAnnotationText(node);
+                } else {
+                    console.log('📝 Opening card editor for regular node...');
+                    editCard(node);
+                }
             });
             
             // Right-click context menu
@@ -1605,6 +2136,53 @@
                 updateSelectionInfo();
             });
             
+            // ====================================================================================================
+            // 🎨 ANNOTATION EVENT HANDLERS
+            // ====================================================================================================
+            
+            // Canvas click for creating annotations
+            cy.on('tap', function(evt) {
+                if (!annotationToolbarVisible || annotationMode === 'select') return;
+                
+                // Only create on background, not on nodes
+                if (evt.target === cy) {
+                    const position = evt.position || evt.cyPosition;
+                    
+                    if (['rect', 'circle', 'triangle', 'diamond', 'star', 'hexagon'].includes(annotationMode)) {
+                        createShapeAnnotation(annotationMode, position);
+                    } else if (['text-small', 'text-medium', 'text-large'].includes(annotationMode)) {
+                        createTextAnnotation(annotationMode, position);
+                    }
+                }
+            });
+            
+            // Node click for connections
+            cy.on('tap', 'node', function(evt) {
+                if (!annotationToolbarVisible) return;
+                
+                const node = evt.target;
+                
+                if (annotationMode === 'arrow' || annotationMode === 'line') {
+                    if (!connectionStartNode) {
+                        // First click - select start node
+                        connectionStartNode = node;
+                        node.style('border-color', '#ff0000');
+                        node.style('border-width', '4px');
+                        console.log('🎯 Connection start node selected:', node.id());
+                    } else if (connectionStartNode !== node) {
+                        // Second click - create connection
+                        createConnection(connectionStartNode, node, annotationMode);
+                        
+                        // Reset start node styling
+                        connectionStartNode.style('border-color', '');
+                        connectionStartNode.style('border-width', '');
+                        connectionStartNode = null;
+                        
+                        console.log('✅ Connection created');
+                    }
+                }
+            });
+            
             // Track mouse position for arrangement positioning
             cy.on('mousemove', function(evt) {
                 lastMousePosition.x = evt.originalEvent.clientX;
@@ -1617,6 +2195,39 @@
                 lastMousePosition.y = evt.clientY;
                 // Debug: uncomment to see if mouse tracking works
                 // console.log('Mouse moved to:', evt.clientX, evt.clientY);
+            });
+            
+            // ====================================================================================================
+            // 🎨 ANNOTATION TOOLBAR EVENT LISTENERS
+            // ====================================================================================================
+            
+            // Add click listeners to annotation tools
+            document.querySelectorAll('.annotation-tool').forEach(tool => {
+                tool.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    const toolType = tool.dataset.tool;
+                    
+                    if (toolType.startsWith('color-')) {
+                        // Color selection
+                        const colors = {
+                            'color-red': '#ff6b6b',
+                            'color-blue': '#4ecdc4', 
+                            'color-green': '#45b7d1',
+                            'color-yellow': '#f9ca24',
+                            'color-purple': '#a55eea'
+                        };
+                        setAnnotationColor(colors[toolType]);
+                    } else if (toolType === 'resize') {
+                        // Toggle resize mode
+                        toggleResizeMode();
+                        tool.classList.toggle('active', resizeMode);
+                    } else {
+                        // Tool selection
+                        setAnnotationMode(toolType);
+                    }
+                });
             });
             
             // Starta med panorering på, så att zoom fungerar direkt
@@ -1668,6 +2279,14 @@
             cy.container().addEventListener('contextmenu', function(evt) {
                 evt.preventDefault();
             });
+            
+            // ====================================================================================================
+            // 🎯 SIMPLE RESIZE SYSTEM
+            // ====================================================================================================
+            
+            // Setup simple resize functionality using mouse events
+            console.log('🔄 Setting up simple resize functionality...');
+            setupFallbackResize();
             
             
         }
@@ -2118,24 +2737,15 @@
                 <p style="margin: 0 0 15px 0; text-align: center; font-size: 14px; color: #666;">
                     Välj sortering, tryck sedan H/V/G+V/G+H/G+T för layout
                 </p>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 15px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
                     <button onclick="setSortMode('textLength-asc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">📝 Text: Kort → Lång</button>
                     <button onclick="setSortMode('textLength-desc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">📝 Text: Lång → Kort</button>
                     <button onclick="setSortMode('alphabetic-asc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🔤 A → Z</button>
                     <button onclick="setSortMode('alphabetic-desc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🔤 Z → A</button>
                     <button onclick="setSortMode('color')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🎨 Färg 1→6</button>
+                    <button onclick="setSortMode('date-asc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">📅 Äldst → Nyast</button>
+                    <button onclick="setSortMode('date-desc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">📅 Nyast → Äldst</button>
                     <button onclick="setSortMode('tagCount')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🏷️ Färre → Fler taggar</button>
-                    <button onclick="setSortMode('eventTime-asc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">⏰ Tid: Äldst först</button>
-                    <button onclick="setSortMode('eventTime-desc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">⏰ Tid: Nyast först</button>
-                </div>
-                <hr style="border: none; height: 1px; background: #ddd; margin: 15px 0;">
-                <h4 style="margin: 0 0 10px 0; text-align: center; color: #007acc;">🔍 Tidsfilter</h4>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                    <button onclick="filterByTimeCategory('today')" style="padding: 8px; border: 2px solid #ff4444; background: #ffebee; border-radius: 4px; cursor: pointer;">🔴 Idag</button>
-                    <button onclick="filterByTimeCategory('thisweek')" style="padding: 8px; border: 2px solid #ff8800; background: #fff3e0; border-radius: 4px; cursor: pointer;">🟠 Denna vecka</button>
-                    <button onclick="filterByTimeCategory('future')" style="padding: 8px; border: 2px solid #4444ff; background: #e3f2fd; border-radius: 4px; cursor: pointer;">🔵 Framtid</button>
-                    <button onclick="filterByTimeCategory('past')" style="padding: 8px; border: 2px solid #666666; background: #f5f5f5; border-radius: 4px; cursor: pointer;">⚫ Förflutit</button>
-                    <button onclick="filterByTimeCategory('all')" style="padding: 8px; border: 1px solid #28a745; background: #d4edda; border-radius: 4px; cursor: pointer; grid-column: 1 / -1;">✅ Visa alla</button>
                 </div>
                 <div style="text-align: center; margin-top: 15px;">
                     <button onclick="closeSortMenu()" style="padding: 8px 16px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer;">Avbryt</button>
@@ -2192,8 +2802,6 @@
                 case 'date-asc': return 'Äldst → nyast';
                 case 'date-desc': return 'Nyast → äldst';
                 case 'tagCount': return 'Färre → fler taggar';
-                case 'eventTime-asc': return 'Event-tid äldst → nyast';
-                case 'eventTime-desc': return 'Event-tid nyast → äldst';
                 default: return 'Okänt';
             }
         }
@@ -2243,78 +2851,10 @@
                         const bTagCount = (b.data('tags') || []).length;
                         return aTagCount - bTagCount;
                         
-                    case 'eventTime-asc':
-                        const aEventData = a.data('eventData');
-                        const bEventData = b.data('eventData');
-                        const aEventTime = aEventData ? aEventData.timestamp : 0;
-                        const bEventTime = bEventData ? bEventData.timestamp : 0;
-                        // Cards without event time go to end
-                        if (!aEventData && !bEventData) return 0;
-                        if (!aEventData) return 1;
-                        if (!bEventData) return -1;
-                        return aEventTime - bEventTime;
-                        
-                    case 'eventTime-desc':
-                        const aEventDataDesc = a.data('eventData');
-                        const bEventDataDesc = b.data('eventData');
-                        const aEventTimeDesc = aEventDataDesc ? aEventDataDesc.timestamp : 0;
-                        const bEventTimeDesc = bEventDataDesc ? bEventDataDesc.timestamp : 0;
-                        // Cards without event time go to end  
-                        if (!aEventDataDesc && !bEventDataDesc) return 0;
-                        if (!aEventDataDesc) return 1;
-                        if (!bEventDataDesc) return -1;
-                        return bEventTimeDesc - aEventTimeDesc;
-                        
                     default:
                         return 0;
                 }
             });
-        }
-        
-        // Filter nodes by time category
-        function filterByTimeCategory(category) {
-            // First refresh all time styling to ensure current categorization
-            refreshAllTimeBasedStyling();
-            
-            // Clear existing selections
-            cy.nodes().unselect();
-            
-            if (category === 'all') {
-                // Select all nodes
-                cy.nodes().select();
-                console.log('Selected all nodes');
-            } else {
-                // Select nodes with specific time category
-                const filteredNodes = cy.nodes().filter(node => {
-                    const eventData = node.data('eventData');
-                    return eventData && eventData.category === category;
-                });
-                
-                filteredNodes.select();
-                console.log(`Selected ${filteredNodes.length} nodes with category: ${category}`);
-                
-                // Show feedback
-                const statusDiv = document.getElementById('selectionInfo');
-                if (statusDiv) {
-                    const categoryNames = {
-                        'today': 'Idag',
-                        'thisweek': 'Denna vecka', 
-                        'future': 'Framtid',
-                        'past': 'Förflutit'
-                    };
-                    
-                    statusDiv.textContent = `Filtrerat: ${filteredNodes.length} kort (${categoryNames[category] || category})`;
-                    statusDiv.classList.add('visible');
-                    
-                    // Auto-hide after 5 seconds
-                    setTimeout(() => {
-                        statusDiv.classList.remove('visible');
-                    }, 5000);
-                }
-            }
-            
-            // Close the sort menu
-            closeSortMenu();
         }
         
         function extractDateFromId(nodeId) {
@@ -3287,11 +3827,8 @@
             console.log(`G+T: Tight grid with 120px overlap - max ${maxCols} wide, ${rows} deep for ${selectedNodes.length} cards`);
         }
         
-        // Enhanced board saving with sync metadata
-        function saveBoard(skipSync = false) {
-            const now = new Date();
-            const deviceId = getDeviceIdentifier();
-            
+        // Save board to localStorage
+        function saveBoard() {
             const boardData = {
                 cards: cy.nodes().map(node => ({
                     id: node.id(),
@@ -3316,34 +3853,11 @@
                     zoom: cy.zoom(),
                     pan: cy.pan()
                 },
-                
-                // Enhanced sync metadata
-                timestamp: now.toISOString(),
-                lastModified: now.getTime(),
-                version: '2.0',
-                deviceInfo: {
-                    id: deviceId,
-                    name: getDeviceName(),
-                    platform: navigator.platform,
-                    userAgent: navigator.userAgent.substring(0, 100)
-                },
-                syncInfo: {
-                    hasUnsyncedChanges: !skipSync,
-                    lastSyncAttempt: getSyncState().lastSyncAttempt,
-                    lastSuccessfulSync: getSyncState().lastSuccessfulSync,
-                    conflictResolutionNeeded: false
-                }
+                timestamp: new Date().toISOString(),
+                version: '1.0'
             };
             
-            // Always save to localStorage first (offline-first)
             localStorage.setItem('spatial-notes-board', JSON.stringify(boardData));
-            
-            // Update sync state
-            updateSyncState({
-                hasLocalChanges: !skipSync,
-                lastLocalSave: now.getTime()
-            });
-            
             // Show saved message in status indicator
             const searchInfo = document.getElementById('searchInfo');
             searchInfo.textContent = 'Sparad ✓';
@@ -3351,13 +3865,6 @@
             setTimeout(() => {
                 searchInfo.classList.remove('visible');
             }, 2000);
-            
-            // Auto-sync to Drive if signed in and not explicitly skipped
-            if (!skipSync && isSignedIn && accessToken && navigator.onLine) {
-                setTimeout(() => {
-                    smartSyncToGoogleDrive();
-                }, 500);
-            }
         }
         
         
@@ -3412,20 +3919,6 @@
                         newNode.style('background-color', getCardColorValue(cardData.cardColor, getCurrentTheme()));
                     }
                     
-                    // Restore eventData and time-based styling
-                    if (cardData.eventData) {
-                        newNode.data('eventData', cardData.eventData);
-                        newNode.addClass(`time-${cardData.eventData.category}`);
-                    } else {
-                        // Fallback: try to parse time from text
-                        applyTimeBasedStyling(newNode);
-                    }
-                    
-                    // Restore location data
-                    if (cardData.location) {
-                        newNode.data('location', cardData.location);
-                    }
-                    
                     newNode.grabify();
                 });
                 
@@ -3455,8 +3948,8 @@
                 pinned: node.hasClass('pinned') || false
             }));
             
-            const suggestedFilename = `spatial-notes-${currentProject}`;
-            const filename = prompt('Namn på HTML-fil:', suggestedFilename) || suggestedFilename;
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+            const filename = prompt('Namn på HTML-fil:', `spatial-notes-${timestamp}`) || `spatial-notes-${timestamp}`;
             
             // Check if running locally (file://) - fetch won't work due to CORS
             if (window.location.protocol === 'file:') {
@@ -3542,9 +4035,9 @@
                     }))
                 };
                 
-                // Generate filename with current project name (same as Google Drive)
-                const suggestedFilename = `spatial-notes-${currentProject}`;
-                const filename = prompt('Namn på JSON-fil:', suggestedFilename) || suggestedFilename;
+                // Generate filename with timestamp
+                const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+                const filename = prompt('Namn på JSON-fil:', `spatial-notes-${timestamp}`) || `spatial-notes-${timestamp}`;
                 
                 if (!filename) return; // User cancelled
                 
@@ -4380,9 +4873,6 @@
                 });
                 
                 newNode.grabify();
-                
-                // Apply time-based styling
-                applyTimeBasedStyling(newNode);
                 
                 // Force refresh of node styling
                 cy.style().update();
@@ -5444,9 +5934,6 @@ Kan ha #taggar överallt.
                 node.data('text', newText);
                 node.data('tags', newTags);
                 
-                // Update time-based styling after text changes
-                applyTimeBasedStyling(node);
-                
                 refreshSearchAndFilter();
                 cleanup();
             };
@@ -5773,1067 +6260,6 @@ Kan ha #taggar överallt.
         let availableProjects = [];
         let projectsLoaded = false;
         
-        // ========================================
-        // SMART SYNC SYSTEM - OFFLINE-FIRST
-        // ========================================
-        
-        // Device identification for multi-device sync
-        function getDeviceIdentifier() {
-            let deviceId = localStorage.getItem('device_id');
-            if (!deviceId) {
-                // Create unique device ID
-                deviceId = 'device_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                localStorage.setItem('device_id', deviceId);
-            }
-            return deviceId;
-        }
-        
-        function getDeviceName() {
-            // Try to determine device type
-            const ua = navigator.userAgent;
-            if (/iPad/i.test(ua)) return 'iPad';
-            if (/iPhone/i.test(ua)) return 'iPhone';
-            if (/Android/i.test(ua)) return 'Android';
-            if (/Windows/i.test(ua)) return 'Windows';
-            if (/Mac/i.test(ua)) return 'Mac';
-            return 'Unknown Device';
-        }
-        
-        // Sync state management
-        function getSyncState() {
-            const saved = localStorage.getItem('sync_state');
-            return saved ? JSON.parse(saved) : {
-                hasLocalChanges: false,
-                lastLocalSave: null,
-                lastSyncAttempt: null,
-                lastSuccessfulSync: null,
-                lastConflictResolution: null,
-                connectionStatus: 'unknown'
-            };
-        }
-        
-        function updateSyncState(changes) {
-            const current = getSyncState();
-            const updated = { ...current, ...changes };
-            localStorage.setItem('sync_state', JSON.stringify(updated));
-            
-            // Update visual sync status
-            updateSyncStatusIndicator();
-        }
-        
-        // Smart sync to Google Drive with conflict detection
-        async function smartSyncToGoogleDrive() {
-            if (!isSignedIn || !accessToken || !navigator.onLine) {
-                updateSyncState({ 
-                    lastSyncAttempt: Date.now(),
-                    connectionStatus: navigator.onLine ? 'no_auth' : 'offline'
-                });
-                return false;
-            }
-            
-            try {
-                updateSyncState({ 
-                    lastSyncAttempt: Date.now(),
-                    connectionStatus: 'syncing'
-                });
-                
-                // Get local data
-                const localData = JSON.parse(localStorage.getItem('spatial-notes-board') || '{}');
-                if (!localData.lastModified) {
-                    console.log('No local changes to sync');
-                    return true;
-                }
-                
-                // Check for remote changes first
-                const remoteData = await fetchFromGoogleDrive();
-                
-                if (!remoteData) {
-                    // No remote file yet, safe to upload
-                    const success = await uploadToGoogleDrive(localData);
-                    if (success) {
-                        updateSyncState({ 
-                            lastSuccessfulSync: Date.now(),
-                            hasLocalChanges: false,
-                            connectionStatus: 'synced'
-                        });
-                        console.log('✅ Initial sync to Drive completed');
-                        return true;
-                    }
-                    return false;
-                }
-                
-                // Compare timestamps for conflict detection
-                const localTime = localData.lastModified || 0;
-                const remoteTime = remoteData.lastModified || 0;
-                const timeDiff = Math.abs(localTime - remoteTime);
-                
-                // If times are very close (< 5 seconds), consider them the same
-                if (timeDiff < 5000) {
-                    console.log('Local and remote are in sync');
-                    updateSyncState({ 
-                        lastSuccessfulSync: Date.now(),
-                        hasLocalChanges: false,
-                        connectionStatus: 'synced'
-                    });
-                    return true;
-                }
-                
-                // Conflict detection
-                if (remoteTime > localTime) {
-                    // Remote is newer - potential conflict
-                    const deviceName = remoteData.deviceInfo?.name || 'Unknown Device';
-                    const remoteDevice = remoteData.deviceInfo?.id;
-                    const localDevice = getDeviceIdentifier();
-                    
-                    if (remoteDevice !== localDevice) {
-                        console.log(`Conflict detected: Remote (${deviceName}) is newer than local`);
-                        await showConflictResolutionDialog(localData, remoteData);
-                        return true;
-                    }
-                }
-                
-                // Local is newer or same device, upload safely
-                const success = await uploadToGoogleDrive(localData);
-                if (success) {
-                    updateSyncState({ 
-                        lastSuccessfulSync: Date.now(),
-                        hasLocalChanges: false,
-                        connectionStatus: 'synced'
-                    });
-                    console.log('✅ Sync to Drive completed');
-                    return true;
-                }
-                
-                return false;
-                
-            } catch (error) {
-                console.error('Smart sync failed:', error);
-                updateSyncState({ 
-                    connectionStatus: 'error'
-                });
-                return false;
-            }
-        }
-        
-        // Show conflict resolution dialog when sync conflicts are detected
-        async function showConflictResolutionDialog(localData, remoteData) {
-            return new Promise((resolve) => {
-                // Create modal overlay
-                const overlay = document.createElement('div');
-                overlay.style.cssText = `
-                    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-                    background: rgba(0,0,0,0.7); z-index: 3000;
-                    display: flex; align-items: center; justify-content: center;
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                `;
-                
-                // Create conflict dialog
-                const dialog = document.createElement('div');
-                dialog.style.cssText = `
-                    background: white; border-radius: 12px; max-width: 800px; width: 90%;
-                    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-                    overflow: hidden; max-height: 80vh; display: flex; flex-direction: column;
-                `;
-                
-                const localDeviceName = getDeviceName();
-                const remoteDeviceName = remoteData.lastSyncDevice ? getDeviceName(remoteData.lastSyncDevice) : 'Annat device';
-                const localTime = new Date(localData.lastModified).toLocaleString('sv-SE');
-                const remoteTime = new Date(remoteData.lastModified).toLocaleString('sv-SE');
-                
-                dialog.innerHTML = `
-                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                               color: white; padding: 20px; text-align: center;">
-                        <h2 style="margin: 0; font-size: 24px;">⚠️ Sync Konflikt Upptäckt</h2>
-                        <p style="margin: 8px 0 0 0; opacity: 0.9;">Samma projekt har ändrats på flera devices</p>
-                    </div>
-                    
-                    <div style="padding: 20px; overflow-y: auto; flex: 1;">
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
-                            
-                            <div style="border: 2px solid #4CAF50; border-radius: 8px; padding: 15px; background: #f8fdf8;">
-                                <h3 style="margin: 0 0 10px 0; color: #2E7D32; display: flex; align-items: center;">
-                                    📱 Lokalt (${localDeviceName})
-                                </h3>
-                                <div style="color: #555; font-size: 14px; margin-bottom: 10px;">
-                                    Senast ändrat: ${localTime}
-                                </div>
-                                <div style="color: #333;">
-                                    <strong>${localData.cards ? localData.cards.length : 0}</strong> kort
-                                </div>
-                            </div>
-                            
-                            <div style="border: 2px solid #2196F3; border-radius: 8px; padding: 15px; background: #f8fbff;">
-                                <h3 style="margin: 0 0 10px 0; color: #1565C0; display: flex; align-items: center;">
-                                    ☁️ Remote (${remoteDeviceName})
-                                </h3>
-                                <div style="color: #555; font-size: 14px; margin-bottom: 10px;">
-                                    Senast ändrat: ${remoteTime}
-                                </div>
-                                <div style="color: #333;">
-                                    <strong>${remoteData.cards ? remoteData.cards.length : 0}</strong> kort
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div style="background: #fff3cd; border: 1px solid #ffeeba; border-radius: 6px; 
-                                   padding: 15px; margin-bottom: 20px;">
-                            <h4 style="margin: 0 0 8px 0; color: #856404;">⚠️ Vad vill du göra?</h4>
-                            <p style="margin: 0; color: #856404; font-size: 14px;">
-                                Välj vilken version du vill behålla. Den andra versionen kommer sparas som backup.
-                            </p>
-                        </div>
-                        
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                            <button id="keepLocal" style="
-                                background: #4CAF50; color: white; border: none; padding: 15px;
-                                border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold;
-                                transition: all 0.2s;">
-                                📱 Behåll Lokal Version<br>
-                                <span style="font-size: 12px; opacity: 0.9;">Ladda upp mina ändringar</span>
-                            </button>
-                            
-                            <button id="keepRemote" style="
-                                background: #2196F3; color: white; border: none; padding: 15px;
-                                border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold;
-                                transition: all 0.2s;">
-                                ☁️ Behåll Remote Version<br>
-                                <span style="font-size: 12px; opacity: 0.9;">Ladda ner från Drive</span>
-                            </button>
-                        </div>
-                        
-                        <button id="compareFirst" style="
-                            background: #FF9800; color: white; border: none; padding: 12px;
-                            border-radius: 8px; cursor: pointer; font-size: 14px; width: 100%;
-                            margin-top: 15px; transition: all 0.2s;">
-                            🔍 Jämför Versioner Först (kommer snart...)
-                        </button>
-                    </div>
-                `;
-                
-                // Add hover effects
-                const style = document.createElement('style');
-                style.textContent = `
-                    #keepLocal:hover { background: #45a049 !important; transform: translateY(-2px); }
-                    #keepRemote:hover { background: #1976D2 !important; transform: translateY(-2px); }
-                    #compareFirst:hover { background: #F57C00 !important; transform: translateY(-2px); }
-                `;
-                document.head.appendChild(style);
-                
-                // Event handlers
-                dialog.querySelector('#keepLocal').onclick = async () => {
-                    updateSyncStatus('Uploading local changes...', 'loading');
-                    
-                    // Backup remote version first
-                    await backupVersion(remoteData, 'remote');
-                    
-                    // Upload local data
-                    const success = await uploadToGoogleDrive(localData);
-                    if (success) {
-                        updateSyncState({ 
-                            lastSuccessfulSync: Date.now(),
-                            hasLocalChanges: false,
-                            connectionStatus: 'synced'
-                        });
-                        updateSyncStatus('✅ Local version kept', 'success');
-                    } else {
-                        updateSyncStatus('Failed to upload local version', 'error');
-                    }
-                    
-                    document.body.removeChild(overlay);
-                    document.head.removeChild(style);
-                    resolve();
-                };
-                
-                dialog.querySelector('#keepRemote').onclick = async () => {
-                    updateSyncStatus('Loading remote changes...', 'loading');
-                    
-                    // Backup local version first  
-                    await backupVersion(localData, 'local');
-                    
-                    // Load remote data
-                    const success = await loadRemoteData(remoteData);
-                    if (success) {
-                        updateSyncState({ 
-                            lastSuccessfulSync: Date.now(),
-                            hasLocalChanges: false,
-                            connectionStatus: 'synced'
-                        });
-                        updateSyncStatus('✅ Remote version loaded', 'success');
-                    } else {
-                        updateSyncStatus('Failed to load remote version', 'error');
-                    }
-                    
-                    document.body.removeChild(overlay);
-                    document.head.removeChild(style);
-                    resolve();
-                };
-                
-                dialog.querySelector('#compareFirst').onclick = () => {
-                    updateSyncStatus('Version comparison coming soon...', 'info');
-                    // Future: Show side-by-side comparison of versions
-                };
-                
-                // Add to DOM
-                overlay.appendChild(dialog);
-                document.body.appendChild(overlay);
-                
-                // Close on overlay click
-                overlay.onclick = (e) => {
-                    if (e.target === overlay) {
-                        document.body.removeChild(overlay);
-                        document.head.removeChild(style);
-                        resolve();
-                    }
-                };
-            });
-        }
-        
-        // Time-based categorization system for @YYMMDD_HHMM syntax
-        
-        // Parse @YYMMDD_HHMM syntax from text (supports both @YYMMDD_HHMM and @YYMMDD formats)
-        function parseTimeFromText(text) {
-            if (!text) return null;
-            
-            // Match @YYMMDD_HHMM or @YYMMDD patterns
-            let timeMatch = text.match(/@(\d{6})_(\d{4})/); // @YYMMDD_HHMM
-            let hasTime = true;
-            
-            if (!timeMatch) {
-                timeMatch = text.match(/@(\d{6})/); // @YYMMDD only
-                hasTime = false;
-            }
-            
-            if (!timeMatch) return null;
-            
-            const dateStr = timeMatch[1];
-            const timeStr = hasTime ? timeMatch[2] : null;
-            
-            // Parse YYMMDD
-            const year = parseInt('20' + dateStr.substr(0, 2));  // YY -> 20YY
-            const month = parseInt(dateStr.substr(2, 2)) - 1;    // MM (0-indexed for Date)
-            const day = parseInt(dateStr.substr(4, 2));          // DD
-            
-            // Parse HHMM (default to 00:00 if no time specified)
-            const hours = hasTime ? parseInt(timeStr.substr(0, 2)) : 0;
-            const minutes = hasTime ? parseInt(timeStr.substr(2, 2)) : 0;
-            
-            // Create Date object
-            const eventDate = new Date(year, month, day, hours, minutes);
-            
-            return {
-                originalText: timeMatch[0],
-                datetime: eventDate,
-                timestamp: eventDate.getTime(),
-                formatted: eventDate.toLocaleString('sv-SE', {
-                    year: 'numeric',
-                    month: '2-digit', 
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                })
-            };
-        }
-        
-        // Categorize event based on timestamp
-        function categorizeEventTime(eventTimestamp) {
-            if (!eventTimestamp) return null;
-            
-            const now = Date.now();
-            const eventTime = eventTimestamp;
-            const dayMs = 24 * 60 * 60 * 1000;
-            
-            // Calculate week boundaries (Monday to Sunday)
-            const today = new Date();
-            const startOfWeek = new Date(today);
-            startOfWeek.setDate(today.getDate() - today.getDay() + 1); // Monday
-            startOfWeek.setHours(0, 0, 0, 0);
-            
-            const endOfWeek = new Date(startOfWeek);
-            endOfWeek.setDate(startOfWeek.getDate() + 6); // Sunday
-            endOfWeek.setHours(23, 59, 59, 999);
-            
-            // Categorization logic
-            if (eventTime < now - dayMs) return 'past';           // More than 1 day ago
-            if (Math.abs(eventTime - now) < dayMs) return 'today'; // Within 24h of now
-            if (eventTime >= startOfWeek.getTime() && eventTime <= endOfWeek.getTime()) return 'thisweek'; // This week
-            if (eventTime > now) return 'future';                // Future beyond this week
-            
-            return 'past'; // Fallback
-        }
-        
-        // Apply time-based styling to a node
-        function applyTimeBasedStyling(node) {
-            // Remove existing time classes
-            node.removeClass('time-past time-today time-thisweek time-future');
-            
-            // Parse time from node text
-            const text = node.data('text') || '';
-            const title = node.data('title') || '';
-            const fullText = title + ' ' + text;
-            
-            const timeInfo = parseTimeFromText(fullText);
-            if (!timeInfo) return; // No time found
-            
-            const category = categorizeEventTime(timeInfo.timestamp);
-            if (category) {
-                node.addClass(`time-${category}`);
-                
-                // Store event data in node
-                node.data('eventData', {
-                    datetime: timeInfo.datetime.toISOString(),
-                    timestamp: timeInfo.timestamp,
-                    category: category,
-                    originalText: timeInfo.originalText,
-                    formatted: timeInfo.formatted,
-                    isPast: category === 'past',
-                    isToday: category === 'today',
-                    isThisWeek: category === 'thisweek',
-                    isFuture: category === 'future'
-                });
-            }
-        }
-        
-        // Apply time styling to all nodes
-        function refreshAllTimeBasedStyling() {
-            cy.nodes().forEach(node => {
-                applyTimeBasedStyling(node);
-            });
-            console.log('Updated time-based styling for all nodes');
-        }
-        
-        // Get human-readable relative time
-        function getRelativeTimeString(timestamp) {
-            const now = Date.now();
-            const diff = timestamp - now;
-            const absDiff = Math.abs(diff);
-            
-            const minute = 60 * 1000;
-            const hour = 60 * minute;
-            const day = 24 * hour;
-            const week = 7 * day;
-            
-            if (absDiff < hour) {
-                const minutes = Math.floor(absDiff / minute);
-                return diff > 0 ? `Om ${minutes} minuter` : `${minutes} minuter sedan`;
-            } else if (absDiff < day) {
-                const hours = Math.floor(absDiff / hour);
-                return diff > 0 ? `Om ${hours} timmar` : `${hours} timmar sedan`;
-            } else if (absDiff < week) {
-                const days = Math.floor(absDiff / day);
-                if (days === 1) {
-                    return diff > 0 ? 'Imorgon' : 'Igår';
-                }
-                return diff > 0 ? `Om ${days} dagar` : `${days} dagar sedan`;
-            } else {
-                // Format as actual date/time
-                return new Date(timestamp).toLocaleString('sv-SE', {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
-            }
-        }
-        
-        // Bulk entry system for multiple notes with @YYMMDD_HHMM @plats syntax
-        
-        // Parse bulk entry text into individual note objects  
-        function parseBulkEntryText(bulkText) {
-            if (!bulkText || !bulkText.trim()) return [];
-            
-            // Find all positions where @YYMMDD appears at start of line
-            const lines = bulkText.split('\n');
-            const noteStarts = [];
-            
-            lines.forEach((line, index) => {
-                if (line.trim().match(/^@\d{6}(?:_\d{4})?/)) {
-                    noteStarts.push(index);
-                }
-            });
-            
-            if (noteStarts.length === 0) return [];
-            
-            const notes = [];
-            
-            // Extract each note section
-            for (let i = 0; i < noteStarts.length; i++) {
-                const startLine = noteStarts[i];
-                const endLine = i < noteStarts.length - 1 ? noteStarts[i + 1] : lines.length;
-                
-                const sectionLines = lines.slice(startLine, endLine);
-                const sectionText = sectionLines.join('\n').trim();
-                
-                if (sectionText) {
-                    const note = parseSingleNoteSection(sectionText);
-                    if (note) notes.push(note);
-                }
-            }
-            
-            return notes;
-        }
-        
-        // Parse a single note section: @YYMMDD_HHMM @plats \n TITEL \n innehåll \n #taggar
-        function parseSingleNoteSection(sectionText) {
-            const lines = sectionText.split('\n').map(line => line.trim()).filter(line => line);
-            if (lines.length === 0) return null;
-            
-            const firstLine = lines[0];
-            const note = {
-                originalText: sectionText,
-                eventTime: null,
-                location: null,
-                title: '',
-                content: '',
-                tags: [],
-                allTags: []
-            };
-            
-            // Parse @YYMMDD_HHMM and @plats from first line  
-            const timeMatch = firstLine.match(/@(\d{6}(?:_\d{4})?)/);
-            if (timeMatch) {
-                note.eventTime = parseTimeFromText(timeMatch[0]);
-            }
-            
-            // Parse location - find @word that's NOT a date
-            const locationMatches = firstLine.match(/@([A-Za-zÅÄÖåäö0-9_-]+)/g) || [];
-            locationMatches.forEach(match => {
-                if (!match.match(/@\d{6}/)) { // Not a date  
-                    note.location = match.substring(1); // Remove @
-                }
-            });
-            
-            // Find title line (first non-@ line)
-            let titleLineIndex = -1;
-            for (let i = 0; i < lines.length; i++) {
-                if (!lines[i].startsWith('@')) {
-                    titleLineIndex = i;
-                    break;
-                }
-            }
-            
-            if (titleLineIndex === -1) return null; // No title found
-            
-            note.title = lines[titleLineIndex];
-            
-            // Content is everything between title and tags  
-            const contentLines = [];
-            for (let i = titleLineIndex + 1; i < lines.length; i++) {
-                if (lines[i].startsWith('#')) break; // Stop at first tag line
-                contentLines.push(lines[i]);
-            }
-            note.content = contentLines.join('\n');
-            
-            // Extract hashtags from entire section
-            const hashtagMatches = sectionText.match(/#[A-Za-zÅÄÖåäö0-9_-]+/g) || [];
-            note.tags = hashtagMatches.map(tag => tag.substring(1)); // Remove #
-            
-            // Remove duplicates from hashtags first
-            const uniqueTags = [...new Set(note.tags)];
-            
-            // Add location as tag ONLY if it's not already in hashtags (case insensitive check)
-            const tagsLowerCase = uniqueTags.map(tag => tag.toLowerCase());
-            if (note.location && !tagsLowerCase.includes(note.location.toLowerCase())) {
-                note.allTags = [...uniqueTags, note.location];
-            } else {
-                note.allTags = uniqueTags;
-            }
-            
-            return note;
-        }
-        
-        // Create cards from parsed bulk entries
-        function createCardsFromBulkEntries(notes) {
-            if (!notes || notes.length === 0) return;
-            
-            const createdNodes = [];
-            const arrangePos = getArrangementPosition();
-            let currentX = arrangePos.x - 200; // Start left of center
-            let currentY = arrangePos.y - 100; // Start above center
-            
-            notes.forEach((note, index) => {
-                // Build full card text: Första raden + innehåll + metadata + taggar
-                let cardText = '';
-                
-                // Första raden (titel)
-                cardText += note.title;
-                
-                // Resten av texten (innehåll)
-                if (note.content) {
-                    cardText += '\n' + note.content;
-                }
-                
-                // @tid @plats efter dubbel radbrytning
-                let metadataLine = '';
-                if (note.eventTime) {
-                    metadataLine += note.eventTime.originalText;
-                }
-                if (note.location) {
-                    if (metadataLine) metadataLine += ' ';
-                    metadataLine += '@' + note.location;
-                }
-                
-                if (metadataLine) {
-                    cardText += '\n\n' + metadataLine;
-                }
-                
-                // Hashtags efter dubbel radbrytning
-                if (note.allTags.length > 0) {
-                    cardText += '\n\n' + note.allTags.map(tag => '#' + tag).join(' ');
-                }
-                
-                // Create new card
-                const newNode = cy.add({
-                    data: {
-                        id: generateCardId(),
-                        title: note.title,
-                        text: cardText,
-                        tags: note.allTags,
-                        hidden_tags: [],
-                        searchMatch: false,
-                        isManualCard: true,
-                        location: note.location || null
-                    },
-                    position: { 
-                        x: currentX + (index % 3) * 320, // 3 columns  
-                        y: currentY + Math.floor(index / 3) * 250 // New row every 3 cards
-                    }
-                });
-                
-                newNode.grabify();
-                
-                // Apply time-based styling - säkerställ att eventData sparas korrekt
-                if (note.eventTime) {
-                    const category = categorizeEventTime(note.eventTime.timestamp);
-                    if (category) {
-                        newNode.addClass(`time-${category}`);
-                        
-                        // Store event data directly
-                        newNode.data('eventData', {
-                            datetime: note.eventTime.datetime.toISOString(),
-                            timestamp: note.eventTime.timestamp,
-                            category: category,
-                            originalText: note.eventTime.originalText,
-                            formatted: note.eventTime.formatted,
-                            isPast: category === 'past',
-                            isToday: category === 'today',
-                            isThisWeek: category === 'thisweek',
-                            isFuture: category === 'future'
-                        });
-                    }
-                } else {
-                    // Fallback: try regular time parsing
-                    applyTimeBasedStyling(newNode);
-                }
-                
-                createdNodes.push(newNode);
-            });
-            
-            // Select all created cards
-            cy.nodes().unselect();
-            createdNodes.forEach(node => node.select());
-            
-            console.log(`Created ${createdNodes.length} cards from bulk entry`);
-            return createdNodes;
-        }
-        
-        // Show bulk entry dialog
-        function showBulkEntryDialog() {
-            // Clear any existing dialogs
-            const existingDialog = document.querySelector('.bulk-entry-dialog');
-            if (existingDialog) existingDialog.remove();
-            
-            // Create modal overlay
-            const overlay = document.createElement('div');
-            overlay.style.cssText = `
-                position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-                background: rgba(0,0,0,0.7); z-index: 3000;
-                display: flex; align-items: center; justify-content: center;
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            `;
-            overlay.className = 'bulk-entry-dialog';
-            
-            // Create dialog
-            const dialog = document.createElement('div');
-            dialog.style.cssText = `
-                background: white; border-radius: 12px; max-width: 800px; width: 90%;
-                box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-                overflow: hidden; max-height: 85vh; display: flex; flex-direction: column;
-            `;
-            
-            dialog.innerHTML = `
-                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                           color: white; padding: 20px; text-align: center;">
-                    <h2 style="margin: 0; font-size: 24px;">📝 Bulk Anteckningar</h2>
-                    <p style="margin: 8px 0 0 0; opacity: 0.9;">Skriv eller klistra in flera anteckningar samtidigt</p>
-                </div>
-                
-                <div style="padding: 20px; overflow-y: auto; flex: 1;">
-                    <div style="background: #e3f2fd; border-left: 4px solid #2196F3; padding: 15px; 
-                               margin-bottom: 20px; border-radius: 4px;">
-                        <h4 style="margin: 0 0 10px 0; color: #1565C0;">💡 Format:</h4>
-                        <div style="font-family: 'SF Mono', Consolas, monospace; font-size: 14px; color: #333;">
-                            <strong>@YYMMDD_HHMM @plats</strong><br>
-                            Första raden (titel)<br>
-                            Sen kommer resten av texten<br>
-                            #tagg #tagg #tagg<br><br>
-                            
-                            <strong>@250821 @Hemma</strong><br>
-                            SLÄNGA SOPOR<br>
-                            Rensa i köket och ta med soporna<br>
-                            #todo #Gränna
-                        </div>
-                    </div>
-                    
-                    <textarea id="bulkEntryText" placeholder="@250821 @Hemma
-SLÄNGA SOPOR
-Rensa i köket och ta med soporna till bilen för att köra till sortergården.
-#sortergård #Gränna #todo
-
-@240513 @Ribbaskolan
-Jag mötte Josefin
-Det var fantastiskt fint!
-#good_times #lycka #Josefin
-
-@251011_2113 @telefon
-Ring Bosse om Elräkningen  
-#todo #ring" 
-                        style="width: 100%; height: 300px; padding: 15px; border: 1px solid #ddd; 
-                               border-radius: 8px; font-family: 'SF Mono', Consolas, monospace; 
-                               font-size: 14px; resize: vertical; line-height: 1.4;"></textarea>
-                               
-                    <div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center;">
-                        <div id="previewCount" style="color: #666; font-size: 14px;"></div>
-                        <div>
-                            <button id="previewBulk" style="background: #2196F3; color: white; border: none; 
-                                   padding: 10px 20px; border-radius: 6px; cursor: pointer; margin-right: 10px;">
-                                👁️ Förhandsgranska
-                            </button>
-                            <button id="createBulk" style="background: #4CAF50; color: white; border: none; 
-                                   padding: 10px 20px; border-radius: 6px; cursor: pointer; margin-right: 10px;">
-                                ✅ Skapa kort
-                            </button>
-                            <button id="cancelBulk" style="background: #666; color: white; border: none; 
-                                   padding: 10px 20px; border-radius: 6px; cursor: pointer;">
-                                ❌ Avbryt
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div id="bulkPreview" style="margin-top: 20px; display: none;"></div>
-                </div>
-            `;
-            
-            // Event handlers
-            const textarea = dialog.querySelector('#bulkEntryText');
-            const previewDiv = dialog.querySelector('#bulkPreview');
-            const countDiv = dialog.querySelector('#previewCount');
-            
-            // Real-time count update
-            const updateCount = () => {
-                const notes = parseBulkEntryText(textarea.value);
-                countDiv.textContent = `📊 ${notes.length} anteckningar identifierade`;
-            };
-            
-            textarea.addEventListener('input', updateCount);
-            updateCount();
-            
-            // Preview button
-            dialog.querySelector('#previewBulk').onclick = () => {
-                const notes = parseBulkEntryText(textarea.value);
-                if (notes.length === 0) {
-                    previewDiv.innerHTML = '<p style="color: #f44336;">Inga giltiga anteckningar hittade</p>';
-                    previewDiv.style.display = 'block';
-                    return;
-                }
-                
-                let previewHTML = '<h4>👁️ Förhandsgranskning:</h4>';
-                notes.forEach((note, index) => {
-                    const timeStr = note.eventTime ? note.eventTime.formatted : 'Ingen tid';
-                    const locationStr = note.location || 'Ingen plats';
-                    const tagsStr = note.tags.length > 0 ? note.tags.join(', ') : 'Inga taggar';
-                    
-                    previewHTML += `
-                        <div style="border: 1px solid #ddd; padding: 10px; margin: 10px 0; border-radius: 6px; background: #f9f9f9;">
-                            <strong>📝 ${index + 1}: ${note.title}</strong><br>
-                            🕒 ${timeStr} | 📍 ${locationStr}<br>
-                            📝 ${note.content || 'Inget innehåll'}<br>
-                            🏷️ ${tagsStr}
-                        </div>
-                    `;
-                });
-                
-                previewDiv.innerHTML = previewHTML;
-                previewDiv.style.display = 'block';
-            };
-            
-            // Create button  
-            dialog.querySelector('#createBulk').onclick = () => {
-                const notes = parseBulkEntryText(textarea.value);
-                if (notes.length === 0) {
-                    alert('Inga giltiga anteckningar att skapa');
-                    return;
-                }
-                
-                createCardsFromBulkEntries(notes);
-                document.body.removeChild(overlay);
-            };
-            
-            // Cancel button
-            dialog.querySelector('#cancelBulk').onclick = () => {
-                document.body.removeChild(overlay);
-            };
-            
-            // Add to DOM
-            overlay.appendChild(dialog);
-            document.body.appendChild(overlay);
-            
-            // Focus textarea
-            setTimeout(() => textarea.focus(), 100);
-            
-            // Close on overlay click
-            overlay.onclick = (e) => {
-                if (e.target === overlay) {
-                    document.body.removeChild(overlay);
-                }
-            };
-        }
-        
-        // Helper functions for sync conflict resolution
-        
-        // Fetch data from Google Drive
-        async function fetchFromGoogleDrive() {
-            if (!isSignedIn || !accessToken) {
-                throw new Error('Not signed in to Google Drive');
-            }
-            
-            try {
-                await ensureValidToken();
-                
-                // Find the spatial notes file
-                const fileId = await findSpatialNotesFile();
-                if (!fileId) {
-                    console.log('No remote file found');
-                    return null;
-                }
-                
-                // Download the file content
-                const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`Failed to fetch from Drive: ${response.statusText}`);
-                }
-                
-                const content = await response.text();
-                return JSON.parse(content);
-                
-            } catch (error) {
-                console.error('Error fetching from Google Drive:', error);
-                throw error;
-            }
-        }
-        
-        // Upload data to Google Drive
-        async function uploadToGoogleDrive(data) {
-            if (!isSignedIn || !accessToken) {
-                throw new Error('Not signed in to Google Drive');
-            }
-            
-            try {
-                await ensureValidToken();
-                
-                // Add sync metadata to data
-                data.lastSyncDevice = getDeviceIdentifier();
-                data.lastSyncTime = Date.now();
-                
-                const filename = `spatial-notes-${currentProject}.json`;
-                const content = JSON.stringify(data, null, 2);
-                
-                // Find existing file or create new
-                const existingFileId = await findSpatialNotesFile();
-                
-                if (existingFileId) {
-                    // Update existing file
-                    const response = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${existingFileId}?uploadType=media`, {
-                        method: 'PATCH',
-                        headers: {
-                            'Authorization': `Bearer ${accessToken}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: content
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error(`Failed to update file: ${response.statusText}`);
-                    }
-                } else {
-                    // Create new file
-                    const metadata = {
-                        name: filename,
-                        parents: ['appDataFolder']
-                    };
-                    
-                    const form = new FormData();
-                    form.append('metadata', new Blob([JSON.stringify(metadata)], {type: 'application/json'}));
-                    form.append('file', new Blob([content], {type: 'application/json'}));
-                    
-                    const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${accessToken}` },
-                        body: form
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error(`Failed to create file: ${response.statusText}`);
-                    }
-                }
-                
-                return true;
-                
-            } catch (error) {
-                console.error('Error uploading to Google Drive:', error);
-                return false;
-            }
-        }
-        
-        // Load remote data into the current board
-        async function loadRemoteData(remoteData) {
-            try {
-                // Clear current board
-                cy.nodes().remove();
-                
-                // Load cards from remote data
-                if (remoteData.cards && remoteData.cards.length > 0) {
-                    remoteData.cards.forEach(cardData => {
-                        const newNode = cy.add({
-                            data: {
-                                id: cardData.id,
-                                title: cardData.title,
-                                text: cardData.text,
-                                tags: cardData.tags || [],
-                                hidden_tags: cardData.hidden_tags || [],
-                                searchMatch: false,
-                                isManualCard: cardData.isManualCard || false,
-                                cardColor: cardData.cardColor || null,
-                                export_timestamp: cardData.export_timestamp || null,
-                                export_session: cardData.export_session || null,
-                                export_source: cardData.export_source || null,
-                                source_file: cardData.source_file || null,
-                                page_number: cardData.page_number || null,
-                                matched_terms: cardData.matched_terms || null,
-                                card_index: cardData.card_index || null
-                            },
-                            position: cardData.position || { x: 100, y: 100 }
-                        });
-                        
-                        // Apply styling
-                        newNode.style({
-                            'height': getMeasuredTextHeight(newNode) + 'px'
-                        });
-                        
-                        if (cardData.cardColor) {
-                            newNode.style('background-color', cardData.cardColor);
-                        }
-                        
-                        if (cardData.pinned) {
-                            newNode.addClass('pinned');
-                        }
-                        
-                        newNode.grabify();
-                    });
-                    
-                    // Restore viewport if available
-                    if (remoteData.viewport) {
-                        cy.zoom(remoteData.viewport.zoom);
-                        cy.pan(remoteData.viewport.pan);
-                    }
-                    
-                    // Save to localStorage as backup
-                    localStorage.setItem('spatial-notes-board', JSON.stringify(remoteData));
-                    
-                    return true;
-                } else {
-                    console.log('No cards found in remote data');
-                    return false;
-                }
-                
-            } catch (error) {
-                console.error('Error loading remote data:', error);
-                return false;
-            }
-        }
-        
-        // Backup version to localStorage with timestamp
-        async function backupVersion(data, type) {
-            try {
-                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-                const deviceName = getDeviceName();
-                const backupKey = `spatial-notes-backup-${type}-${deviceName}-${timestamp}`;
-                
-                localStorage.setItem(backupKey, JSON.stringify(data));
-                
-                console.log(`Backup saved: ${backupKey}`);
-                
-                // Keep only last 5 backups to prevent storage overflow
-                const allKeys = Object.keys(localStorage);
-                const backupKeys = allKeys.filter(key => key.startsWith('spatial-notes-backup-'))
-                    .sort().reverse().slice(5);  // Keep newest 5
-                
-                // Remove older backups
-                allKeys.filter(key => key.startsWith('spatial-notes-backup-') && !backupKeys.includes(key))
-                    .forEach(key => localStorage.removeItem(key));
-                
-                return true;
-                
-            } catch (error) {
-                console.error('Error creating backup:', error);
-                return false;
-            }
-        }
-        
-        // Update sync status indicator (visual feedback)
-        function updateSyncStatusIndicator() {
-            const syncState = getSyncState();
-            const statusEl = document.querySelector('.search-results-info');
-            
-            if (!statusEl) return;
-            
-            // Determine status color and message based on sync state
-            let statusColor = '#666';  // default gray
-            let statusMessage = 'Offline';
-            
-            if (!navigator.onLine) {
-                statusColor = '#ff9800';  // orange for offline
-                statusMessage = 'Offline Mode';
-            } else if (syncState.connectionStatus === 'synced') {
-                statusColor = '#4caf50';  // green for synced
-                const lastSync = new Date(syncState.lastSuccessfulSync);
-                const timeDiff = Date.now() - syncState.lastSuccessfulSync;
-                
-                if (timeDiff < 60000) {  // less than 1 minute
-                    statusMessage = 'Synced just now';
-                } else if (timeDiff < 3600000) {  // less than 1 hour
-                    const minutes = Math.floor(timeDiff / 60000);
-                    statusMessage = `Synced ${minutes}m ago`;
-                } else {
-                    statusMessage = `Synced ${lastSync.toLocaleTimeString('sv-SE', {hour: '2-digit', minute: '2-digit'})}`;
-                }
-            } else if (syncState.connectionStatus === 'error') {
-                statusColor = '#f44336';  // red for error
-                statusMessage = 'Sync Error';
-            } else if (syncState.hasLocalChanges) {
-                statusColor = '#ff9800';  // orange for unsaved changes
-                statusMessage = 'Unsaved Changes';
-            } else if (syncState.connectionStatus === 'no_auth') {
-                statusColor = '#9e9e9e';  // gray for no auth
-                statusMessage = 'Not Signed In';
-            }
-            
-            // Update visual indicator (reuse existing status area)
-            statusEl.style.borderLeft = `4px solid ${statusColor}`;
-        }
-        
         // Token management with enhanced persistence
         let tokenExpiry = null;
         let rememberMeEnabled = false;
@@ -6899,10 +6325,6 @@ Ring Bosse om Elräkningen
                     }
                     
                     console.log(`Restored valid tokens from ${source}`);
-                    
-                    // Start auto-sync when tokens are successfully restored
-                    startAutoSync();
-                    
                     return true;
                 } else {
                     console.log(`Saved tokens expired, clearing ${source}`);
@@ -7104,9 +6526,6 @@ Ring Bosse om Elräkningen
                             console.log('Token expires at:', new Date(tokenExpiry).toLocaleString());
                             updateAuthStatus();
                             
-                            // Start auto-sync when successfully signed in
-                            startAutoSync();
-                            
                             // Load available projects and then current project
                             setTimeout(async () => {
                                 await loadAvailableProjects();
@@ -7208,9 +6627,6 @@ Ring Bosse om Elräkningen
                         
                         // Clear all tokens and saved data
                         clearSavedTokens();
-                        
-                        // Stop auto-sync when signing out
-                        stopAutoSync();
                         
                         updateSyncStatus('Signed out from Google Drive', 'info');
                         updateAuthStatus();
@@ -7444,23 +6860,17 @@ Ring Bosse om Elräkningen
                         title: node.data('title') || '',
                         text: node.data('text') || '',
                         tags: node.data('tags') || [],
-                        position: { x: node.position('x'), y: node.position('y') }, // Sparar som position objekt
+                        x: node.position('x'),
+                        y: node.position('y'),
                         cardColor: node.data('cardColor') || '',
                         export_source: node.data('export_source') || '',
                         source_file: node.data('source_file') || '',
                         matched_terms: node.data('matched_terms') || '',
                         isManualCard: node.data('isManualCard') || false,
-                        pinned: node.hasClass('pinned'), // Sparar pinning korrekt
-                        // Spara eventData för tidskategorisering
-                        eventData: node.data('eventData') || null,
-                        location: node.data('location') || null
+                        isPinned: node.data('isPinned') || false
                     })),
                     timestamp: new Date().toISOString(),
-                    version: '2.0',
-                    viewport: {
-                        zoom: cy.zoom(),
-                        pan: cy.pan()
-                    }
+                    version: '2.0'
                 };
                 
                 const fileContent = JSON.stringify(boardData, null, 2);
@@ -7635,11 +7045,29 @@ Ring Bosse om Elräkningen
                     console.log('All cards loaded successfully');
                     updateSyncStatus(`✅ Loaded ${boardData.cards.length} cards from "${currentProject}"`, 'success');
                     
-                    // Skip height updates för Google Drive loads - positionerna är redan korrekt sparade
-                    console.log('Google Drive load completed - skipping height calculations to preserve positions');
-                    
-                    // Apply time-based styling immediately utan height changes
-                    refreshAllTimeBasedStyling();
+                    // Skip height updates if cards were already loaded from localStorage 
+                    // to prevent visual jumping during Drive sync
+                    if (existingCards === 0) {
+                        // Only update heights for first load (no localStorage data)
+                        console.log('First load - applying height calculations');
+                        setTimeout(() => {
+                            cy.batch(() => {
+                                cy.nodes().forEach(node => {
+                                    try {
+                                        const heightInfo = getMeasuredTextHeight(node);
+                                        node.style('height', heightInfo + 'px');
+                                    } catch (error) {
+                                        const textLength = (node.data('text') || '').length;
+                                        const fallbackHeight = Math.max(140, textLength * 0.8 + 60);
+                                        node.style('height', fallbackHeight + 'px');
+                                    }
+                                });
+                            });
+                            console.log(`Height calculations applied to ${cy.nodes().length} cards`);
+                        }, 150);
+                    } else {
+                        console.log('Skipped height updates - cards already properly sized from localStorage');
+                    }
                     
                     // Auto-save to localStorage as backup
                     setTimeout(() => saveBoard(), 500);
@@ -7829,88 +7257,23 @@ Ring Bosse om Elräkningen
             }
         }
         
-        // Enhanced connection-aware auto-sync functionality
+        // Auto-sync functionality
         let autoSyncInterval;
-        let connectionCheckInterval;
-        let lastOnlineStatus = navigator.onLine;
-        
         function startAutoSync() {
             if (!isSignedIn || !accessToken) return;
             
-            // Smart auto-sync every 30 seconds when signed in and online
+            // Auto-save to Drive every 30 seconds when signed in
             autoSyncInterval = setInterval(async () => {
-                if (isSignedIn && accessToken && navigator.onLine) {
-                    const syncState = getSyncState();
-                    
-                    // Only sync if we have local changes or it's been a while since last sync
-                    const timeSinceLastSync = Date.now() - (syncState.lastSuccessfulSync || 0);
-                    const shouldSync = syncState.hasLocalChanges || timeSinceLastSync > 300000; // 5 minutes
-                    
-                    if (shouldSync) {
-                        console.log('Auto-sync: Syncing changes to Drive...');
-                        await smartSyncToGoogleDrive();
-                    }
-                } else if (!navigator.onLine) {
-                    updateSyncState({
-                        connectionStatus: 'offline'
-                    });
+                if (isSignedIn && accessToken) {
+                    await saveToGoogleDrive();
                 }
-            }, 30000);  // Check every 30 seconds
-            
-            console.log('Auto-sync started');
+            }, 30000);
         }
         
         function stopAutoSync() {
             if (autoSyncInterval) {
                 clearInterval(autoSyncInterval);
                 autoSyncInterval = null;
-                console.log('Auto-sync stopped');
-            }
-        }
-        
-        // Monitor connection status changes
-        function startConnectionMonitoring() {
-            // Listen for online/offline events
-            window.addEventListener('online', handleOnlineStatusChange);
-            window.addEventListener('offline', handleOnlineStatusChange);
-            
-            // Also poll connection status periodically (for mobile reliability)
-            connectionCheckInterval = setInterval(handleOnlineStatusChange, 10000); // Check every 10 seconds
-        }
-        
-        function stopConnectionMonitoring() {
-            window.removeEventListener('online', handleOnlineStatusChange);
-            window.removeEventListener('offline', handleOnlineStatusChange);
-            
-            if (connectionCheckInterval) {
-                clearInterval(connectionCheckInterval);
-                connectionCheckInterval = null;
-            }
-        }
-        
-        function handleOnlineStatusChange() {
-            const isOnline = navigator.onLine;
-            
-            if (isOnline !== lastOnlineStatus) {
-                lastOnlineStatus = isOnline;
-                
-                if (isOnline) {
-                    console.log('Connection restored - attempting sync...');
-                    updateSyncStatus('Connection restored', 'info');
-                    
-                    // Try to sync when coming back online
-                    if (isSignedIn && accessToken) {
-                        setTimeout(() => smartSyncToGoogleDrive(), 2000); // Wait 2 seconds for connection to stabilize
-                    }
-                } else {
-                    console.log('Connection lost - entering offline mode');
-                    updateSyncState({
-                        connectionStatus: 'offline'
-                    });
-                    updateSyncStatus('Offline Mode - changes saved locally', 'warning');
-                }
-                
-                updateSyncStatusIndicator();
             }
         }
         
@@ -7925,12 +7288,6 @@ Ring Bosse om Elräkningen
                 currentProject = savedProject;
                 console.log(`Restored current project: ${currentProject}`);
             }
-            
-            // Start connection monitoring immediately
-            startConnectionMonitoring();
-            
-            // Initialize sync status indicator
-            updateSyncStatusIndicator();
             
             // Initialize Google Drive API (wait for gapi to load)
             setTimeout(() => initializeGoogleAPI(), 3000);
@@ -8005,9 +7362,6 @@ Ring Bosse om Elräkningen
                             }
                             
                             console.log(`Auto-loaded ${boardData.cards.length} cards from localStorage`);
-                            
-                            // Apply time-based styling to auto-loaded cards
-                            refreshAllTimeBasedStyling();
                         }
                     } catch (e) {
                         console.log('Error auto-loading:', e);
