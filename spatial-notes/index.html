@@ -4652,7 +4652,8 @@
                         exportDate: new Date().toISOString(),
                         exportApp: 'Spatial Notes',
                         version: '1.0',
-                        totalCards: cy.nodes().length
+                        totalCards: cy.nodes().length,
+                        totalEdges: cy.edges().length
                     },
                     viewport: {
                         zoom: cy.zoom(),
@@ -4669,6 +4670,8 @@
                             y: Math.round(node.position().y)
                         },
                         pinned: node.hasClass('pinned') || false,
+                        isManualCard: node.data('isManualCard') || false,
+                        cardColor: node.data('cardColor') || null,
                         // Preserve all metadata for advanced analysis
                         export_timestamp: node.data('export_timestamp') || null,
                         export_session: node.data('export_session') || null,
@@ -4676,8 +4679,42 @@
                         source_file: node.data('source_file') || null,
                         page_number: node.data('page_number') || null,
                         matched_terms: node.data('matched_terms') || null,
-                        card_index: node.data('card_index') || null
-                    }))
+                        card_index: node.data('card_index') || null,
+                        // Annotation-specific data (geometric shapes)
+                        isAnnotation: node.data('isAnnotation') || false,
+                        annotationType: node.data('annotationType') || null,
+                        customWidth: node.data('customWidth') || null,
+                        customHeight: node.data('customHeight') || null,
+                        customZIndex: node.data('customZIndex') || null,
+                        customFontSize: node.data('customFontSize') || null,
+                        // Save annotation color from visual style
+                        annotationColor: node.data('isAnnotation') ? node.style('background-color') : null,
+                        // Save shape data for geometric figures
+                        shape: node.data('shape') || null
+                    })),
+                    edges: cy.edges().map(edge => ({
+                        id: edge.id(),
+                        source: edge.source().id(),
+                        target: edge.target().id(),
+                        // Preserve all edge data
+                        isAnnotation: edge.data('isAnnotation') || false,
+                        annotationType: edge.data('annotationType') || null,
+                        customColor: edge.data('customColor') || null,
+                        // Save all visual styling
+                        style: {
+                            'line-color': edge.style('line-color'),
+                            'target-arrow-color': edge.style('target-arrow-color'),
+                            'target-arrow-shape': edge.style('target-arrow-shape'),
+                            'source-arrow-color': edge.style('source-arrow-color'),
+                            'source-arrow-shape': edge.style('source-arrow-shape'),
+                            'width': edge.style('width'),
+                            'curve-style': edge.style('curve-style'),
+                            'control-point-step-size': edge.style('control-point-step-size'),
+                            'opacity': edge.style('opacity')
+                        }
+                    })),
+                    // Save global arrow visibility state
+                    arrowsHidden: window.arrowsHidden || false
                 };
                 
                 // Generate filename with timestamp
@@ -4700,13 +4737,13 @@
                 
                 // Show confirmation
                 const searchInfo = document.getElementById('searchInfo');
-                searchInfo.textContent = `📋 JSON-fil exporterad: ${a.download} (${exportData.cards.length} kort)`;
+                searchInfo.textContent = `📋 JSON-fil exporterad: ${a.download} (${exportData.cards.length} kort, ${exportData.edges.length} pilar)`;
                 searchInfo.classList.add('visible');
                 setTimeout(() => {
                     searchInfo.classList.remove('visible');
                 }, 3000);
                 
-                console.log(`JSON export completed: ${a.download} with ${exportData.cards.length} cards`);
+                console.log(`JSON export completed: ${a.download} with ${exportData.cards.length} cards and ${exportData.edges.length} edges`);
                 
             } catch (error) {
                 console.error('Error exporting JSON:', error);
@@ -4771,6 +4808,8 @@
                                     tags: cardData.tags || [],
                                     hidden_tags: hiddenTags,
                                     searchMatch: false,
+                                    isManualCard: cardData.isManualCard || false,
+                                    cardColor: cardData.cardColor || null,
                                     // Restore metadata
                                     export_timestamp: cardData.export_timestamp || null,
                                     export_session: cardData.export_session || null,
@@ -4778,7 +4817,18 @@
                                     source_file: cardData.source_file || null,
                                     page_number: cardData.page_number || null,
                                     matched_terms: cardData.matched_terms || null,
-                                    card_index: cardData.card_index || null
+                                    card_index: cardData.card_index || null,
+                                    // Annotation-specific data
+                                    isAnnotation: cardData.isAnnotation || false,
+                                    annotationType: cardData.annotationType || null,
+                                    customWidth: cardData.customWidth || null,
+                                    customHeight: cardData.customHeight || null,
+                                    customZIndex: cardData.customZIndex || null,
+                                    customFontSize: cardData.customFontSize || null,
+                                    // Store annotation color for restoration
+                                    annotationColor: cardData.annotationColor || null,
+                                    // Store shape data for geometric figures
+                                    shape: cardData.shape || null
                                 },
                                 position: cardData.position || { x: Math.random() * 800 + 100, y: Math.random() * 600 + 100 }
                             });
@@ -4788,9 +4838,93 @@
                                 newNode.addClass('pinned');
                             }
                             
+                            // Restore annotation shape class and text label
+                            if (cardData.isAnnotation && cardData.annotationType === 'shape') {
+                                newNode.addClass('annotation-shape');
+                                
+                                // Make sure text shows as label for annotations
+                                if (cardData.text) {
+                                    newNode.style('label', cardData.text);
+                                }
+                            }
+                            
+                            // Restore custom size, layer, color and font size for annotation nodes
+                            if (cardData.isAnnotation && (cardData.customWidth || cardData.customHeight || cardData.customZIndex !== null || cardData.annotationColor || cardData.customFontSize)) {
+                                const width = cardData.customWidth || 120;
+                                const height = cardData.customHeight || 120;
+                                const zIndex = cardData.customZIndex !== null ? cardData.customZIndex : -1;
+                                
+                                // Convert internal z-index to Cytoscape z-index
+                                let cyZIndex = 1; // default
+                                if (zIndex === -1) cyZIndex = 0; // Background
+                                if (zIndex === 0) cyZIndex = 1;  // Normal
+                                if (zIndex === 1) cyZIndex = 2;  // Foreground
+                                
+                                const styleUpdate = {
+                                    'width': width + 'px',
+                                    'height': height + 'px',
+                                    'z-index': cyZIndex
+                                };
+                                
+                                // Restore annotation color if saved
+                                if (cardData.annotationColor && cardData.annotationColor !== 'rgb(255,255,255)') {
+                                    styleUpdate['background-color'] = cardData.annotationColor;
+                                }
+                                
+                                // Restore custom font size if saved
+                                if (cardData.customFontSize) {
+                                    styleUpdate['font-size'] = cardData.customFontSize + 'px';
+                                }
+                                
+                                newNode.style(styleUpdate);
+                            }
+                            
+                            // Restore card color
+                            if (cardData.cardColor) {
+                                newNode.style('background-color', getCardColorValue(cardData.cardColor, getCurrentTheme()));
+                            }
+                            
                             newNode.grabify();
                             importedCount++;
                         });
+                        
+                        // Import edges/arrows if they exist
+                        let importedEdges = 0;
+                        if (importData.edges && Array.isArray(importData.edges)) {
+                            importData.edges.forEach(edgeData => {
+                                const newEdge = cy.add({
+                                    data: {
+                                        id: edgeData.id,
+                                        source: edgeData.source,
+                                        target: edgeData.target,
+                                        isAnnotation: edgeData.isAnnotation || false,
+                                        annotationType: edgeData.annotationType || null,
+                                        customColor: edgeData.customColor || null
+                                    }
+                                });
+                                
+                                // Apply annotation classes for styling
+                                if (edgeData.isAnnotation) {
+                                    newEdge.addClass('annotation-connection');
+                                }
+                                
+                                // Restore all visual styling
+                                if (edgeData.style) {
+                                    newEdge.style(edgeData.style);
+                                }
+                                
+                                importedEdges++;
+                            });
+                        }
+                        
+                        // Restore global arrow visibility state
+                        if (importData.arrowsHidden !== undefined) {
+                            window.arrowsHidden = importData.arrowsHidden;
+                            if (window.arrowsHidden) {
+                                // Apply hidden state to all edges
+                                cy.edges().style('opacity', 0);
+                            }
+                        }
                         
                         // Card IDs are now timestamp-based, no counter needed
                         
@@ -4803,8 +4937,11 @@
                         }
                         
                         // Show success message
-                        let message = `📁 JSON-import lyckades: ${importedCount} kort importerade`;
-                        message += ` (alla fick nya ID:n + gömda taggar)`;
+                        let message = `📁 JSON-import lyckades: ${importedCount} kort`;
+                        if (importedEdges > 0) {
+                            message += `, ${importedEdges} pilar`;
+                        }
+                        message += ` importerade (alla fick nya ID:n + gömda taggar)`;
                         if (importData.metadata) {
                             message += `\nExportdatum: ${new Date(importData.metadata.exportDate).toLocaleString('sv-SE')}`;
                         }
@@ -4816,7 +4953,7 @@
                             searchInfo.classList.remove('visible');
                         }, 4000);
                         
-                        console.log(`JSON import completed: ${importedCount} cards imported`, importData.metadata);
+                        console.log(`JSON import completed: ${importedCount} cards and ${importedEdges} edges imported`, importData.metadata);
                         
                     } catch (error) {
                         console.error('Error importing JSON:', error);
