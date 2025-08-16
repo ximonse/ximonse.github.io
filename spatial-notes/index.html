@@ -2466,7 +2466,28 @@
                     showResizeDialog(node);
                 };
                 menu.appendChild(resizeOption);
+                
+                // Font size option for geometric shapes
+                const fontSizeOption = document.createElement('div');
+                fontSizeOption.className = 'context-menu-item';
+                fontSizeOption.innerHTML = '🔤 Ändra fontstorlek';
+                fontSizeOption.onclick = () => {
+                    hideContextMenu();
+                    showFontSizeDialog(node);
+                };
+                menu.appendChild(fontSizeOption);
             }
+            
+            // Arrow visibility toggle (global option)
+            const arrowToggleOption = document.createElement('div');
+            arrowToggleOption.className = 'context-menu-item';
+            const arrowsVisible = !window.arrowsHidden;
+            arrowToggleOption.innerHTML = arrowsVisible ? '👁️ Dölj pilar' : '👁️ Visa pilar';
+            arrowToggleOption.onclick = () => {
+                hideContextMenu();
+                toggleArrowVisibility();
+            };
+            menu.appendChild(arrowToggleOption);
             
             document.body.appendChild(menu);
             
@@ -2637,6 +2658,130 @@
             
             const layerName = newZIndex === -1 ? 'bakgrund' : newZIndex === 0 ? 'normal' : 'förgrund';
             console.log('✅ Resize and layer change applied successfully, now in:', layerName);
+            
+            // Save the board to persist changes
+            saveBoard();
+        }
+        
+        // Font size dialog for geometric shapes
+        function showFontSizeDialog(node) {
+            // Get current font size or default
+            const currentFontSize = node.style('font-size') || '16px';
+            const currentFontSizeValue = parseInt(currentFontSize.replace('px', ''));
+            
+            // Create overlay
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.5);
+                z-index: 10000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
+            
+            const dialog = document.createElement('div');
+            dialog.style.cssText = `
+                background: white;
+                padding: 30px;
+                border-radius: 15px;
+                max-width: 350px;
+                width: 90%;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            `;
+            
+            dialog.innerHTML = `
+                <h3 style="margin-top: 0; color: #333;">🔤 Ändra fontstorlek</h3>
+                <div style="margin: 20px 0;">
+                    <label for="fontSizeInput" style="display: block; margin-bottom: 5px; font-weight: bold;">Fontstorlek (px):</label>
+                    <input type="number" id="fontSizeInput" value="${currentFontSizeValue}" min="8" max="72" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+                </div>
+                <div style="text-align: right; margin-top: 25px;">
+                    <button id="cancelFontSize" style="margin-right: 10px; padding: 8px 16px; border: 1px solid #ddd; border-radius: 5px; background: white; cursor: pointer;">Avbryt</button>
+                    <button id="applyFontSize" style="padding: 8px 16px; border: none; border-radius: 5px; background: #007bff; color: white; cursor: pointer;">Tillämpa</button>
+                </div>
+            `;
+            
+            overlay.appendChild(dialog);
+            document.body.appendChild(overlay);
+            
+            // Focus the input
+            document.getElementById('fontSizeInput').focus();
+            document.getElementById('fontSizeInput').select();
+            
+            // Cancel button
+            document.getElementById('cancelFontSize').onclick = () => {
+                document.body.removeChild(overlay);
+            };
+            
+            // Apply button
+            document.getElementById('applyFontSize').onclick = () => {
+                const fontSizeInput = document.getElementById('fontSizeInput');
+                const newFontSize = parseInt(fontSizeInput.value) || currentFontSizeValue;
+                
+                // Apply font size change
+                changeFontSize(node, newFontSize);
+                
+                document.body.removeChild(overlay);
+            };
+            
+            // ESC to close
+            const handleEscape = (e) => {
+                if (e.key === 'Escape') {
+                    document.body.removeChild(overlay);
+                    document.removeEventListener('keydown', handleEscape);
+                }
+            };
+            document.addEventListener('keydown', handleEscape);
+            
+            // Enter to apply
+            const handleEnter = (e) => {
+                if (e.key === 'Enter') {
+                    document.getElementById('applyFontSize').click();
+                    document.removeEventListener('keydown', handleEnter);
+                }
+            };
+            document.addEventListener('keydown', handleEnter);
+        }
+        
+        // Apply font size change to geometric shape
+        function changeFontSize(node, newFontSize) {
+            console.log('🔤 Changing font size for node:', node.id(), 'to', newFontSize + 'px');
+            
+            // Store the new font size in node data for persistence
+            node.data('customFontSize', newFontSize);
+            
+            // Update the visual properties using Cytoscape style
+            cy.batch(() => {
+                node.style('font-size', newFontSize + 'px');
+            });
+            
+            console.log('✅ Font size changed successfully to:', newFontSize + 'px');
+            
+            // Save the board to persist changes
+            saveBoard();
+        }
+        
+        // Arrow visibility toggle
+        function toggleArrowVisibility() {
+            console.log('👁️ Toggling arrow visibility...');
+            
+            const edges = cy.edges();
+            const currentOpacity = edges.length > 0 ? edges[0].style('opacity') : 1;
+            const newOpacity = currentOpacity == 0 ? 1 : 0;
+            
+            cy.batch(() => {
+                edges.style('opacity', newOpacity);
+            });
+            
+            // Store visibility state globally
+            window.arrowsHidden = newOpacity == 0;
+            
+            console.log('✅ Arrows', newOpacity == 0 ? 'hidden' : 'visible');
             
             // Save the board to persist changes
             saveBoard();
@@ -4161,7 +4306,9 @@
                     // Save annotation color from visual style
                     annotationColor: node.data('isAnnotation') ? node.style('background-color') : null,
                     // Save shape data for geometric figures
-                    shape: node.data('shape') || null
+                    shape: node.data('shape') || null,
+                    // Save custom font size for geometric shapes
+                    customFontSize: node.data('customFontSize') || null
                 })),
                 edges: cy.edges().map(edge => ({
                     id: edge.id(),
@@ -4180,13 +4327,16 @@
                         'source-arrow-shape': edge.style('source-arrow-shape'),
                         'width': edge.style('width'),
                         'curve-style': edge.style('curve-style'),
-                        'control-point-step-size': edge.style('control-point-step-size')
+                        'control-point-step-size': edge.style('control-point-step-size'),
+                        'opacity': edge.style('opacity')
                     }
                 })),
                 viewport: {
                     zoom: cy.zoom(),
                     pan: cy.pan()
                 },
+                // Save global arrow visibility state
+                arrowsHidden: window.arrowsHidden || false,
                 timestamp: new Date().toISOString(),
                 version: '1.0'
             };
@@ -4248,7 +4398,9 @@
                             // Store annotation color for restoration
                             annotationColor: cardData.annotationColor || null,
                             // Store shape data for geometric figures
-                            shape: cardData.shape || null
+                            shape: cardData.shape || null,
+                            // Store custom font size for geometric shapes
+                            customFontSize: cardData.customFontSize || null
                         },
                         position: cardData.position
                     });
@@ -4290,6 +4442,11 @@
                         // Restore annotation color if saved
                         if (cardData.annotationColor && cardData.annotationColor !== 'rgb(255,255,255)') {
                             styleUpdate['background-color'] = cardData.annotationColor;
+                        }
+                        
+                        // Restore custom font size if saved
+                        if (cardData.customFontSize) {
+                            styleUpdate['font-size'] = cardData.customFontSize + 'px';
                         }
                         
                         newNode.style(styleUpdate);
@@ -4338,6 +4495,15 @@
                 if (boardData.viewport) {
                     cy.zoom(boardData.viewport.zoom);
                     cy.pan(boardData.viewport.pan);
+                }
+                
+                // Restore global arrow visibility state
+                if (boardData.arrowsHidden !== undefined) {
+                    window.arrowsHidden = boardData.arrowsHidden;
+                    if (window.arrowsHidden) {
+                        // Apply hidden state to all edges
+                        cy.edges().style('opacity', 0);
+                    }
                 }
                 
                 // Removed annoying "Laddade X kort!" alert - user can see the cards loaded
