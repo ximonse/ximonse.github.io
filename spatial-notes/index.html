@@ -2489,6 +2489,19 @@
             };
             menu.appendChild(arrowToggleOption);
             
+            // Remove arrows between selected cards (if multiple cards selected)
+            const selectedNodes = cy.$('node:selected');
+            if (selectedNodes.length > 1) {
+                const removeArrowsOption = document.createElement('div');
+                removeArrowsOption.className = 'context-menu-item';
+                removeArrowsOption.innerHTML = '🗑️ Ta bort pilar mellan markerade';
+                removeArrowsOption.onclick = () => {
+                    hideContextMenu();
+                    removeArrowsBetweenSelected();
+                };
+                menu.appendChild(removeArrowsOption);
+            }
+            
             document.body.appendChild(menu);
             
             // Close menu on click elsewhere
@@ -2787,6 +2800,36 @@
             saveBoard();
         }
         
+        // Remove arrows between selected cards
+        function removeArrowsBetweenSelected() {
+            const selectedNodes = cy.$('node:selected');
+            const selectedNodeIds = new Set(selectedNodes.map(node => node.id()));
+            
+            console.log('🗑️ Removing arrows between', selectedNodes.length, 'selected cards...');
+            
+            // Find edges that connect any two selected nodes
+            const edgesToRemove = cy.edges().filter(edge => {
+                const sourceId = edge.source().id();
+                const targetId = edge.target().id();
+                return selectedNodeIds.has(sourceId) && selectedNodeIds.has(targetId);
+            });
+            
+            console.log('Found', edgesToRemove.length, 'arrows to remove between selected cards');
+            
+            if (edgesToRemove.length > 0) {
+                cy.batch(() => {
+                    edgesToRemove.remove();
+                });
+                
+                console.log('✅ Removed', edgesToRemove.length, 'arrows between selected cards');
+                
+                // Save the board to persist changes
+                saveBoard();
+            } else {
+                console.log('ℹ️ No arrows found between selected cards');
+            }
+        }
+        
         // Color picker system
         function showColorPicker(event, nodes) {
             console.log('showColorPicker called with', nodes.length, 'nodes');
@@ -2978,14 +3021,27 @@
         }
         
         function deleteSelectedCards() {
-            // Get all selected nodes (including search matches)
+            // Get all selected nodes and edges
             const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
-            console.log(`Delete attempt on ${selectedNodes.length} selected nodes`);
+            const selectedEdges = cy.$('edge:selected');
+            console.log(`Delete attempt on ${selectedNodes.length} selected nodes and ${selectedEdges.length} selected edges`);
             
-            if (selectedNodes.length === 0) return;
+            if (selectedNodes.length === 0 && selectedEdges.length === 0) return;
             
             // Save state for undo before deleting
             saveState();
+            
+            // Delete selected edges (arrows) first - they have no protection
+            if (selectedEdges.length > 0) {
+                const edgeCount = selectedEdges.length;
+                cy.batch(() => {
+                    selectedEdges.remove();
+                });
+                console.log(`✅ Deleted ${edgeCount} selected arrows`);
+                
+                // Save the board to persist changes
+                saveBoard();
+            }
             
             // Filter out ALL pinned cards using proper filtering
             const unpinnedNodes = selectedNodes.filter(function(node) {
@@ -3484,7 +3540,7 @@
             // Calculate total height needed for all cards with spacing
             let totalRequiredHeight = 0;
             nodesToArrange.forEach((node, index) => {
-                const cardHeight = getMeasuredTextHeight(node);
+                const cardHeight = getCardHeight(node);
                 totalRequiredHeight += cardHeight;
                 if (index < nodesToArrange.length - 1) {
                     totalRequiredHeight += 60; // 20% spacing (60px)
@@ -3496,7 +3552,7 @@
             
             nodesToArrange.forEach((node, index) => {
                 // Get this card's actual height
-                const cardHeight = getMeasuredTextHeight(node);
+                const cardHeight = getCardHeight(node);
                 
                 // Position this card at its center
                 const cardCenterY = currentY + (cardHeight / 2);
@@ -3569,7 +3625,7 @@
                 sortedNodes.forEach((node, index) => {
                     // Get this card's actual width and height
                     const cardWidth = getCardWidth(node);
-                    const cardHeight = getMeasuredTextHeight(node);
+                    const cardHeight = getCardHeight(node);
                     
                     // Position this card with top-aligned positioning
                     const cardCenterX = currentX + (cardWidth / 2);
@@ -3590,9 +3646,22 @@
             console.log(`Arranged ${selectedNodes.length} cards in centered row with 20% spacing`);
         }
         
-        // Helper function to calculate card width (fixed 300px for consistency)
+        // Helper function to calculate card width (considers geometric shapes)
         function getCardWidth(node) {
-            return 300; // Fixed width for all cards
+            // Check if it's a geometric shape with custom width
+            if (node.data('isAnnotation') && node.data('customWidth')) {
+                return node.data('customWidth');
+            }
+            return 300; // Fixed width for all regular cards
+        }
+        
+        // Helper function to calculate card height (considers geometric shapes)
+        function getCardHeight(node) {
+            // Check if it's a geometric shape with custom height
+            if (node.data('isAnnotation') && node.data('customHeight')) {
+                return node.data('customHeight');
+            }
+            return getMeasuredTextHeight(node); // Use text-based height for regular cards
         }
         
         
