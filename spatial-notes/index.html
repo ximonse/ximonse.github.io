@@ -2004,6 +2004,15 @@
                             'font-size': '32px',
                             'color': '#333',
                             'text-wrap': 'none',
+                            'z-index': function(node) {
+                                // Cytoscape z-index must be non-negative integers
+                                // 0 = background, 1 = normal, 2 = foreground
+                                const zIndex = node.data('customZIndex');
+                                if (zIndex === -1) return 0; // Background
+                                if (zIndex === 0) return 1;  // Normal
+                                if (zIndex === 1) return 2;  // Foreground
+                                return 1; // Default to normal
+                            },
                             'shape': function(node) {
                                 const shape = node.data('shape') || 'rectangle';
                                 const shapeMap = {
@@ -2049,7 +2058,7 @@
                     {
                         selector: 'edge.annotation-connection',
                         style: {
-                            'width': 3,
+                            'width': 6,
                             'line-color': '#ff6b6b',
                             'target-arrow-color': '#ff6b6b',
                             'curve-style': 'bezier',
@@ -2447,6 +2456,18 @@
                 menu.appendChild(removeColorOption);
             }
             
+            // Resize option for annotation/geometric shapes
+            if (node.data('isAnnotation') && node.data('annotationType') !== 'connection') {
+                const resizeOption = document.createElement('div');
+                resizeOption.className = 'context-menu-item';
+                resizeOption.innerHTML = '↗️ Ändra storlek';
+                resizeOption.onclick = () => {
+                    hideContextMenu();
+                    showResizeDialog(node);
+                };
+                menu.appendChild(resizeOption);
+            }
+            
             document.body.appendChild(menu);
             
             // Close menu on click elsewhere
@@ -2460,6 +2481,165 @@
             if (existingMenu) {
                 existingMenu.remove();
             }
+        }
+        
+        // Resize dialog for geometric shapes
+        function showResizeDialog(node) {
+            // Get current size or defaults
+            const currentWidth = node.data('customWidth') || 120;
+            const currentHeight = node.data('customHeight') || 120;
+            const currentZIndex = node.data('customZIndex') || -1;
+            
+            // Create overlay
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.5);
+                z-index: 10000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
+            
+            const dialog = document.createElement('div');
+            dialog.style.cssText = `
+                background: white;
+                padding: 30px;
+                border-radius: 15px;
+                max-width: 400px;
+                width: 90%;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            `;
+            
+            dialog.innerHTML = `
+                <h3 style="margin-top: 0; text-align: center;">↗️ Ändra storlek & lager</h3>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold;">Bredd (px):</label>
+                    <input type="number" id="resizeWidth" value="${currentWidth}" min="20" max="500" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold;">Höjd (px):</label>
+                    <input type="number" id="resizeHeight" value="${currentHeight}" min="20" max="500" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold;">Lagerhöjd:</label>
+                    <select id="layerSelect" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <option value="-1" ${currentZIndex === -1 ? 'selected' : ''}>🔻 Bakgrund (under kort)</option>
+                        <option value="0" ${currentZIndex === 0 ? 'selected' : ''}>📄 Normal nivå</option>
+                        <option value="1" ${currentZIndex === 1 ? 'selected' : ''}>🔺 Förgrund (över kort)</option>
+                    </select>
+                    <small style="color: #666; display: block; margin-top: 5px;">Bakgrund: figurerna hamnar under korten som underlägg</small>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="keepAspectRatio" checked>
+                        <span>Behåll proportioner</span>
+                    </label>
+                </div>
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button id="cancelResize" style="padding: 10px 20px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">Avbryt</button>
+                    <button id="applyResize" style="padding: 10px 20px; border: none; background: #007acc; color: white; border-radius: 4px; cursor: pointer;">Tillämpa</button>
+                </div>
+            `;
+            
+            overlay.appendChild(dialog);
+            document.body.appendChild(overlay);
+            
+            // Focus first input
+            const widthInput = document.getElementById('resizeWidth');
+            const heightInput = document.getElementById('resizeHeight');
+            const aspectCheckbox = document.getElementById('keepAspectRatio');
+            widthInput.focus();
+            
+            // Keep aspect ratio functionality
+            const originalAspectRatio = currentWidth / currentHeight;
+            
+            widthInput.addEventListener('input', () => {
+                if (aspectCheckbox.checked) {
+                    heightInput.value = Math.round(widthInput.value / originalAspectRatio);
+                }
+            });
+            
+            heightInput.addEventListener('input', () => {
+                if (aspectCheckbox.checked) {
+                    widthInput.value = Math.round(heightInput.value * originalAspectRatio);
+                }
+            });
+            
+            // Handle buttons
+            document.getElementById('cancelResize').onclick = () => {
+                document.body.removeChild(overlay);
+            };
+            
+            document.getElementById('applyResize').onclick = () => {
+                const newWidth = parseInt(widthInput.value) || currentWidth;
+                const newHeight = parseInt(heightInput.value) || currentHeight;
+                const newZIndex = parseInt(document.getElementById('layerSelect').value);
+                
+                // Apply resize and layer change
+                resizeAnnotationNode(node, newWidth, newHeight, newZIndex);
+                
+                document.body.removeChild(overlay);
+            };
+            
+            // ESC to close
+            const handleEscape = (e) => {
+                if (e.key === 'Escape') {
+                    document.body.removeChild(overlay);
+                    document.removeEventListener('keydown', handleEscape);
+                }
+            };
+            document.addEventListener('keydown', handleEscape);
+            
+            // Enter to apply
+            const handleEnter = (e) => {
+                if (e.key === 'Enter') {
+                    document.getElementById('applyResize').click();
+                    document.removeEventListener('keydown', handleEnter);
+                }
+            };
+            document.addEventListener('keydown', handleEnter);
+        }
+        
+        // Apply resize and layer change to annotation node
+        function resizeAnnotationNode(node, newWidth, newHeight, newZIndex = null) {
+            console.log('🔧 Resizing annotation node:', node.id(), 'to', newWidth, 'x', newHeight, 'z-index:', newZIndex);
+            
+            // Store the new size and layer in node data
+            node.data('customWidth', newWidth);
+            node.data('customHeight', newHeight);
+            if (newZIndex !== null) {
+                node.data('customZIndex', newZIndex);
+            }
+            
+            // Update the visual properties using Cytoscape style
+            cy.batch(() => {
+                const styleUpdate = {
+                    'width': newWidth + 'px',
+                    'height': newHeight + 'px'
+                };
+                
+                if (newZIndex !== null) {
+                    // Convert internal z-index to Cytoscape z-index
+                    let cyZIndex = 1; // default
+                    if (newZIndex === -1) cyZIndex = 0; // Background
+                    if (newZIndex === 0) cyZIndex = 1;  // Normal
+                    if (newZIndex === 1) cyZIndex = 2;  // Foreground
+                    styleUpdate['z-index'] = cyZIndex;
+                }
+                
+                node.style(styleUpdate);
+            });
+            
+            const layerName = newZIndex === -1 ? 'bakgrund' : newZIndex === 0 ? 'normal' : 'förgrund';
+            console.log('✅ Resize and layer change applied successfully, now in:', layerName);
+            
+            // Save the board to persist changes
+            saveBoard();
         }
         
         // Color picker system
@@ -2857,6 +3037,103 @@
             });
         }
         
+        // Get nodes sorted by arrow connections (topological sort)
+        function getArrowBasedOrder(selectedNodes) {
+            console.log('🔍 getArrowBasedOrder called with:', selectedNodes.length, 'nodes');
+            
+            // Get all edges connecting the selected nodes
+            const nodeIds = new Set(selectedNodes.map(node => node.id()));
+            console.log('📝 Selected node IDs:', Array.from(nodeIds));
+            
+            const allEdges = cy.edges();
+            console.log('📊 Total edges in graph:', allEdges.length);
+            
+            const relevantEdges = allEdges.filter(edge => {
+                const sourceId = edge.source().id();
+                const targetId = edge.target().id();
+                const isRelevant = nodeIds.has(sourceId) && nodeIds.has(targetId);
+                if (isRelevant) {
+                    console.log('✅ Found relevant edge:', sourceId, '→', targetId);
+                }
+                return isRelevant;
+            });
+            
+            console.log('🔗 Relevant edges found:', relevantEdges.length);
+            
+            if (relevantEdges.length === 0) {
+                console.log('❌ No arrows between selected nodes, returning original order');
+                return selectedNodes; // No arrows, return original order
+            }
+            
+            // Build adjacency list for topological sort
+            const adjList = new Map();
+            const inDegree = new Map();
+            
+            // Initialize all selected nodes
+            selectedNodes.forEach(node => {
+                const id = node.id();
+                adjList.set(id, []);
+                inDegree.set(id, 0);
+            });
+            
+            // Build graph from edges
+            relevantEdges.forEach(edge => {
+                const sourceId = edge.source().id();
+                const targetId = edge.target().id();
+                
+                console.log('🔧 Building edge:', sourceId, '→', targetId);
+                adjList.get(sourceId).push(targetId);
+                inDegree.set(targetId, inDegree.get(targetId) + 1);
+            });
+            
+            console.log('📈 In-degrees:', Object.fromEntries(inDegree));
+            
+            // Kahn's algorithm for topological sorting
+            const queue = [];
+            const sortedOrder = [];
+            
+            // Find nodes with no incoming edges
+            for (const [nodeId, degree] of inDegree) {
+                if (degree === 0) {
+                    console.log('🚀 Starting node (no incoming edges):', nodeId);
+                    queue.push(nodeId);
+                }
+            }
+            
+            while (queue.length > 0) {
+                const currentId = queue.shift();
+                sortedOrder.push(currentId);
+                console.log('✔️ Processing node:', currentId);
+                
+                // Process neighbors
+                const neighbors = adjList.get(currentId) || [];
+                neighbors.forEach(neighborId => {
+                    inDegree.set(neighborId, inDegree.get(neighborId) - 1);
+                    console.log('📉 Reduced in-degree for', neighborId, 'to', inDegree.get(neighborId));
+                    if (inDegree.get(neighborId) === 0) {
+                        console.log('🚀 Adding to queue:', neighborId);
+                        queue.push(neighborId);
+                    }
+                });
+            }
+            
+            // Handle cycles - add remaining nodes
+            selectedNodes.forEach(node => {
+                if (!sortedOrder.includes(node.id())) {
+                    console.log('⚠️ Adding remaining node (possible cycle):', node.id());
+                    sortedOrder.push(node.id());
+                }
+            });
+            
+            // Convert back to node objects in sorted order
+            const nodeMap = new Map(selectedNodes.map(node => [node.id(), node]));
+            const sortedNodes = sortedOrder.map(id => nodeMap.get(id)).filter(Boolean);
+            
+            console.log('🎯 Final sorted order:', sortedOrder);
+            console.log('✅ Arrow-based sorting complete:', relevantEdges.length, 'edges found, sorted', sortedNodes.length, 'nodes');
+            return sortedNodes;
+        }
+
         function extractDateFromId(nodeId) {
             // Try to extract timestamp from ID like "20250810-143052"
             const match = nodeId.match(/(\d{8}-\d{6})/);
@@ -3045,16 +3322,18 @@
             const centerX = arrangePos.x;
             const centerY = arrangePos.y;
             
-            // Sort nodes - use custom sorting if active, otherwise keep original order
-            let nodesToArrange = sortMode ? sortNodes(selectedNodes.toArray()) : selectedNodes.toArray();
-            
-            // Clear sort mode after use
+            // Sort nodes - check arrows first, then custom sorting, then original order
+            let nodesToArrange;
             if (sortMode) {
+                nodesToArrange = sortNodes(selectedNodes.toArray());
                 console.log('Applied sorting:', sortMode);
                 sortMode = null;
                 // Hide status message
                 const statusDiv = document.getElementById('selectionInfo');
                 if (statusDiv) statusDiv.classList.remove('visible');
+            } else {
+                // Try arrow-based sorting first
+                nodesToArrange = getArrowBasedOrder(selectedNodes.toArray());
             }
             
             // Calculate total height needed for all cards with spacing
@@ -3113,16 +3392,19 @@
             const centerX = arrangePos.x;
             const centerY = arrangePos.y;
             
-            // Sort nodes - use custom sorting if active, otherwise maintain left-to-right order
-            let sortedNodes = sortMode ? sortNodes(selectedNodes.toArray()) : selectedNodes.sort((a, b) => a.position().x - b.position().x);
-            
-            // Clear sort mode after use
+            // Sort nodes - check arrows first, then custom sorting, then left-to-right order
+            let sortedNodes;
             if (sortMode) {
+                sortedNodes = sortNodes(selectedNodes.toArray());
                 console.log('Applied sorting:', sortMode);
                 sortMode = null;
                 // Hide status message
                 const statusDiv = document.getElementById('selectionInfo');
                 if (statusDiv) statusDiv.classList.remove('visible');
+            } else {
+                // Try arrow-based sorting first, fallback to left-to-right
+                const arrowSorted = getArrowBasedOrder(selectedNodes.toArray());
+                sortedNodes = arrowSorted.length === selectedNodes.length ? arrowSorted : selectedNodes.sort((a, b) => a.position().x - b.position().x);
             }
             
             // Calculate total width needed for all cards with spacing (use 20% spacing)
@@ -3615,30 +3897,54 @@
             const startX = screenCenterX - gridWidth / 2;
             const topLineY = screenCenterY; // Top of grid at mouse cursor (like G+H)
             
-            // Sort nodes - use custom sorting if active, otherwise keep original order
-            const nodeArray = sortMode ? sortNodes(selectedNodes.toArray()) : selectedNodes.toArray();
-            
-            // Clear sort mode after use
+            // Sort nodes - check arrows first, then custom sorting, then original order
+            let nodeArray;
             if (sortMode) {
+                nodeArray = sortNodes(selectedNodes.toArray());
                 console.log('Applied sorting:', sortMode);
                 sortMode = null;
                 // Hide status message
                 const statusDiv = document.getElementById('selectionInfo');
                 if (statusDiv) statusDiv.classList.remove('visible');
+            } else {
+                // Try arrow-based sorting first
+                nodeArray = getArrowBasedOrder(selectedNodes.toArray());
             }
             
-            // Arrange column by column with top alignment
-            for (let col = 0; col < cols; col++) {
-                let currentY = topLineY;
-                
-                for (let row = 0; row < rows; row++) {
+            // Row-by-row placement to respect arrow sorting order
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
                     const nodeIndex = row * cols + col;
                     if (nodeIndex < nodeArray.length) {
                         const node = nodeArray[nodeIndex];
                         const cardHeight = getMeasuredTextHeight(node);
                         
                         const newX = startX + col * horizontalSpacing;
-                        const cardCenterY = currentY + (cardHeight / 2);
+                        let cardCenterY;
+                        
+                        if (row === 0) {
+                            // First row: align tops at topLineY
+                            cardCenterY = topLineY + (cardHeight / 2);
+                        } else {
+                            // Other rows: calculate based on previous rows
+                            let totalHeightAbove = 0;
+                            for (let prevRow = 0; prevRow < row; prevRow++) {
+                                // Find the tallest card in the previous row
+                                let maxHeightInRow = 100; // minimum height
+                                for (let prevCol = 0; prevCol < cols; prevCol++) {
+                                    const prevIndex = prevRow * cols + prevCol;
+                                    if (prevIndex < nodeArray.length) {
+                                        const prevNode = nodeArray[prevIndex];
+                                        const prevHeight = getMeasuredTextHeight(prevNode);
+                                        maxHeightInRow = Math.max(maxHeightInRow, prevHeight);
+                                    }
+                                }
+                                totalHeightAbove += maxHeightInRow + verticalSpacing;
+                            }
+                            cardCenterY = topLineY + totalHeightAbove + (cardHeight / 2);
+                        }
+                        
+                        console.log(`🎯 G+V placing node ${nodeIndex} (${node.id()}) at col ${col}, row ${row}`);
                         
                         node.animate({
                             position: { x: newX, y: cardCenterY }
@@ -3646,11 +3952,6 @@
                             duration: 400,
                             easing: 'ease-out'
                         });
-                        
-                        // Move to next position in this column with same spacing as G+H
-                        if (row < rows - 1) {
-                            currentY += cardHeight + verticalSpacing; // 40px spacing like G+H
-                        }
                     }
                 }
             }
@@ -3687,16 +3988,18 @@
             const gridWidth = (cols - 1) * horizontalSpacing;
             const startX = screenCenterX - gridWidth / 2;
             
-            // Sort nodes - use custom sorting if active, otherwise keep original order
-            const nodeArray = sortMode ? sortNodes(selectedNodes.toArray()) : selectedNodes.toArray();
-            
-            // Clear sort mode after use
+            // Sort nodes - check arrows first, then custom sorting, then original order
+            let nodeArray;
             if (sortMode) {
+                nodeArray = sortNodes(selectedNodes.toArray());
                 console.log('Applied sorting:', sortMode);
                 sortMode = null;
                 // Hide status message
                 const statusDiv = document.getElementById('selectionInfo');
                 if (statusDiv) statusDiv.classList.remove('visible');
+            } else {
+                // Try arrow-based sorting first
+                nodeArray = getArrowBasedOrder(selectedNodes.toArray());
             }
             
             // First pass: calculate the height of each row
@@ -3782,31 +4085,35 @@
             // For top row alignment
             const topRowY = screenCenterY - 100; // Start a bit above center
             
-            // Sort nodes - use custom sorting if active, otherwise keep original order
+            // Sort nodes - check arrows first, then custom sorting, then original order
             const wasSorted = !!sortMode;
-            const nodeArray = sortMode ? sortNodes(selectedNodes.toArray()) : selectedNodes.toArray();
-            
-            // Clear sort mode after use
+            let nodeArray;
             if (sortMode) {
+                nodeArray = sortNodes(selectedNodes.toArray());
                 console.log('Applied sorting:', sortMode);
                 sortMode = null;
                 // Hide status message
                 const statusDiv = document.getElementById('selectionInfo');
                 if (statusDiv) statusDiv.classList.remove('visible');
+            } else {
+                // Try arrow-based sorting first
+                nodeArray = getArrowBasedOrder(selectedNodes.toArray());
             }
             
-            // Use same column-by-column placement as original (works for both sorted and unsorted)
-            for (let col = 0; col < cols; col++) {
-                const colX = startX + col * (cardWidth + horizontalSpacing);
-                let currentY = topRowY;
+            // Row-by-row placement to respect arrow sorting order
+            for (let row = 0; row < rows; row++) {
+                let currentY = topRowY + row * overlapSpacing;
                 
-                // Go through each row in this column
-                for (let row = 0; row < rows; row++) {
+                // Go through each column in this row
+                for (let col = 0; col < cols; col++) {
                     const nodeIndex = row * cols + col;
                     if (nodeIndex < nodeArray.length) {
                         const node = nodeArray[nodeIndex];
+                        const colX = startX + col * (cardWidth + horizontalSpacing);
                         const cardHeight = getMeasuredTextHeight(node);
                         const cardCenterY = currentY + (cardHeight / 2);
+                        
+                        console.log(`🎯 G+T placing node ${nodeIndex} (${node.id()}) at col ${col}, row ${row}`);
                         
                         node.animate({
                             position: { x: colX, y: cardCenterY }
@@ -3814,9 +4121,6 @@
                             duration: 400,
                             easing: 'ease-out'
                         });
-                        
-                        // Next card in this column is 120px lower
-                        currentY += overlapSpacing;
                     }
                 }
             }
@@ -3847,7 +4151,37 @@
                     source_file: node.data('source_file') || null,
                     page_number: node.data('page_number') || null,
                     matched_terms: node.data('matched_terms') || null,
-                    card_index: node.data('card_index') || null
+                    card_index: node.data('card_index') || null,
+                    // Annotation-specific data
+                    isAnnotation: node.data('isAnnotation') || false,
+                    annotationType: node.data('annotationType') || null,
+                    customWidth: node.data('customWidth') || null,
+                    customHeight: node.data('customHeight') || null,
+                    customZIndex: node.data('customZIndex') || null,
+                    // Save annotation color from visual style
+                    annotationColor: node.data('isAnnotation') ? node.style('background-color') : null,
+                    // Save shape data for geometric figures
+                    shape: node.data('shape') || null
+                })),
+                edges: cy.edges().map(edge => ({
+                    id: edge.id(),
+                    source: edge.source().id(),
+                    target: edge.target().id(),
+                    // Preserve all edge data
+                    isAnnotation: edge.data('isAnnotation') || false,
+                    annotationType: edge.data('annotationType') || null,
+                    customColor: edge.data('customColor') || null,
+                    // Save all visual styling
+                    style: {
+                        'line-color': edge.style('line-color'),
+                        'target-arrow-color': edge.style('target-arrow-color'),
+                        'target-arrow-shape': edge.style('target-arrow-shape'),
+                        'source-arrow-color': edge.style('source-arrow-color'),
+                        'source-arrow-shape': edge.style('source-arrow-shape'),
+                        'width': edge.style('width'),
+                        'curve-style': edge.style('curve-style'),
+                        'control-point-step-size': edge.style('control-point-step-size')
+                    }
                 })),
                 viewport: {
                     zoom: cy.zoom(),
@@ -3904,7 +4238,17 @@
                             source_file: cardData.source_file || null,
                             page_number: cardData.page_number || null,
                             matched_terms: cardData.matched_terms || null,
-                            card_index: cardData.card_index || null
+                            card_index: cardData.card_index || null,
+                            // Annotation-specific data
+                            isAnnotation: cardData.isAnnotation || false,
+                            annotationType: cardData.annotationType || null,
+                            customWidth: cardData.customWidth || null,
+                            customHeight: cardData.customHeight || null,
+                            customZIndex: cardData.customZIndex || null,
+                            // Store annotation color for restoration
+                            annotationColor: cardData.annotationColor || null,
+                            // Store shape data for geometric figures
+                            shape: cardData.shape || null
                         },
                         position: cardData.position
                     });
@@ -3914,6 +4258,44 @@
                         newNode.addClass('pinned');
                     }
                     
+                    // Restore annotation shape class and text label
+                    if (cardData.isAnnotation && cardData.annotationType === 'shape') {
+                        newNode.addClass('annotation-shape');
+                        
+                        // Make sure text shows as label for annotations
+                        if (cardData.text) {
+                            newNode.style('label', cardData.text);
+                            console.log('✅ Restored annotation text:', cardData.text, 'for node:', cardData.id);
+                        }
+                    }
+                    
+                    // Restore custom size, layer and color for annotation nodes
+                    if (cardData.isAnnotation && (cardData.customWidth || cardData.customHeight || cardData.customZIndex !== null || cardData.annotationColor)) {
+                        const width = cardData.customWidth || 120;
+                        const height = cardData.customHeight || 120;
+                        const zIndex = cardData.customZIndex !== null ? cardData.customZIndex : -1;
+                        
+                        // Convert internal z-index to Cytoscape z-index
+                        let cyZIndex = 1; // default
+                        if (zIndex === -1) cyZIndex = 0; // Background
+                        if (zIndex === 0) cyZIndex = 1;  // Normal
+                        if (zIndex === 1) cyZIndex = 2;  // Foreground
+                        
+                        const styleUpdate = {
+                            'width': width + 'px',
+                            'height': height + 'px',
+                            'z-index': cyZIndex
+                        };
+                        
+                        // Restore annotation color if saved
+                        if (cardData.annotationColor && cardData.annotationColor !== 'rgb(255,255,255)') {
+                            styleUpdate['background-color'] = cardData.annotationColor;
+                        }
+                        
+                        newNode.style(styleUpdate);
+                        console.log('✅ Restored annotation styling for', newNode.id(), 'color:', cardData.annotationColor, 'shape:', cardData.shape);
+                    }
+                    
                     // Restore card color
                     if (cardData.cardColor) {
                         newNode.style('background-color', getCardColorValue(cardData.cardColor, getCurrentTheme()));
@@ -3921,6 +4303,34 @@
                     
                     newNode.grabify();
                 });
+                
+                // Restore edges/arrows if they exist
+                if (boardData.edges && Array.isArray(boardData.edges)) {
+                    boardData.edges.forEach(edgeData => {
+                        const newEdge = cy.add({
+                            data: {
+                                id: edgeData.id,
+                                source: edgeData.source,
+                                target: edgeData.target,
+                                isAnnotation: edgeData.isAnnotation || false,
+                                annotationType: edgeData.annotationType || null,
+                                customColor: edgeData.customColor || null
+                            }
+                        });
+                        
+                        // Apply annotation classes for styling
+                        if (edgeData.isAnnotation) {
+                            newEdge.addClass('annotation-connection');
+                        }
+                        
+                        // Restore all visual styling
+                        if (edgeData.style) {
+                            newEdge.style(edgeData.style);
+                            console.log('✅ Restored edge styling for', edgeData.id, 'arrow shape:', edgeData.style['target-arrow-shape']);
+                        }
+                    });
+                    console.log('✅ Restored', boardData.edges.length, 'edges/arrows');
+                }
                 
                 // Card IDs are now timestamp-based, no counter needed
                 
@@ -4502,28 +4912,28 @@
         function getCardColorValue(colorId, theme) {
             const colors = {
                 light: {
-                    1: '#e8f5e8', // Grön
-                    2: '#fff3e0', // Orange  
-                    3: '#ffebee', // Röd
-                    4: '#fffde7', // Gul
-                    5: '#f1f8e9', // Gröngul
-                    6: '#e3f2fd'  // Blå
+                    1: '#d4f2d4', // Grön (stronger)
+                    2: '#ffe4b3', // Orange (stronger)
+                    3: '#ffc1cc', // Röd (stronger)
+                    4: '#fff7b3', // Gul (stronger)
+                    5: '#e1f0c1', // Gröngul (stronger)
+                    6: '#c7e7ff'  // Blå (stronger)
                 },
                 dark: {
-                    1: '#2d4a2d', // Mörk Grön
-                    2: '#4a3d2a', // Mörk Orange
-                    3: '#4a2c2a', // Mörk Röd
-                    4: '#4a4a2a', // Mörk Gul
-                    5: '#3a4a2d', // Mörk Gröngul
-                    6: '#1e3a5f'  // Mörk Blå
+                    1: '#3d5a3d', // Mörk Grön (stronger)
+                    2: '#5a4d3a', // Mörk Orange (stronger)
+                    3: '#5a3c3a', // Mörk Röd (stronger)
+                    4: '#5a5a3a', // Mörk Gul (stronger)
+                    5: '#4a5a3d', // Mörk Gröngul (stronger)
+                    6: '#2e4a6f'  // Mörk Blå (stronger)
                 },
                 sepia: {
-                    1: '#e8e6d7', // Sepia Grön
-                    2: '#f0e6d2', // Sepia Orange
-                    3: '#f4e6d7', // Sepia Röd
-                    4: '#f5f2e6', // Sepia Gul
-                    5: '#eae6d7', // Sepia Gröngul
-                    6: '#e6d7c3'  // Sepia Blå
+                    1: '#ded6c7', // Sepia Grön (stronger)
+                    2: '#e6d6c2', // Sepia Orange (stronger)
+                    3: '#ead6c7', // Sepia Röd (stronger)
+                    4: '#ebe2d6', // Sepia Gul (stronger)
+                    5: '#dad6c7', // Sepia Gröngul (stronger)
+                    6: '#d6c7b3'  // Sepia Blå (stronger)
                 }
             };
             
