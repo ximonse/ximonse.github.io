@@ -4950,7 +4950,11 @@
                     // Save shape data for geometric figures
                     shape: node.data('shape') || null,
                     // Save custom font size for geometric shapes
-                    customFontSize: node.data('customFontSize') || null
+                    customFontSize: node.data('customFontSize') || null,
+                    // Save copy metadata for copy tracking
+                    copyOf: node.data('copyOf') || null,
+                    isCopy: node.data('isCopy') || false,
+                    copyTimestamp: node.data('copyTimestamp') || null
                 })),
                 edges: cy.edges().map(edge => ({
                     id: edge.id(),
@@ -5032,7 +5036,11 @@
                             // Store shape data for geometric figures
                             shape: cardData.shape || null,
                             // Store custom font size for geometric shapes
-                            customFontSize: cardData.customFontSize || null
+                            customFontSize: cardData.customFontSize || null,
+                            // Restore copy metadata for copy tracking
+                            copyOf: cardData.copyOf || null,
+                            isCopy: cardData.isCopy || false,
+                            copyTimestamp: cardData.copyTimestamp || null
                         },
                         position: cardData.position
                     });
