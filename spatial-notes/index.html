@@ -3769,6 +3769,57 @@
             return markedCount;
         }
         
+        // Debug function to check hidden_tags - call this in console
+        function debugHiddenTags() {
+            console.log('=== HIDDEN TAGS DEBUG ===');
+            cy.nodes().forEach(node => {
+                const hiddenTags = node.data('hidden_tags') || [];
+                const isCopy = node.data('isCopy');
+                const copyOf = node.data('copyOf');
+                const copyTimestamp = node.data('copyTimestamp');
+                
+                if (hiddenTags.length > 0 || isCopy) {
+                    console.log(`Card ${node.id()}:`);
+                    console.log(`  Title: "${node.data('title')}"`);
+                    console.log(`  Hidden tags:`, hiddenTags);
+                    console.log(`  isCopy:`, isCopy);
+                    console.log(`  copyOf:`, copyOf);
+                    console.log(`  copyTimestamp:`, copyTimestamp);
+                    console.log('---');
+                }
+            });
+            console.log('=== END DEBUG ===');
+        }
+        
+        // Test copy search - call this in console 
+        function testCopySearch() {
+            console.log('🧪 Testing copy search functionality...');
+            
+            // Create test card
+            const testNode = cy.add({
+                data: {
+                    id: 'test-copy-search',
+                    title: 'Test Original',
+                    text: 'This is a test card',
+                    tags: ['test'],
+                    hidden_tags: [],
+                    searchMatch: false
+                },
+                position: { x: 100, y: 100 }
+            });
+            testNode.grabify();
+            
+            // Select and copy it
+            testNode.select();
+            copySelectedCards();
+            
+            // Create copy via arrangement
+            arrangeCopiedCardsInRow();
+            
+            console.log('✅ Test setup complete. Now try searching for "copy_" in the search box');
+            console.log('💡 Also try: debugHiddenTags() to see all hidden tags');
+        }
+        
         // Test function for temporal markings - call this in console
         function testTemporalMarkings() {
             // Create test cards with different date scenarios
@@ -5665,6 +5716,12 @@
         
         // Clear board completely
         function clusterSelectedCards() {
+            // If we have copied cards, create and arrange them. Otherwise, arrange selected nodes.
+            if (copiedCards.length > 0) {
+                arrangeCopiedCardsInCluster();
+                return;
+            }
+            
             const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
             if (selectedNodes.length < 2) return;
             
@@ -7085,6 +7142,74 @@ Skriv ditt innehåll här...
             newNodes.forEach(node => node.select());
             
             console.log(`G+T: Created ${newNodes.length} copied cards in top-aligned ${rows}×${cols} grid`);
+        }
+        
+        // Arrange copied cards in cluster at mouse position
+        function arrangeCopiedCardsInCluster() {
+            if (copiedCards.length === 0) return;
+            
+            const arrangePos = getArrangementPosition();
+            const centerX = arrangePos.x;
+            const centerY = arrangePos.y;
+            
+            // Create the copied cards with unique IDs
+            const now = new Date();
+            const baseId = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+            
+            const newNodes = [];
+            copiedCards.forEach((cardData, index) => {
+                const newId = `${baseId}-copy-${index + 1}`;
+                
+                const newNode = cy.add({
+                    data: {
+                        id: newId,
+                        title: cardData.title,
+                        text: cardData.text,
+                        tags: cardData.tags,
+                        hidden_tags: cardData.hidden_tags || [],
+                        searchMatch: false,
+                        // Copy metadata
+                        export_timestamp: cardData.export_timestamp,
+                        export_session: cardData.export_session,
+                        export_source: cardData.export_source,
+                        source_file: cardData.source_file,
+                        page_number: cardData.page_number,
+                        matched_terms: cardData.matched_terms,
+                        card_index: cardData.card_index,
+                        // New copy metadata
+                        copyOf: cardData.copyOf,
+                        isCopy: cardData.isCopy,
+                        copyTimestamp: cardData.copyTimestamp
+                    },
+                    position: { x: centerX, y: centerY } // Will be repositioned below
+                });
+                
+                newNode.grabify();
+                newNodes.push(newNode);
+            });
+            
+            // Arrange in cluster (tight circle)
+            const radius = 50; // Small cluster radius like original clusterSelectedCards
+            
+            newNodes.forEach((node, index) => {
+                const angle = (index / newNodes.length) * 2 * Math.PI;
+                const x = centerX + Math.cos(angle) * radius;
+                const y = centerY + Math.sin(angle) * radius;
+                
+                node.position({ x: x, y: y });
+            });
+            
+            // Clear copied cards and select the new ones
+            copiedCards = [];
+            cy.nodes().unselect();
+            newNodes.forEach(node => node.select());
+            
+            // Apply temporal markings to newly created cards
+            setTimeout(() => {
+                applyTemporalMarkings();
+            }, 100);
+            
+            console.log(`Q: Created and clustered ${newNodes.length} copied cards`);
         }
         
         // Quick note dialog for Alt+N
