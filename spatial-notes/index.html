@@ -134,19 +134,6 @@
             border-radius: 20px;
         }
         
-        .google-drive-btn {
-            padding: 8px 16px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-weight: 500;
-            margin-left: 15px;
-        }
-        
-        .google-drive-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
         
         .menu-dropdown {
             position: relative;
@@ -811,14 +798,6 @@
                 justify-content: center;
             }
             
-            .google-drive-btn span:last-child {
-                display: none; /* Hide "Google Drive" text */
-            }
-            
-            .google-drive-btn {
-                width: 40px;
-                height: 40px;
-            }
             
             .menu-button {
                 padding: 8px 12px;
@@ -1065,11 +1044,7 @@
         <div class="tag-filter-box">
             <input type="text" class="tag-filter-input" placeholder="Filter på tags: tech, psychology..." id="tagFilterInput">
         </div>
-        <button class="google-drive-btn toolbar-btn" id="googleDriveBtn" onclick="toggleGoogleDriveAuth()">
-            <span>📱</span>
-            <span id="driveButtonText">Google Drive</span>
-        </button>
-        <button class="google-drive-btn toolbar-btn" id="annotationToggleBtn" onclick="toggleAnnotationToolbar()" title="Aktivera/inaktivera annotation-verktyg">
+        <button class="toolbar-btn" id="annotationToggleBtn" onclick="toggleAnnotationToolbar()" title="Aktivera/inaktivera annotation-verktyg">
             ⬜→⭕
         </button>
         
@@ -1084,14 +1059,13 @@
                 <span>▼</span>
             </button>
             <div class="dropdown-content">
-                <button onclick="saveBoard()">💾 Spara</button>
-                <button onclick="loadBoard()">📂 Ladda</button>
+                <button onclick="saveBoard()">💾 Spara (LocalStorage)</button>
+                <button onclick="saveWithTimestamp()">💾 Spara fil</button>
+                <button onclick="saveAs()">💾 Spara som...</button>
+                <button onclick="loadBoard()">📂 Ladda fil</button>
                 <button onclick="exportToJSON()">📋 Exportera JSON</button>
                 <button onclick="importFromJSON()">📁 Importera JSON</button>
                 <button onclick="importFromExtractor()">📥 Från PDF-Extractor</button>
-                <button onclick="saveToGoogleDrive()" id="driveSaveBtn">☁️ Spara till Drive</button>
-                <button onclick="loadFromGoogleDrive()" id="driveLoadBtn">☁️ Ladda från Drive</button>
-                <button onclick="showProjectManager()" id="projectManagerBtn">📁 Hantera Projekt</button>
                 <button onclick="toggleMetadataView()" id="metadataBtn">🔍 Metadata</button>
                 <button onclick="debugDumpPositions()">🐛 Debug Positioner</button>
                 <button onclick="toggleDarkTheme()" id="themeBtn">🌙 Mörkt Tema</button>
@@ -4931,8 +4905,18 @@
             console.log(`G+T: Tight grid with 120px overlap - max ${maxCols} wide, ${rows} deep for ${selectedNodes.length} cards`);
         }
         
-        // Save board to localStorage
-        function saveBoard() {
+        // Change tracking for autosave
+        let hasChanges = false;
+        let autosaveInterval = null;
+        
+        // Mark that changes have been made
+        function markChanged() {
+            hasChanges = true;
+        }
+        
+        // Save board to localStorage or file
+        function saveBoard(filename = null, isAutosave = false) {
+            const now = new Date();
             const boardData = {
                 cards: cy.nodes().map(node => ({
                     id: node.id(),
@@ -4996,18 +4980,76 @@
                 },
                 // Save global arrow visibility state
                 arrowsHidden: window.arrowsHidden || false,
-                timestamp: new Date().toISOString(),
+                lastModified: now.getTime(), // Unix timestamp for comparison
+                timestamp: now.toISOString(), // Human readable
                 version: '1.0'
             };
             
-            localStorage.setItem('spatial-notes-board', JSON.stringify(boardData));
-            // Show saved message in status indicator
+            if (filename) {
+                // Save to file
+                const blob = new Blob([JSON.stringify(boardData, null, 2)], {type: 'application/json'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } else {
+                // Save to localStorage
+                localStorage.setItem('spatial-notes-board', JSON.stringify(boardData));
+            }
+            
+            // Reset change tracking
+            hasChanges = false;
+            
+            // Show saved message
             const searchInfo = document.getElementById('searchInfo');
-            searchInfo.textContent = 'Sparad ✓';
+            if (isAutosave) {
+                searchInfo.textContent = 'Auto-sparad ✓';
+            } else {
+                searchInfo.textContent = 'Sparad ✓';
+            }
             searchInfo.classList.add('visible');
             setTimeout(() => {
                 searchInfo.classList.remove('visible');
             }, 2000);
+        }
+        
+        // Save with timestamp filename
+        function saveWithTimestamp() {
+            const now = new Date();
+            const timestamp = now.toISOString().replace(/[:.]/g, '-').replace('T', '_').split('.')[0];
+            const filename = `board-name_${timestamp}.json`;
+            saveBoard(filename);
+        }
+        
+        // Save as dialog
+        function saveAs() {
+            const filename = prompt('Filnamn (utan .json):', 'my-board');
+            if (filename) {
+                saveBoard(filename.endsWith('.json') ? filename : filename + '.json');
+            }
+        }
+        
+        // Autosave function
+        function performAutosave() {
+            if (hasChanges) {
+                const now = new Date();
+                const timestamp = now.toISOString().replace(/[:.]/g, '-').replace('T', '_').split('.')[0];
+                const filename = `board-name_autosave_${timestamp}.json`;
+                saveBoard(filename, true);
+            }
+        }
+        
+        // Start autosave timer
+        function startAutosave() {
+            if (autosaveInterval) {
+                clearInterval(autosaveInterval);
+            }
+            // Every 20 minutes (1200000 ms)
+            autosaveInterval = setInterval(performAutosave, 20 * 60 * 1000);
         }
         
         
@@ -5172,23 +5214,66 @@
             }
         }
         
-        // Load board from localStorage (public function with UI alerts)
+        // Load board from file
         function loadBoard() {
-            // Clear any stray edit dialogs first
-            clearAllEditDialogs();
-            
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        try {
+                            const boardData = JSON.parse(e.target.result);
+                            loadBoardFromData(boardData);
+                            console.log(`File loaded: ${boardData.cards.length} cards and ${(boardData.edges || []).length} edges`);
+                        } catch (error) {
+                            alert('Fel vid laddning av fil: ' + error.message);
+                        }
+                    };
+                    reader.readAsText(file);
+                }
+            };
+            input.click();
+        }
+        
+        // Check for newer files on startup
+        function checkForNewerFiles() {
+            // This is a placeholder - browser can't scan local files for security reasons
+            // User will need to manually check their folder or we could implement a file timestamp cache
+            console.log('Note: Manual file checking needed - browser cannot scan local folder');
+        }
+        
+        // Startup conflict detection (simplified for browser limitations)
+        function checkStartupConflicts() {
             const savedData = localStorage.getItem('spatial-notes-board');
-            if (!savedData) {
-                alert('Ingen sparad bräda hittades!');
-                return;
-            }
-            
-            try {
-                const boardData = JSON.parse(savedData);
-                loadBoardFromData(boardData);
-                console.log(`Manual load completed: ${boardData.cards.length} cards and ${(boardData.edges || []).length} edges`);
-            } catch (error) {
-                alert('Fel vid laddning av bräda: ' + error.message);
+            if (savedData) {
+                try {
+                    const boardData = JSON.parse(savedData);
+                    if (boardData.lastModified) {
+                        const lastModified = new Date(boardData.lastModified);
+                        const hoursSinceModified = (Date.now() - boardData.lastModified) / (1000 * 60 * 60);
+                        
+                        if (hoursSinceModified < 24) { // Show warning if modified within 24 hours
+                            const timeAgo = hoursSinceModified < 1 ? 
+                                `${Math.round(hoursSinceModified * 60)} minuter sedan` : 
+                                `${Math.round(hoursSinceModified)} timmar sedan`;
+                            
+                            console.log(`Varning: LocalStorage har data sparad ${timeAgo}. Kom ihåg att ladda senaste version från fil om du arbetat på annan dator.`);
+                            
+                            // Show subtle reminder in status
+                            const searchInfo = document.getElementById('searchInfo');
+                            searchInfo.textContent = `💡 LocalStorage från ${timeAgo}`;
+                            searchInfo.classList.add('visible');
+                            setTimeout(() => {
+                                searchInfo.classList.remove('visible');
+                            }, 5000);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error checking startup conflicts:', error);
+                }
             }
         }
         
@@ -8804,6 +8889,20 @@ Kan ha #taggar överallt.
         document.addEventListener('DOMContentLoaded', function() {
             initCytoscape();
             loadSavedTheme(); // Load theme before anything else
+            
+            // Check for potential conflicts on startup
+            checkStartupConflicts();
+            
+            // Start autosave system
+            startAutosave();
+            
+            // Add change tracking to Cytoscape events
+            cy.on('add remove position', function(evt) {
+                markChanged();
+            });
+            
+            // Also track manual edits through existing edit functions
+            // (editCard, editCodeCard, etc. already call saveBoard which resets hasChanges)
             
             // Load current project from localStorage even without Google login
             const savedProject = localStorage.getItem('google_current_project');
