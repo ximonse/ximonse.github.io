@@ -4753,11 +4753,12 @@
             const screenCenterY = arrangePos.y;
             
             const nodeCount = selectedNodes.length;
-            const cols = Math.ceil(Math.sqrt(nodeCount));
+            const maxCols = 6;
+            const cols = Math.min(maxCols, Math.ceil(Math.sqrt(nodeCount)));
             const rows = Math.ceil(nodeCount / cols);
             
-            const horizontalSpacing = 320;
-            const rowPadding = 40; // Space between rows
+            const horizontalSpacing = 360; // 60px gap between cards (360 - 300 = 60)
+            const rowPadding = 95; // Adjusted to get actual 60px visual spacing
             
             const gridWidth = (cols - 1) * horizontalSpacing;
             const startX = screenCenterX - gridWidth / 2;
@@ -6834,11 +6835,12 @@
             
             // Arrange in horizontal packed rows (exact same logic as original)
             const nodeCount = newNodes.length;
-            const cols = Math.ceil(Math.sqrt(nodeCount));
+            const maxCols = 6;
+            const cols = Math.min(maxCols, Math.ceil(Math.sqrt(nodeCount)));
             const rows = Math.ceil(nodeCount / cols);
             
-            const horizontalSpacing = 320;
-            const rowPadding = 40; // Space between rows
+            const horizontalSpacing = 360; // 60px gap between cards (360 - 300 = 60)
+            const rowPadding = 95; // Adjusted to get actual 60px visual spacing
             
             const gridWidth = (cols - 1) * horizontalSpacing;
             const startX = screenCenterX - gridWidth / 2;
