@@ -1047,7 +1047,7 @@
         <button class="toolbar-btn" id="annotationToggleBtn" onclick="toggleAnnotationToolbar()" title="Aktivera/inaktivera annotation-verktyg">
             ⬜→⭕
         </button>
-        <button class="toolbar-btn" id="imageUploadBtn" onclick="triggerImageUpload()" title="Kamera, Galleri, Filväljare, Google Drive">
+        <button class="toolbar-btn" id="imageUploadBtn" onclick="triggerImageUpload()" title="iPad: Kamera/Galleri-val | Desktop: Filuppladdning">
             📷 Bilder
         </button>
         
@@ -1174,73 +1174,11 @@
                    (navigator.maxTouchPoints && navigator.maxTouchPoints > 1);
         }
         
-        // Image upload handling - show menu with all 4 options
+        // Simple image upload - uses iPad's built-in camera/gallery choice
         function triggerImageUpload() {
-            showImageSourceMenu();
-        }
-        
-        // Show complete image source menu
-        function showImageSourceMenu(clientX = null, clientY = null) {
-            const menu = document.createElement('div');
-            
-            // Position menu at click position if provided, otherwise default position
-            const menuStyle = clientX && clientY ? `
-                position: fixed;
-                left: ${Math.min(clientX, window.innerWidth - 180)}px;
-                top: ${Math.min(clientY, window.innerHeight - 200)}px;
-            ` : `
-                position: fixed;
-                top: 70px;
-                right: 20px;
-            `;
-            
-            menu.style.cssText = menuStyle + `
-                background: white;
-                border: 1px solid #ddd;
-                border-radius: 8px;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                z-index: 10000;
-                padding: 8px 0;
-                min-width: 160px;
-            `;
-            
-            const options = [
-                { text: '📷 Kamera', action: () => document.getElementById('hiddenCameraInput').click() },
-                { text: '🖼️ Galleri', action: () => document.getElementById('hiddenGalleryInput').click() },
-                { text: '📂 Filväljare', action: () => document.getElementById('hiddenGalleryInput').click() },
-                { text: '☁️ Google Drive', action: () => console.log('Google Drive clicked - implement if needed') }
-            ];
-            
-            options.forEach((option, index) => {
-                const item = document.createElement('div');
-                item.textContent = option.text;
-                item.style.cssText = `
-                    padding: 12px 16px;
-                    cursor: pointer;
-                    border-bottom: ${index < options.length - 1 ? '1px solid #f0f0f0' : 'none'};
-                `;
-                item.onmouseover = () => item.style.backgroundColor = '#f8f9fa';
-                item.onmouseout = () => item.style.backgroundColor = 'white';
-                item.onclick = () => {
-                    option.action();
-                    document.body.removeChild(menu);
-                };
-                menu.appendChild(item);
-            });
-            
-            document.body.appendChild(menu);
-            
-            // Close menu when clicking outside
-            setTimeout(() => {
-                document.addEventListener('click', function closeMenu(e) {
-                    if (!menu.contains(e.target)) {
-                        if (document.body.contains(menu)) {
-                            document.body.removeChild(menu);
-                        }
-                        document.removeEventListener('click', closeMenu);
-                    }
-                });
-            }, 100);
+            // iPad: capture="camera" automatically gives both camera and gallery choice
+            // Desktop: Opens file picker
+            document.getElementById('hiddenCameraInput').click();
         }
 
         // Process uploaded images
