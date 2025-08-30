@@ -1047,7 +1047,7 @@
         <button class="toolbar-btn" id="annotationToggleBtn" onclick="toggleAnnotationToolbar()" title="Aktivera/inaktivera annotation-verktyg">
             ⬜→⭕
         </button>
-        <button class="toolbar-btn" id="imageUploadBtn" onclick="triggerImageUpload()" title="iPad: Kamera/galleri | Desktop: Filväljare | Långtryck på canvas: Klistra urklipp">
+        <button class="toolbar-btn" id="imageUploadBtn" onclick="triggerImageUpload()" title="Kamera, Galleri, Filväljare, Google Drive">
             📷 Bilder
         </button>
         
@@ -1174,15 +1174,73 @@
                    (navigator.maxTouchPoints && navigator.maxTouchPoints > 1);
         }
         
-        // Simple image upload - mobile gets camera, desktop gets file picker
+        // Image upload handling - show menu with all 4 options
         function triggerImageUpload() {
-            if (isMobileDevice()) {
-                // Mobile/tablet: Use camera input (includes camera + gallery options)
-                document.getElementById('hiddenCameraInput').click();
-            } else {
-                // Desktop: Direct file picker
-                document.getElementById('hiddenGalleryInput').click();
-            }
+            showImageSourceMenu();
+        }
+        
+        // Show complete image source menu
+        function showImageSourceMenu(clientX = null, clientY = null) {
+            const menu = document.createElement('div');
+            
+            // Position menu at click position if provided, otherwise default position
+            const menuStyle = clientX && clientY ? `
+                position: fixed;
+                left: ${Math.min(clientX, window.innerWidth - 180)}px;
+                top: ${Math.min(clientY, window.innerHeight - 200)}px;
+            ` : `
+                position: fixed;
+                top: 70px;
+                right: 20px;
+            `;
+            
+            menu.style.cssText = menuStyle + `
+                background: white;
+                border: 1px solid #ddd;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                z-index: 10000;
+                padding: 8px 0;
+                min-width: 160px;
+            `;
+            
+            const options = [
+                { text: '📷 Kamera', action: () => document.getElementById('hiddenCameraInput').click() },
+                { text: '🖼️ Galleri', action: () => document.getElementById('hiddenGalleryInput').click() },
+                { text: '📂 Filväljare', action: () => document.getElementById('hiddenGalleryInput').click() },
+                { text: '☁️ Google Drive', action: () => console.log('Google Drive clicked - implement if needed') }
+            ];
+            
+            options.forEach((option, index) => {
+                const item = document.createElement('div');
+                item.textContent = option.text;
+                item.style.cssText = `
+                    padding: 12px 16px;
+                    cursor: pointer;
+                    border-bottom: ${index < options.length - 1 ? '1px solid #f0f0f0' : 'none'};
+                `;
+                item.onmouseover = () => item.style.backgroundColor = '#f8f9fa';
+                item.onmouseout = () => item.style.backgroundColor = 'white';
+                item.onclick = () => {
+                    option.action();
+                    document.body.removeChild(menu);
+                };
+                menu.appendChild(item);
+            });
+            
+            document.body.appendChild(menu);
+            
+            // Close menu when clicking outside
+            setTimeout(() => {
+                document.addEventListener('click', function closeMenu(e) {
+                    if (!menu.contains(e.target)) {
+                        if (document.body.contains(menu)) {
+                            document.body.removeChild(menu);
+                        }
+                        document.removeEventListener('click', closeMenu);
+                    }
+                });
+            }, 100);
         }
 
         // Process uploaded images
@@ -1347,7 +1405,18 @@
             }
         }
 
-        // Paste clipboard content (text or image) at specific position
+        // Handle canvas long press - different behavior for mobile vs desktop
+        function handleCanvasLongPress(clientX, clientY) {
+            if (isMobileDevice()) {
+                // Mobile/tablet: Show image source menu at touch position
+                showImageSourceMenu(clientX, clientY);
+            } else {
+                // Desktop: Paste clipboard content
+                pasteClipboardContent(clientX, clientY);
+            }
+        }
+        
+        // Paste clipboard content (text or image) at specific position (desktop only)
         async function pasteClipboardContent(clientX, clientY) {
             try {
                 const clipboardItems = await navigator.clipboard.read();
@@ -2683,47 +2752,44 @@
             let canvasPressTimer = null;
             const cyContainer = document.getElementById('cy');
             
-            // Touch events for canvas long press (mobile/tablet)
-            cyContainer.addEventListener('touchstart', function(e) {
-                if (e.touches.length === 1) { // Only single touch
-                    const touch = e.touches[0];
+            // Canvas background long press using Cytoscape events
+            let backgroundTouchTimer = null;
+            let backgroundTouchPos = null;
+            
+            // Long press on canvas background (not on nodes)
+            cy.on('touchstart', function(evt) {
+                if (!evt.target || evt.target === cy) { // Background touch
+                    const touch = evt.originalEvent.touches[0];
+                    backgroundTouchPos = { x: touch.clientX, y: touch.clientY };
+                    backgroundTouchTimer = setTimeout(() => {
+                        if (isMobileDevice() && backgroundTouchPos) {
+                            showImageSourceMenu(backgroundTouchPos.x, backgroundTouchPos.y);
+                        }
+                    }, 1000);
+                }
+            });
+            
+            cy.on('touchend touchmove', function(evt) {
+                if (backgroundTouchTimer) {
+                    clearTimeout(backgroundTouchTimer);
+                    backgroundTouchTimer = null;
+                    backgroundTouchPos = null;
+                }
+            });
+            
+            // Desktop mouse long press on background
+            cy.on('mousedown', function(evt) {
+                if (!evt.target || evt.target === cy) { // Background click
+                    const mouseEvent = evt.originalEvent;
                     canvasPressTimer = setTimeout(() => {
-                        pasteClipboardContent(touch.clientX, touch.clientY);
-                    }, 1000); // 1 second hold
+                        if (!isMobileDevice()) {
+                            pasteClipboardContent(mouseEvent.clientX, mouseEvent.clientY);
+                        }
+                    }, 1000);
                 }
             });
             
-            cyContainer.addEventListener('touchend', function(e) {
-                if (canvasPressTimer) {
-                    clearTimeout(canvasPressTimer);
-                    canvasPressTimer = null;
-                }
-            });
-            
-            cyContainer.addEventListener('touchmove', function(e) {
-                if (canvasPressTimer) {
-                    clearTimeout(canvasPressTimer);
-                    canvasPressTimer = null;
-                }
-            });
-            
-            // Mouse events for canvas long press (desktop)
-            cyContainer.addEventListener('mousedown', function(e) {
-                if (e.button === 0) { // Left mouse button
-                    canvasPressTimer = setTimeout(() => {
-                        pasteClipboardContent(e.clientX, e.clientY);
-                    }, 1000); // 1 second hold
-                }
-            });
-            
-            cyContainer.addEventListener('mouseup', function(e) {
-                if (canvasPressTimer) {
-                    clearTimeout(canvasPressTimer);
-                    canvasPressTimer = null;
-                }
-            });
-            
-            cyContainer.addEventListener('mousemove', function(e) {
+            cy.on('mouseup mousemove', function(evt) {
                 if (canvasPressTimer) {
                     clearTimeout(canvasPressTimer);
                     canvasPressTimer = null;
