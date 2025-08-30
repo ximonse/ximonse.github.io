@@ -1047,6 +1047,9 @@
         <button class="toolbar-btn" id="annotationToggleBtn" onclick="toggleAnnotationToolbar()" title="Aktivera/inaktivera annotation-verktyg">
             ⬜→⭕
         </button>
+        <button class="toolbar-btn" id="imageUploadBtn" onclick="triggerImageUpload()" title="Ladda upp bilder (iPad/mobil/dator, eller Ctrl+V)">
+            📷 Bilder
+        </button>
         
         <!-- Mobile controls (hidden on desktop) -->
         <div class="mobile-controls">
@@ -1143,6 +1146,9 @@
         </div>
     </div>
 
+    <!-- Hidden file input for image upload -->
+    <input type="file" id="hiddenImageInput" accept="image/*" multiple capture="camera" style="display: none;">
+
     <script>
         // Global variables
         let cy;
@@ -1158,7 +1164,177 @@
         
         // Mouse position tracking
         let lastMousePosition = { x: null, y: null };
+
+        // IMAGE HANDLING SYSTEM - Integration with existing architecture
         
+        // Trigger image upload dialog
+        function triggerImageUpload() {
+            document.getElementById('hiddenImageInput').click();
+        }
+
+        // Process uploaded images
+        function handleImageFiles(files) {
+            Array.from(files).forEach(file => {
+                if (file && file.type.startsWith('image/')) {
+                    processImage(file).then(imageData => {
+                        createImageNode(imageData, file.name);
+                    }).catch(err => {
+                        console.error('Image processing failed:', err);
+                    });
+                }
+            });
+        }
+
+        // Process image to 800px width with S-curve + strong light-gray whitening for handwritten notes (~35-90 KB)
+        function processImage(file) {
+            return new Promise((resolve, reject) => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const img = new Image();
+                
+                img.onload = () => {
+                    // Scale to 800px width for better quality, maintain aspect ratio
+                    const ratio = 800 / img.width;
+                    canvas.width = 800;
+                    canvas.height = Math.round(img.height * ratio);
+                    
+                    // Draw image to canvas
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    
+                    // Enhance for handwritten notes - moderate contrast improvement
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const data = imageData.data;
+                    
+                    for (let i = 0; i < data.length; i += 4) {
+                        // Simple contrast enhancement without aggressive processing
+                        let r = data[i];
+                        let g = data[i + 1];
+                        let b = data[i + 2];
+                        
+                        // Calculate grayscale value for contrast enhancement
+                        const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+                        
+                        // Gentle contrast curve - improve readability without artifacts
+                        let enhanced;
+                        if (gray < 128) {
+                            // Darken text slightly
+                            enhanced = gray * 0.8;
+                        } else {
+                            // Lighten background slightly
+                            enhanced = gray + (255 - gray) * 0.3;
+                        }
+                        
+                        // Apply enhancement proportionally to preserve color balance
+                        const factor = enhanced / Math.max(gray, 1);
+                        
+                        data[i] = Math.min(255, Math.max(0, r * factor));
+                        data[i + 1] = Math.min(255, Math.max(0, g * factor));
+                        data[i + 2] = Math.min(255, Math.max(0, b * factor));
+                        // Alpha channel (data[i + 3]) remains unchanged
+                    }
+                    
+                    // Apply the enhanced image data back to canvas
+                    ctx.putImageData(imageData, 0, 0);
+                    
+                    // Try WebP for best quality/size ratio, fallback to PNG, then JPEG
+                    let base64;
+                    let format = 'unknown';
+                    
+                    try {
+                        // Try WebP first (best compression + quality)
+                        base64 = canvas.toDataURL('image/webp', 0.95);
+                        if (base64.startsWith('data:image/webp')) {
+                            format = 'WebP 95%';
+                        } else {
+                            throw new Error('WebP not supported');
+                        }
+                    } catch {
+                        try {
+                            // Fallback to PNG
+                            base64 = canvas.toDataURL('image/png');
+                            format = 'PNG (lossless)';
+                            
+                            // If PNG too large, use max JPEG
+                            if (base64.length > 300000) { // ~225KB in base64
+                                base64 = canvas.toDataURL('image/jpeg', 1.0);
+                                format = 'JPEG 100%';
+                            }
+                        } catch {
+                            // Final fallback
+                            base64 = canvas.toDataURL('image/jpeg', 1.0);
+                            format = 'JPEG 100%';
+                        }
+                    }
+                    
+                    console.log(`📷 Using ${format} (${Math.round(base64.length/1024)} KB)`);
+                    
+                    resolve({
+                        data: base64,
+                        width: canvas.width,
+                        height: canvas.height,
+                        originalName: file.name
+                    });
+                };
+                
+                img.onerror = () => reject('Image loading failed');
+                img.src = URL.createObjectURL(file);
+            });
+        }
+
+        // Create image node integrated with existing system
+        function createImageNode(imageData, filename) {
+            const position = getArrangementPosition();
+            const nodeId = generateCardId();
+            
+            // Calculate proper aspect ratio height
+            const ratio = imageData.height / imageData.width;
+            const calculatedHeight = Math.round(300 * ratio);
+            
+            cy.add({
+                group: 'nodes',
+                data: {
+                    id: nodeId,
+                    type: 'image', // New node type
+                    imageData: imageData.data,
+                    imageWidth: imageData.width,  // Store original dimensions
+                    imageHeight: imageData.height, // Store original dimensions
+                    calculatedHeight: calculatedHeight, // Pre-calculated height for arrangement
+                    annotation: '',
+                    searchableText: '',
+                    originalFileName: filename,
+                    title: '', // No visible title for images
+                    text: '', // Keep consistent with existing structure
+                    tags: [],
+                    isManualCard: true // Integrate with existing categorization
+                },
+                position: position
+            });
+
+            console.log(`📷 Created image node: ${filename} (${Math.round(imageData.data.length/1024)} KB) - ${imageData.width}x${imageData.height} → 300x${calculatedHeight}`);
+        }
+
+        // Handle paste events (Ctrl+V) for images
+        function handlePasteImage(event) {
+            const items = event.clipboardData?.items;
+            if (!items) return;
+
+            for (let item of items) {
+                if (item.type.startsWith('image/')) {
+                    event.preventDefault();
+                    const file = item.getAsFile();
+                    if (file) {
+                        processImage(file).then(imageData => {
+                            createImageNode(imageData, 'pasted-image-' + Date.now() + '.jpg');
+                        }).catch(err => {
+                            console.error('Paste image processing failed:', err);
+                        });
+                    }
+                    break;
+                }
+            }
+        }
+
+
         // Generate unique timestamp-based card ID
         function generateCardId() {
             const now = new Date();
@@ -1706,6 +1882,29 @@
          * @returns {number} The measured height of the text in pixels.
          */
         function getMeasuredTextHeight(node) {
+            // SPECIAL HANDLING FOR IMAGE NODES
+            if (node.data('type') === 'image' && node.data('imageData')) {
+                // Use pre-calculated height if available (for new images)
+                const preCalculated = node.data('calculatedHeight');
+                if (preCalculated) {
+                    return preCalculated;
+                }
+                
+                // For imported images, calculate from stored dimensions
+                const imageWidth = node.data('imageWidth');
+                const imageHeight = node.data('imageHeight');
+                if (imageWidth && imageHeight) {
+                    const ratio = imageHeight / imageWidth;
+                    return Math.round(300 * ratio); // 300px width, maintain aspect ratio
+                }
+                
+                // Last resort: Use a reasonable default to avoid creating Image objects
+                // which can be expensive and cause performance issues
+                console.log('Image node missing dimensions, using default height');
+                return 260; // Safe default for images - avoid creating Image objects
+            }
+            
+            // NORMAL TEXT NODE PROCESSING
             // Check cache first
             const hash = getContentHash(node);
             if (heightCache.has(hash)) {
@@ -1914,7 +2113,6 @@
                                 return Math.max(140, measuredHeight + 10); // Standard padding, 140px minimum
                             },
                             'shape': 'round-rectangle',
-                            'cursor': 'grab',
                             'label': function(node) {
                                 const title = node.data('title') || '';
                                 const text = node.data('text') || '';
@@ -1979,8 +2177,7 @@
                         style: {
                             'background-color': '#fff9c4',
                             'border-color': '#f57f17',
-                            'border-width': 2,
-                            'box-shadow': '0 0 10px rgba(245, 127, 23, 0.4)'
+                            'border-width': 2
                         }
                     },
                     {
@@ -1995,8 +2192,7 @@
                         selector: 'node:selected',
                         style: {
                             'border-color': '#1565c0',
-                            'border-width': 4,
-                            'box-shadow': '0 0 20px rgba(21, 101, 192, 0.7)'
+                            'border-width': 4
                         }
                     },
                     {
@@ -2004,8 +2200,54 @@
                         style: {
                             'border-color': '#2e7d32',
                             'border-width': 4,
-                            'background-color': '#c8e6c9',
-                            'box-shadow': '0 0 12px rgba(46, 125, 50, 0.5)'
+                            'background-color': '#c8e6c9'
+                        }
+                    },
+                    // ====================================================================================================
+                    // 📷 IMAGE NODE STYLES - Post-it feel (~10cm) with image background
+                    // ====================================================================================================
+                    {
+                        selector: 'node[type="image"]',
+                        style: {
+                            'width': 300, // Same as regular cards
+                            'height': function(node) {
+                                // Use the same logic as getMeasuredTextHeight for consistency
+                                return getMeasuredTextHeight(node);
+                            },
+                            'background-image': 'data(imageData)',
+                            'background-fit': 'cover',
+                            'border-width': 3,
+                            'border-color': '#ddd',
+                            'shape': 'round-rectangle',
+                            'label': function(node) {
+                                // Only show annotation icon if present, no filename
+                                const hasAnnotation = (node.data('annotation') || '').length > 0;
+                                return hasAnnotation ? '📝' : '';
+                            },
+                            'text-valign': 'bottom',
+                            'text-halign': 'center',
+                            'text-background-color': 'rgba(255, 255, 255, 0.9)',
+                            'text-background-padding': '4px',
+                            'text-background-shape': 'round-rectangle',
+                            'font-size': '14px',
+                            'font-weight': 'bold',
+                            'color': '#333',
+                            'text-wrap': 'wrap',
+                            'text-max-width': 280
+                        }
+                    },
+                    {
+                        selector: 'node[type="image"]:selected',
+                        style: {
+                            'border-color': '#1565c0',
+                            'border-width': 5
+                        }
+                    },
+                    {
+                        selector: 'node[type="image"].search-match',
+                        style: {
+                            'border-color': '#f57f17',
+                            'border-width': 4
                         }
                     },
                     // ====================================================================================================
@@ -2307,6 +2549,43 @@
                 cy.panningEnabled(true);
                 cy.boxSelectionEnabled(true);
             });
+
+            // ====================================================================================================
+            // 📷 IMAGE SYSTEM EVENT LISTENERS - Integration with existing architecture
+            // ====================================================================================================
+            
+            // File input change handler
+            document.getElementById('hiddenImageInput').addEventListener('change', function(e) {
+                if (e.target.files.length > 0) {
+                    handleImageFiles(e.target.files);
+                    // Reset input to allow same file again
+                    e.target.value = '';
+                }
+            });
+            
+            // Paste event listener for Ctrl+V images
+            document.addEventListener('paste', handlePasteImage);
+            
+            // Drag and drop support (bonus functionality)
+            const cyContainer = document.getElementById('cy');
+            cyContainer.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+            
+            cyContainer.addEventListener('drop', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const files = Array.from(e.dataTransfer.files).filter(file => 
+                    file.type.startsWith('image/')
+                );
+                
+                if (files.length > 0) {
+                    handleImageFiles(files);
+                    console.log(`📷 ${files.length} bild(er) droppade`);
+                }
+            });
             
             // Background click events temporarily disabled to test zoom
             // TODO: Re-enable with zoom preservation
@@ -2342,7 +2621,13 @@
                 const text = (node.data('text') || '').toLowerCase();
                 const tags = (node.data('tags') || []).join(' ').toLowerCase();
                 const hiddenTags = (node.data('hidden_tags') || []).join(' ').toLowerCase();
-                const searchableText = title + ' ' + text + ' ' + tags + ' ' + hiddenTags; // Search in title, text, tags, and hidden_tags
+                
+                // IMAGE SEARCH INTEGRATION - Add image annotation and filename to searchable text
+                const imageAnnotation = (node.data('annotation') || '').toLowerCase();
+                const originalFileName = (node.data('originalFileName') || '').toLowerCase();
+                const searchableImageText = imageAnnotation + ' ' + originalFileName;
+                
+                const searchableText = title + ' ' + text + ' ' + tags + ' ' + hiddenTags + ' ' + searchableImageText;
                 
                 const matches = evaluateBooleanQuery(query.toLowerCase(), searchableText);
                 
@@ -4640,7 +4925,7 @@
             }, 2000);
         }
         
-        // G+V: Grid Vertical - max 6 wide, 20% spacing, top row aligned
+        // G+V: Grid Vertical - column-focused arrangement with max gap between cards (bottom-edge to top-edge)
         function arrangeSelectedGridVerticalColumns() {
             // Check if we should arrange copied cards instead
             if (copiedCards.length > 0) {
@@ -4653,23 +4938,9 @@
             
             saveState();
             
-            // G+V: Max 6 wide grid with 20% spacing
-            const nodeCount = selectedNodes.length;
-            const maxCols = 6;
-            const cols = Math.min(maxCols, Math.ceil(Math.sqrt(nodeCount)));
-            const rows = Math.ceil(nodeCount / cols);
-            
             const arrangePos = getArrangementPosition();
             const screenCenterX = arrangePos.x;
             const screenCenterY = arrangePos.y;
-            
-            // Use same spacing as G+H for consistency
-            const horizontalSpacing = 320; // Same as G+H
-            const verticalSpacing = 40; // Same row padding as G+H
-            
-            const gridWidth = (cols - 1) * horizontalSpacing;
-            const startX = screenCenterX - gridWidth / 2;
-            const topLineY = screenCenterY; // Top of grid at mouse cursor (like G+H)
             
             // Sort nodes - check arrows first, then custom sorting, then original order
             let nodeArray;
@@ -4685,52 +4956,58 @@
                 nodeArray = getArrowBasedOrder(selectedNodes.toArray());
             }
             
-            // Row-by-row placement to respect arrow sorting order
-            for (let row = 0; row < rows; row++) {
-                for (let col = 0; col < cols; col++) {
-                    const nodeIndex = row * cols + col;
-                    if (nodeIndex < nodeArray.length) {
-                        const node = nodeArray[nodeIndex];
-                        const cardHeight = getMeasuredTextHeight(node);
-                        
-                        const newX = startX + col * horizontalSpacing;
-                        let cardCenterY;
-                        
-                        if (row === 0) {
-                            // First row: align tops at topLineY
-                            cardCenterY = topLineY + (cardHeight / 2);
-                        } else {
-                            // Other rows: calculate based on previous rows
-                            let totalHeightAbove = 0;
-                            for (let prevRow = 0; prevRow < row; prevRow++) {
-                                // Find the tallest card in the previous row
-                                let maxHeightInRow = 100; // minimum height
-                                for (let prevCol = 0; prevCol < cols; prevCol++) {
-                                    const prevIndex = prevRow * cols + prevCol;
-                                    if (prevIndex < nodeArray.length) {
-                                        const prevNode = nodeArray[prevIndex];
-                                        const prevHeight = getMeasuredTextHeight(prevNode);
-                                        maxHeightInRow = Math.max(maxHeightInRow, prevHeight);
-                                    }
-                                }
-                                totalHeightAbove += maxHeightInRow + verticalSpacing;
-                            }
-                            cardCenterY = topLineY + totalHeightAbove + (cardHeight / 2);
-                        }
-                        
-                        console.log(`🎯 G+V placing node ${nodeIndex} (${node.id()}) at col ${col}, row ${row}`);
-                        
-                        node.animate({
-                            position: { x: newX, y: cardCenterY }
-                        }, {
-                            duration: 400,
-                            easing: 'ease-out'
-                        });
-                    }
+            // G+V: Column-focused arrangement with max gap between bottom-edge to top-edge
+            const nodeCount = nodeArray.length;
+            const maxCols = 6; // Max 6 columns
+            const cols = Math.min(maxCols, Math.ceil(Math.sqrt(nodeCount)));
+            const cardsPerCol = Math.ceil(nodeCount / cols);
+            
+            const horizontalSpacing = 350; // Gap between columns
+            const maxVerticalGap = 80; // Max gap from bottom-edge of upper card to top-edge of lower card
+            
+            const gridWidth = (cols - 1) * horizontalSpacing;
+            const startX = screenCenterX - gridWidth / 2;
+            
+            // Top-aligned columns - all start from same Y position (like G+H but vertical)
+            const topLineY = screenCenterY; // All columns start from same top line
+            
+            // Arrange column by column (instead of row by row)
+            for (let col = 0; col < cols; col++) {
+                const colStartIndex = col * cardsPerCol;
+                const colEndIndex = Math.min(colStartIndex + cardsPerCol, nodeCount);
+                const cardsInThisCol = colEndIndex - colStartIndex;
+                
+                if (cardsInThisCol === 0) continue;
+                
+                const colX = startX + col * horizontalSpacing;
+                
+                // Start each column from the same top line
+                let currentTopY = topLineY;
+                
+                // Place cards in this column with gap between bottom and top edges
+                for (let cardIndex = 0; cardIndex < cardsInThisCol; cardIndex++) {
+                    const nodeIndex = colStartIndex + cardIndex;
+                    const node = nodeArray[nodeIndex];
+                    const cardHeight = getMeasuredTextHeight(node);
+                    
+                    // Card center is at currentTopY + half height
+                    const cardCenterY = currentTopY + (cardHeight / 2);
+                    
+                    console.log(`🎯 G+V placing node ${nodeIndex} (${node.id()}) in col ${col}, position ${cardIndex}, top-aligned, gap: ${maxVerticalGap}px`);
+                    
+                    node.animate({
+                        position: { x: colX, y: cardCenterY }
+                    }, {
+                        duration: 400,
+                        easing: 'ease-out'
+                    });
+                    
+                    // Move to next position: current card bottom + gap
+                    currentTopY += cardHeight + maxVerticalGap;
                 }
             }
             
-            console.log(`G+V: Grid med kolumner (som kommando 1) - ${cols} kolumner för ${selectedNodes.length} kort`);
+            console.log(`G+V: Top-alignade kolumner - ${cols} kolumner, 80px vertikalt, 350px horisontellt`);
         }
         
         // G+H: Grid where rows are top-aligned and packed tightly (no row overlap)
@@ -4952,7 +5229,13 @@
                     // Save copy metadata for copy tracking
                     copyOf: node.data('copyOf') || null,
                     isCopy: node.data('isCopy') || false,
-                    copyTimestamp: node.data('copyTimestamp') || null
+                    copyTimestamp: node.data('copyTimestamp') || null,
+                    // IMAGE DATA - New addition for v2.0 backwards compatibility
+                    type: node.data('type') || null, // 'image' for image nodes
+                    imageData: node.data('imageData') || null, // Base64 image data
+                    annotation: node.data('annotation') || null, // Image annotation text
+                    searchableText: node.data('searchableText') || null, // Lowercased searchable text
+                    originalFileName: node.data('originalFileName') || null // Original filename
                 })),
                 edges: cy.edges().map(edge => ({
                     id: edge.id(),
@@ -4983,7 +5266,7 @@
                 arrowsHidden: window.arrowsHidden || false,
                 lastModified: now.getTime(), // Unix timestamp for comparison
                 timestamp: now.toISOString(), // Human readable
-                version: '1.0'
+                version: '2.0' // Updated for image support
             };
             
             if (filename) {
@@ -5057,6 +5340,10 @@
         // Load board data (internal function without UI alerts)
         function loadBoardFromData(boardData) {
             try {
+                // Safety check: Ensure Cytoscape is fully initialized
+                if (!cy || !cy.nodes || !cy.add || typeof cy.add !== 'function') {
+                    throw new Error('Cytoscape är inte redo än. Vänta ett ögonblick och försök igen.');
+                }
                 
                 // Clear existing nodes
                 cy.nodes().remove();
@@ -5096,7 +5383,13 @@
                             // Restore copy metadata for copy tracking
                             copyOf: cardData.copyOf || null,
                             isCopy: cardData.isCopy || false,
-                            copyTimestamp: cardData.copyTimestamp || null
+                            copyTimestamp: cardData.copyTimestamp || null,
+                            // IMAGE DATA - Backwards compatible restoration
+                            type: cardData.type || null, // 'image' for image nodes
+                            imageData: cardData.imageData || null, // Base64 image data
+                            annotation: cardData.annotation || null, // Image annotation text
+                            searchableText: cardData.searchableText || null, // Lowercased searchable text
+                            originalFileName: cardData.originalFileName || null // Original filename
                         },
                         position: cardData.position
                     });
@@ -5152,6 +5445,26 @@
                     // Restore card color
                     if (cardData.cardColor) {
                         newNode.style('background-color', getCardColorValue(cardData.cardColor, getCurrentTheme()));
+                    }
+                    
+                    // IMAGE NODE RESTORATION - Special handling for image nodes
+                    if (cardData.type === 'image' && cardData.imageData) {
+                        console.log('🖼️ Restoring image node:', cardData.originalFileName);
+                        
+                        // Apply image-specific styling (height will be calculated by Cytoscape style function)
+                        newNode.style({
+                            'background-image': cardData.imageData,
+                            'background-fit': 'cover',
+                            'width': '300px' // Same as regular cards
+                        });
+                        
+                        // Update label to show annotation indicator if present
+                        // Don't show filename in title, keep title empty for clean image display
+                        newNode.data('title', '');
+                        
+                        const filename = cardData.originalFileName || 'Image';
+                        const hasAnnotation = (cardData.annotation || '').length > 0;
+                        console.log(`✅ Restored image: ${filename} (${hasAnnotation ? 'with annotation' : 'no annotation'})`);
                     }
                     
                     newNode.grabify();
@@ -5347,9 +5660,10 @@
                     metadata: {
                         exportDate: new Date().toISOString(),
                         exportApp: 'Spatial Notes',
-                        version: '1.0',
+                        version: '2.0', // Updated for image support
                         totalCards: cy.nodes().length,
-                        totalEdges: cy.edges().length
+                        totalEdges: cy.edges().length,
+                        totalImages: cy.nodes('[type="image"]').length
                     },
                     viewport: {
                         zoom: cy.zoom(),
@@ -5386,7 +5700,13 @@
                         // Save annotation color from visual style
                         annotationColor: node.data('isAnnotation') ? node.style('background-color') : null,
                         // Save shape data for geometric figures
-                        shape: node.data('shape') || null
+                        shape: node.data('shape') || null,
+                        // IMAGE DATA - Essential for exporting images
+                        type: node.data('type') || null, // 'image' for image nodes
+                        imageData: node.data('imageData') || null, // Base64 image data
+                        annotation: node.data('annotation') || null, // Image annotation text
+                        searchableText: node.data('searchableText') || null, // Searchable text
+                        originalFileName: node.data('originalFileName') || null // Original filename
                     })),
                     edges: cy.edges().map(edge => ({
                         id: edge.id(),
@@ -5464,13 +5784,21 @@
                 
                 const reader = new FileReader();
                 reader.onload = function(e) {
-                    try {
-                        const importData = JSON.parse(e.target.result);
-                        
-                        // Validate JSON structure
-                        if (!importData.cards || !Array.isArray(importData.cards)) {
-                            throw new Error('Ogiltig JSON-fil: Saknar kort-data');
-                        }
+                    // Add a small delay to ensure Cytoscape is fully ready
+                    setTimeout(() => {
+                        try {
+                            const importData = JSON.parse(e.target.result);
+                            
+                            // Validate JSON structure
+                            if (!importData.cards || !Array.isArray(importData.cards)) {
+                                throw new Error('Ogiltig JSON-fil: Saknar kort-data');
+                            }
+                            
+                            // Safety check: Ensure Cytoscape is fully initialized
+                            if (!cy || !cy.add || typeof cy.add !== 'function') {
+                                alert('⚠️ Systemet laddas fortfarande. Vänta 2-3 sekunder och försök igen.');
+                                return;
+                            }
                         
                         // Always add to existing cards (no replace option)
                         
@@ -5486,7 +5814,11 @@
                         // Create ID mapping for edges
                         const idMapping = new Map();
                         
-                        importData.cards.forEach(cardData => {
+                        console.log(`🚀 Starting optimized import of ${importData.cards.length} cards...`);
+                        
+                        // Use batch mode for optimal performance
+                        cy.batch(() => {
+                            importData.cards.forEach(cardData => {
                             // Save original ID for origin tag
                             const originalId = cardData.id;
                             
@@ -5533,7 +5865,13 @@
                                     // Store annotation color for restoration
                                     annotationColor: cardData.annotationColor || null,
                                     // Store shape data for geometric figures
-                                    shape: cardData.shape || null
+                                    shape: cardData.shape || null,
+                                    // IMAGE DATA - Import compatibility for v2.0
+                                    type: cardData.type || null,
+                                    imageData: cardData.imageData || null,
+                                    annotation: cardData.annotation || null,
+                                    searchableText: cardData.searchableText || null,
+                                    originalFileName: cardData.originalFileName || null
                                 },
                                 position: cardData.position || { x: Math.random() * 800 + 100, y: Math.random() * 600 + 100 }
                             });
@@ -5589,14 +5927,39 @@
                                 newNode.style('background-color', getCardColorValue(cardData.cardColor, getCurrentTheme()));
                             }
                             
+                            // IMAGE NODE RESTORATION - Import compatibility
+                            if (cardData.type === 'image' && cardData.imageData) {
+                                console.log('🖼️ Importing image node:', cardData.originalFileName);
+                                
+                                // Apply image-specific styling
+                                newNode.style({
+                                    'background-image': cardData.imageData,
+                                    'background-fit': 'cover',
+                                    'width': '300px'
+                                });
+                                
+                                // Update title to show annotation indicator if present
+                                // Don't show filename in title, keep title empty for clean image display
+                                newNode.data('title', '');
+                                
+                                const filename = cardData.originalFileName || 'Imported Image';
+                                const hasAnnotation = (cardData.annotation || '').length > 0;
+                                console.log(`✅ Imported image: ${filename} (${hasAnnotation ? 'with annotation' : 'no annotation'})`);
+                            }
+                            
                             newNode.grabify();
                             importedCount++;
                         });
+                        }); // End batch operation for cards
                         
-                        // Import edges/arrows if they exist
+                        console.log(`✅ Batch card import completed: ${importedCount} cards processed`);
+                        
+                        // Import edges/arrows if they exist  
                         let importedEdges = 0;
                         if (importData.edges && Array.isArray(importData.edges)) {
-                            importData.edges.forEach(edgeData => {
+                            console.log(`🔗 Starting batch import of ${importData.edges.length} edges...`);
+                            cy.batch(() => {
+                                importData.edges.forEach(edgeData => {
                                 // Map old IDs to new IDs
                                 const newSourceId = idMapping.get(edgeData.source);
                                 const newTargetId = idMapping.get(edgeData.target);
@@ -5634,6 +5997,8 @@
                                     console.warn('Skipping edge - source or target not found:', edgeData.source, '->', edgeData.target);
                                 }
                             });
+                            }); // End batch operation for edges
+                            console.log(`✅ Batch edge import completed: ${importedEdges} edges processed`);
                         }
                         
                         // Restore global arrow visibility state
@@ -5674,10 +6039,11 @@
                         
                         console.log(`JSON import completed: ${importedCount} cards and ${importedEdges} edges imported`, importData.metadata);
                         
-                    } catch (error) {
-                        console.error('Error importing JSON:', error);
-                        alert('Fel vid JSON-import: ' + error.message + '\n\nKontrollera att filen är en giltig Spatial Notes JSON-export.');
-                    }
+                        } catch (error) {
+                            console.error('Error importing JSON:', error);
+                            alert('Fel vid JSON-import: ' + error.message + '\n\nKontrollera att filen är en giltig Spatial Notes JSON-export.');
+                        }
+                    }, 100); // End of setTimeout
                 };
                 
                 reader.readAsText(file);
@@ -6435,6 +6801,56 @@
             cy.center(); // Center the view
         }
         
+        // Helper function to create node from card data (handles both regular and image nodes)
+        function createNodeFromCardData(cardData, newId, position) {
+            const nodeData = {
+                id: newId,
+                title: cardData.title,
+                text: cardData.text,
+                tags: cardData.tags,
+                hidden_tags: cardData.hidden_tags || [],
+                searchMatch: false,
+                // Copy metadata
+                export_timestamp: cardData.export_timestamp,
+                export_session: cardData.export_session,
+                export_source: cardData.export_source,
+                source_file: cardData.source_file,
+                page_number: cardData.page_number,
+                matched_terms: cardData.matched_terms,
+                card_index: cardData.card_index,
+                // Copy metadata
+                copyOf: cardData.copyOf,
+                isCopy: cardData.isCopy,
+                copyTimestamp: cardData.copyTimestamp,
+                // IMAGE DATA - Essential for image nodes
+                type: cardData.type,
+                imageData: cardData.imageData,
+                imageWidth: cardData.imageWidth,        // Store original dimensions
+                imageHeight: cardData.imageHeight,      // Store original dimensions
+                calculatedHeight: cardData.calculatedHeight, // Store pre-calculated height
+                annotation: cardData.annotation,
+                searchableText: cardData.searchableText,
+                originalFileName: cardData.originalFileName
+            };
+
+            const newNode = cy.add({
+                data: nodeData,
+                position: position
+            });
+
+            // Apply image-specific styling if it's an image node
+            if (cardData.type === 'image' && cardData.imageData) {
+                newNode.style({
+                    'background-image': cardData.imageData,
+                    'background-fit': 'cover',
+                    'width': '300px'
+                });
+                console.log(`📷 Created image copy: ${cardData.originalFileName}`);
+            }
+
+            return newNode;
+        }
+
         // Copy selected cards
         function copySelectedCards() {
             const selectedNodes = cy.nodes(':selected');
@@ -6465,7 +6881,13 @@
                     source_file: node.data('source_file'),
                     page_number: node.data('page_number'),
                     matched_terms: node.data('matched_terms'),
-                    card_index: node.data('card_index')
+                    card_index: node.data('card_index'),
+                    // IMAGE NODE DATA - Essential for copying images
+                    type: node.data('type'), // 'image' for image nodes
+                    imageData: node.data('imageData'), // Base64 image data
+                    annotation: node.data('annotation'), // Image annotation text
+                    searchableText: node.data('searchableText'), // Searchable text
+                    originalFileName: node.data('originalFileName') // Original filename
                 };
                 
                 // Add copy metadata to hidden tags (searchable but not visible)
@@ -6497,29 +6919,7 @@
             copiedCards.forEach((cardData, index) => {
                 const newId = `${baseId}-copy-${index + 1}`;
                 
-                const newNode = cy.add({
-                    data: {
-                        id: newId,
-                        title: cardData.title,
-                        text: cardData.text,
-                        tags: cardData.tags,
-                        hidden_tags: cardData.hidden_tags || [],
-                        searchMatch: false,
-                        // Copy metadata
-                        export_timestamp: cardData.export_timestamp,
-                        export_session: cardData.export_session,
-                        export_source: cardData.export_source,
-                        source_file: cardData.source_file,
-                        page_number: cardData.page_number,
-                        matched_terms: cardData.matched_terms,
-                        card_index: cardData.card_index,
-                        // New copy metadata
-                        copyOf: cardData.copyOf,
-                        isCopy: cardData.isCopy,
-                        copyTimestamp: cardData.copyTimestamp
-                    },
-                    position: { x: centerX, y: centerY } // Will be repositioned below
-                });
+                const newNode = createNodeFromCardData(cardData, newId, { x: centerX, y: centerY });
                 
                 newNode.grabify();
                 newNodes.push(newNode);
@@ -6573,29 +6973,7 @@
             copiedCards.forEach((cardData, index) => {
                 const newId = `${baseId}-copy-${index + 1}`;
                 
-                const newNode = cy.add({
-                    data: {
-                        id: newId,
-                        title: cardData.title,
-                        text: cardData.text,
-                        tags: cardData.tags,
-                        hidden_tags: cardData.hidden_tags || [],
-                        searchMatch: false,
-                        // Copy metadata
-                        export_timestamp: cardData.export_timestamp,
-                        export_session: cardData.export_session,
-                        export_source: cardData.export_source,
-                        source_file: cardData.source_file,
-                        page_number: cardData.page_number,
-                        matched_terms: cardData.matched_terms,
-                        card_index: cardData.card_index,
-                        // New copy metadata
-                        copyOf: cardData.copyOf,
-                        isCopy: cardData.isCopy,
-                        copyTimestamp: cardData.copyTimestamp
-                    },
-                    position: { x: centerX, y: centerY } // Will be repositioned below
-                });
+                const newNode = createNodeFromCardData(cardData, newId, { x: centerX, y: centerY });
                 
                 newNode.grabify();
                 newNodes.push(newNode);
@@ -6649,29 +7027,8 @@
             copiedCards.forEach((cardData, index) => {
                 const newId = `${baseId}-copy-${index + 1}`;
                 
-                const newNode = cy.add({
-                    data: {
-                        id: newId,
-                        title: cardData.title,
-                        text: cardData.text,
-                        tags: cardData.tags,
-                        hidden_tags: cardData.hidden_tags || [],
-                        searchMatch: false,
-                        // Copy metadata
-                        export_timestamp: cardData.export_timestamp,
-                        export_session: cardData.export_session,
-                        export_source: cardData.export_source,
-                        source_file: cardData.source_file,
-                        page_number: cardData.page_number,
-                        matched_terms: cardData.matched_terms,
-                        card_index: cardData.card_index,
-                        // New copy metadata
-                        copyOf: cardData.copyOf,
-                        isCopy: cardData.isCopy,
-                        copyTimestamp: cardData.copyTimestamp
-                    },
-                    position: { x: screenCenterX, y: screenCenterY } // Will be repositioned below
-                });
+                // Use createNodeFromCardData to preserve ALL data including images
+                const newNode = createNodeFromCardData(cardData, newId, { x: screenCenterX, y: screenCenterY });
                 
                 newNode.grabify();
                 newNodes.push(newNode);
@@ -6715,11 +7072,6 @@
             const screenCenterX = arrangePos.x;
             const screenCenterY = arrangePos.y;
             
-            // Calculate grid dimensions  
-            const nodeCount = copiedCards.length;
-            const cols = Math.ceil(Math.sqrt(nodeCount));
-            const rows = Math.ceil(nodeCount / cols);
-            
             // Create the copied cards with unique IDs
             const now = new Date();
             const baseId = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
@@ -6728,56 +7080,54 @@
             copiedCards.forEach((cardData, index) => {
                 const newId = `${baseId}-copy-${index + 1}`;
                 
-                const newNode = cy.add({
-                    data: {
-                        id: newId,
-                        title: cardData.title,
-                        text: cardData.text,
-                        tags: cardData.tags,
-                        hidden_tags: cardData.hidden_tags || [],
-                        searchMatch: false,
-                        // Copy metadata
-                        export_timestamp: cardData.export_timestamp,
-                        export_session: cardData.export_session,
-                        export_source: cardData.export_source,
-                        source_file: cardData.source_file,
-                        page_number: cardData.page_number,
-                        matched_terms: cardData.matched_terms,
-                        card_index: cardData.card_index,
-                        // New copy metadata
-                        copyOf: cardData.copyOf,
-                        isCopy: cardData.isCopy,
-                        copyTimestamp: cardData.copyTimestamp
-                    },
-                    position: { x: screenCenterX, y: screenCenterY }
-                });
+                // Use createNodeFromCardData to preserve ALL data including images
+                const newNode = createNodeFromCardData(cardData, newId, { x: screenCenterX, y: screenCenterY });
                 
                 newNode.grabify();
                 newNodes.push(newNode);
             });
             
-            // Arrange in vertical columns (exact same logic as original)
-            const horizontalSpacing = 320;
+            // G+V: Column-focused arrangement with max gap between bottom-edge to top-edge (same logic as original)
+            const nodeCount = newNodes.length;
+            const maxCols = 6; // Max 6 columns
+            const cols = Math.min(maxCols, Math.ceil(Math.sqrt(nodeCount)));
+            const cardsPerCol = Math.ceil(nodeCount / cols);
+            
+            const horizontalSpacing = 350; // Gap between columns
+            const maxVerticalGap = 80; // Max gap from bottom-edge of upper card to top-edge of lower card
+            
             const gridWidth = (cols - 1) * horizontalSpacing;
             const startX = screenCenterX - gridWidth / 2;
-            const startY = screenCenterY; // Top of grid at mouse cursor
             
-            // Arrange column by column (like original)
+            // Top-aligned columns - all start from same Y position (like G+H but vertical)
+            const topLineY = screenCenterY; // All columns start from same top line
+            
+            // Arrange column by column (instead of row by row)
             for (let col = 0; col < cols; col++) {
-                let currentY = startY;
+                const colStartIndex = col * cardsPerCol;
+                const colEndIndex = Math.min(colStartIndex + cardsPerCol, nodeCount);
+                const cardsInThisCol = colEndIndex - colStartIndex;
                 
-                for (let row = 0; row < rows; row++) {
-                    const nodeIndex = row * cols + col;
-                    if (nodeIndex < newNodes.length) {
-                        const node = newNodes[nodeIndex];
-                        const cardHeight = getMeasuredTextHeight(node);
-                        
-                        const newX = startX + col * horizontalSpacing;
-                        const cardCenterY = currentY + (cardHeight / 2);
-                        
-                        node.position({ x: newX, y: cardCenterY });
-                        currentY += cardHeight + 40; // 40px spacing like G+H
-                    }
+                if (cardsInThisCol === 0) continue;
+                
+                const colX = startX + col * horizontalSpacing;
+                
+                // Start each column from the same top line
+                let currentTopY = topLineY;
+                
+                // Place cards in this column with gap between bottom and top edges
+                for (let cardIndex = 0; cardIndex < cardsInThisCol; cardIndex++) {
+                    const nodeIndex = colStartIndex + cardIndex;
+                    const node = newNodes[nodeIndex];
+                    const cardHeight = getMeasuredTextHeight(node);
+                    
+                    // Card center is at currentTopY + half height
+                    const cardCenterY = currentTopY + (cardHeight / 2);
+                    
+                    node.position({ x: colX, y: cardCenterY });
+                    
+                    // Move to next position: current card bottom + gap
+                    currentTopY += cardHeight + maxVerticalGap;
                 }
             }
             
@@ -6786,7 +7136,7 @@
             cy.nodes().unselect();
             newNodes.forEach(node => node.select());
             
-            console.log(`G+V: Created ${newNodes.length} copied cards in ${cols} columns`);
+            console.log(`G+V: Created ${newNodes.length} copied cards in ${cols} top-aligned columns, 80px vertikalt, 350px horisontellt`);
         }
         
         // G+H: Copy cards in horizontal packed layout
@@ -6805,29 +7155,8 @@
             copiedCards.forEach((cardData, index) => {
                 const newId = `${baseId}-copy-${index + 1}`;
                 
-                const newNode = cy.add({
-                    data: {
-                        id: newId,
-                        title: cardData.title,
-                        text: cardData.text,
-                        tags: cardData.tags,
-                        hidden_tags: cardData.hidden_tags || [],
-                        searchMatch: false,
-                        // Copy metadata
-                        export_timestamp: cardData.export_timestamp,
-                        export_session: cardData.export_session,
-                        export_source: cardData.export_source,
-                        source_file: cardData.source_file,
-                        page_number: cardData.page_number,
-                        matched_terms: cardData.matched_terms,
-                        card_index: cardData.card_index,
-                        // New copy metadata
-                        copyOf: cardData.copyOf,
-                        isCopy: cardData.isCopy,
-                        copyTimestamp: cardData.copyTimestamp
-                    },
-                    position: { x: screenCenterX, y: screenCenterY }
-                });
+                // Use createNodeFromCardData to preserve ALL data including images
+                const newNode = createNodeFromCardData(cardData, newId, { x: screenCenterX, y: screenCenterY });
                 
                 newNode.grabify();
                 newNodes.push(newNode);
@@ -7180,29 +7509,8 @@ Skriv ditt innehåll här...
             copiedCards.forEach((cardData, index) => {
                 const newId = `${baseId}-copy-${index + 1}`;
                 
-                const newNode = cy.add({
-                    data: {
-                        id: newId,
-                        title: cardData.title,
-                        text: cardData.text,
-                        tags: cardData.tags,
-                        hidden_tags: cardData.hidden_tags || [],
-                        searchMatch: false,
-                        // Copy metadata
-                        export_timestamp: cardData.export_timestamp,
-                        export_session: cardData.export_session,
-                        export_source: cardData.export_source,
-                        source_file: cardData.source_file,
-                        page_number: cardData.page_number,
-                        matched_terms: cardData.matched_terms,
-                        card_index: cardData.card_index,
-                        // New copy metadata
-                        copyOf: cardData.copyOf,
-                        isCopy: cardData.isCopy,
-                        copyTimestamp: cardData.copyTimestamp
-                    },
-                    position: { x: screenCenterX, y: screenCenterY }
-                });
+                // Use createNodeFromCardData to preserve ALL data including images
+                const newNode = createNodeFromCardData(cardData, newId, { x: screenCenterX, y: screenCenterY });
                 
                 newNode.grabify();
                 newNodes.push(newNode);
@@ -7268,29 +7576,7 @@ Skriv ditt innehåll här...
             copiedCards.forEach((cardData, index) => {
                 const newId = `${baseId}-copy-${index + 1}`;
                 
-                const newNode = cy.add({
-                    data: {
-                        id: newId,
-                        title: cardData.title,
-                        text: cardData.text,
-                        tags: cardData.tags,
-                        hidden_tags: cardData.hidden_tags || [],
-                        searchMatch: false,
-                        // Copy metadata
-                        export_timestamp: cardData.export_timestamp,
-                        export_session: cardData.export_session,
-                        export_source: cardData.export_source,
-                        source_file: cardData.source_file,
-                        page_number: cardData.page_number,
-                        matched_terms: cardData.matched_terms,
-                        card_index: cardData.card_index,
-                        // New copy metadata
-                        copyOf: cardData.copyOf,
-                        isCopy: cardData.isCopy,
-                        copyTimestamp: cardData.copyTimestamp
-                    },
-                    position: { x: centerX, y: centerY } // Will be repositioned below
-                });
+                const newNode = createNodeFromCardData(cardData, newId, { x: centerX, y: centerY });
                 
                 newNode.grabify();
                 newNodes.push(newNode);
@@ -7455,12 +7741,14 @@ Kan ha #taggar överallt.
             console.log(`Created quick note: "${title}" with ${uniqueTags.length} tags`);
         }
         
-        // Edit card - unified for all card types
+        // Edit card - unified for all card types (including images)
         function editCard(node) {
             // Clear any existing edit dialogs first
             clearAllEditDialogs();
             
-            const currentText = node.data('text') || '';
+            // Handle image nodes differently - use annotation field for text
+            const isImageNode = node.data('type') === 'image';
+            const currentText = isImageNode ? (node.data('annotation') || '') : (node.data('text') || '');
             const currentTags = node.data('tags') || [];
             
             // Create overlay for editing (unified UI without title)
@@ -7532,16 +7820,28 @@ Kan ha #taggar överallt.
             // Handle save
             document.getElementById('saveEdit').onclick = function() {
                 const newText = textarea.value.trim();
-                if (!newText) {
-                    alert('Text krävs');
-                    return;
-                }
-                
                 const tagsInput = document.getElementById('editCardTags').value || '';
                 const newTags = tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag);
                 
-                // Update node data (preserve title if it exists, but don't show in UI)
-                node.data('text', newText);
+                // Allow saving with just tags (no text required)
+                if (!newText && newTags.length === 0) {
+                    alert('Antingen text eller minst en tagg krävs');
+                    return;
+                }
+                
+                if (isImageNode) {
+                    // For image nodes, save to annotation field and update searchable text
+                    node.data('annotation', newText);
+                    node.data('searchableText', newText.toLowerCase());
+                    
+                    // Update title to show annotation indicator
+                    // Don't show filename in title, keep title empty for clean image display
+                    node.data('title', '');
+                } else {
+                    // For regular nodes, save to text field
+                    node.data('text', newText);
+                }
+                
                 node.data('tags', newTags);
                 
                 refreshSearchAndFilter();
