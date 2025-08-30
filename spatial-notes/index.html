@@ -1047,7 +1047,7 @@
         <button class="toolbar-btn" id="annotationToggleBtn" onclick="toggleAnnotationToolbar()" title="Aktivera/inaktivera annotation-verktyg">
             ⬜→⭕
         </button>
-        <button class="toolbar-btn" id="imageUploadBtn" onclick="triggerImageUpload()" title="Klick: Välja kamera/galleri | Håll länge: Klistra in senaste screenshot">
+        <button class="toolbar-btn" id="imageUploadBtn" onclick="triggerImageUpload()" title="Desktop: Ladda upp bild | Mobil: Välj kamera/galleri | Håll länge: Klistra screenshot">
             📷 Bilder
         </button>
         
@@ -1168,8 +1168,25 @@
 
         // IMAGE HANDLING SYSTEM - Integration with existing architecture
         
-        // Show image source selection menu
+        // Detect if user is on mobile/tablet device
+        function isMobileDevice() {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                   (navigator.maxTouchPoints && navigator.maxTouchPoints > 1);
+        }
+        
+        // Handle image upload based on device type
         function triggerImageUpload() {
+            if (isMobileDevice()) {
+                // Mobile/tablet: Show menu with camera and gallery options
+                showImageSourceMenu();
+            } else {
+                // Desktop: Just open file picker (no camera option)
+                document.getElementById('hiddenGalleryInput').click();
+            }
+        }
+        
+        // Show image source selection menu (mobile only)
+        function showImageSourceMenu() {
             const menu = document.createElement('div');
             menu.style.cssText = `
                 position: fixed;
