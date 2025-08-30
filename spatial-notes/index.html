@@ -1047,7 +1047,7 @@
         <button class="toolbar-btn" id="annotationToggleBtn" onclick="toggleAnnotationToolbar()" title="Aktivera/inaktivera annotation-verktyg">
             ⬜→⭕
         </button>
-        <button class="toolbar-btn" id="imageUploadBtn" onclick="triggerImageUpload()" title="Desktop: Ladda upp bild | Mobil: Välj kamera/galleri | Håll länge: Klistra screenshot">
+        <button class="toolbar-btn" id="imageUploadBtn" onclick="triggerImageUpload()" title="Klick: Visa bildmeny | Håll länge: Klistra screenshot" style="user-select: none; -webkit-user-select: none;">
             📷 Bilder
         </button>
         
@@ -1178,15 +1178,15 @@
         function triggerImageUpload() {
             if (isMobileDevice()) {
                 // Mobile/tablet: Show menu with camera and gallery options
-                showImageSourceMenu();
+                showImageSourceMenu(true); // Include camera option
             } else {
-                // Desktop: Just open file picker (no camera option)
-                document.getElementById('hiddenGalleryInput').click();
+                // Desktop: Show menu but without camera option
+                showImageSourceMenu(false); // No camera option
             }
         }
         
-        // Show image source selection menu (mobile only)
-        function showImageSourceMenu() {
+        // Show image source selection menu
+        function showImageSourceMenu(includeCamera = true) {
             const menu = document.createElement('div');
             menu.style.cssText = `
                 position: fixed;
@@ -1201,10 +1201,13 @@
                 min-width: 150px;
             `;
             
-            const options = [
-                { text: '📷 Kamera', action: () => document.getElementById('hiddenCameraInput').click() },
-                { text: '🖼️ Galleri', action: () => document.getElementById('hiddenGalleryInput').click() }
-            ];
+            const options = [];
+            
+            if (includeCamera) {
+                options.push({ text: '📷 Kamera', action: () => document.getElementById('hiddenCameraInput').click() });
+            }
+            
+            options.push({ text: '🖼️ Ladda upp bild', action: () => document.getElementById('hiddenGalleryInput').click() });
             
             options.forEach(option => {
                 const item = document.createElement('div');
@@ -2672,13 +2675,22 @@
             
             // Touch events (iPad/mobile)
             imageUploadBtn.addEventListener('touchstart', function(e) {
+                e.preventDefault(); // Prevent text selection and other default behaviors
                 imageButtonPressTimer = setTimeout(() => {
-                    e.preventDefault();
                     pasteLatestScreenshot();
                 }, 1000); // 1 second hold
             });
             
-            imageUploadBtn.addEventListener('touchend', function() {
+            imageUploadBtn.addEventListener('touchend', function(e) {
+                e.preventDefault(); // Prevent default behaviors
+                if (imageButtonPressTimer) {
+                    clearTimeout(imageButtonPressTimer);
+                    imageButtonPressTimer = null;
+                }
+            });
+            
+            imageUploadBtn.addEventListener('touchcancel', function(e) {
+                e.preventDefault();
                 if (imageButtonPressTimer) {
                     clearTimeout(imageButtonPressTimer);
                     imageButtonPressTimer = null;
@@ -2688,24 +2700,30 @@
             // Mouse events (desktop)
             imageUploadBtn.addEventListener('mousedown', function(e) {
                 if (e.button === 0) { // Left mouse button
+                    e.preventDefault(); // Prevent text selection
                     imageButtonPressTimer = setTimeout(() => {
                         pasteLatestScreenshot();
                     }, 1000); // 1 second hold
                 }
             });
             
-            imageUploadBtn.addEventListener('mouseup', function() {
+            imageUploadBtn.addEventListener('mouseup', function(e) {
                 if (imageButtonPressTimer) {
                     clearTimeout(imageButtonPressTimer);
                     imageButtonPressTimer = null;
                 }
             });
             
-            imageUploadBtn.addEventListener('mouseleave', function() {
+            imageUploadBtn.addEventListener('mouseleave', function(e) {
                 if (imageButtonPressTimer) {
                     clearTimeout(imageButtonPressTimer);
                     imageButtonPressTimer = null;
                 }
+            });
+            
+            // Prevent context menu on long press
+            imageUploadBtn.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
             });
             
             // Drag and drop support (bonus functionality)
