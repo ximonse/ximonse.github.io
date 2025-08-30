@@ -1047,7 +1047,7 @@
         <button class="toolbar-btn" id="annotationToggleBtn" onclick="toggleAnnotationToolbar()" title="Aktivera/inaktivera annotation-verktyg">
             ⬜→⭕
         </button>
-        <button class="toolbar-btn" id="imageUploadBtn" onclick="triggerImageUpload()" title="Ladda upp bilder (iPad/mobil/dator, eller Ctrl+V)">
+        <button class="toolbar-btn" id="imageUploadBtn" onclick="triggerImageUpload()" title="Klick: Välja kamera/galleri | Håll länge: Klistra in senaste screenshot">
             📷 Bilder
         </button>
         
@@ -1146,8 +1146,9 @@
         </div>
     </div>
 
-    <!-- Hidden file input for image upload -->
-    <input type="file" id="hiddenImageInput" accept="image/*" multiple capture="camera" style="display: none;">
+    <!-- Hidden file inputs for image upload -->
+    <input type="file" id="hiddenCameraInput" accept="image/*" multiple capture="camera" style="display: none;">
+    <input type="file" id="hiddenGalleryInput" accept="image/*" multiple style="display: none;">
 
     <script>
         // Global variables
@@ -1167,9 +1168,58 @@
 
         // IMAGE HANDLING SYSTEM - Integration with existing architecture
         
-        // Trigger image upload dialog
+        // Show image source selection menu
         function triggerImageUpload() {
-            document.getElementById('hiddenImageInput').click();
+            const menu = document.createElement('div');
+            menu.style.cssText = `
+                position: fixed;
+                top: 70px;
+                right: 20px;
+                background: white;
+                border: 1px solid #ddd;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                z-index: 10000;
+                padding: 8px 0;
+                min-width: 150px;
+            `;
+            
+            const options = [
+                { text: '📷 Kamera', action: () => document.getElementById('hiddenCameraInput').click() },
+                { text: '🖼️ Galleri', action: () => document.getElementById('hiddenGalleryInput').click() }
+            ];
+            
+            options.forEach(option => {
+                const item = document.createElement('div');
+                item.textContent = option.text;
+                item.style.cssText = `
+                    padding: 12px 16px;
+                    cursor: pointer;
+                    border-bottom: 1px solid #f0f0f0;
+                `;
+                item.onmouseover = () => item.style.backgroundColor = '#f8f9fa';
+                item.onmouseout = () => item.style.backgroundColor = 'white';
+                item.onclick = () => {
+                    option.action();
+                    document.body.removeChild(menu);
+                };
+                menu.appendChild(item);
+            });
+            
+            // Remove last border
+            menu.lastChild.style.borderBottom = 'none';
+            
+            document.body.appendChild(menu);
+            
+            // Close menu when clicking outside
+            setTimeout(() => {
+                document.addEventListener('click', function closeMenu(e) {
+                    if (!menu.contains(e.target)) {
+                        document.body.removeChild(menu);
+                        document.removeEventListener('click', closeMenu);
+                    }
+                });
+            }, 100);
         }
 
         // Process uploaded images
@@ -1331,6 +1381,31 @@
                     }
                     break;
                 }
+            }
+        }
+
+        // Paste latest screenshot from clipboard (long press function)
+        async function pasteLatestScreenshot() {
+            try {
+                const clipboardItems = await navigator.clipboard.read();
+                for (let item of clipboardItems) {
+                    for (let type of item.types) {
+                        if (type.startsWith('image/')) {
+                            const blob = await item.getAsType(type);
+                            processImage(blob).then(imageData => {
+                                createImageNode(imageData, 'screenshot-' + Date.now() + '.jpg');
+                            }).catch(err => {
+                                console.error('Screenshot processing failed:', err);
+                            });
+                            return;
+                        }
+                    }
+                }
+                console.log('Ingen bild hittades i urklipp');
+            } catch (err) {
+                console.error('Kunde inte komma åt urklipp:', err);
+                // Fallback: Trigger regular paste event
+                document.execCommand('paste');
             }
         }
 
@@ -2554,8 +2629,16 @@
             // 📷 IMAGE SYSTEM EVENT LISTENERS - Integration with existing architecture
             // ====================================================================================================
             
-            // File input change handler
-            document.getElementById('hiddenImageInput').addEventListener('change', function(e) {
+            // File input change handlers
+            document.getElementById('hiddenCameraInput').addEventListener('change', function(e) {
+                if (e.target.files.length > 0) {
+                    handleImageFiles(e.target.files);
+                    // Reset input to allow same file again
+                    e.target.value = '';
+                }
+            });
+            
+            document.getElementById('hiddenGalleryInput').addEventListener('change', function(e) {
                 if (e.target.files.length > 0) {
                     handleImageFiles(e.target.files);
                     // Reset input to allow same file again
@@ -2565,6 +2648,48 @@
             
             // Paste event listener for Ctrl+V images
             document.addEventListener('paste', handlePasteImage);
+            
+            // Long press support for image button to paste latest screenshot
+            let imageButtonPressTimer = null;
+            const imageUploadBtn = document.getElementById('imageUploadBtn');
+            
+            // Touch events (iPad/mobile)
+            imageUploadBtn.addEventListener('touchstart', function(e) {
+                imageButtonPressTimer = setTimeout(() => {
+                    e.preventDefault();
+                    pasteLatestScreenshot();
+                }, 1000); // 1 second hold
+            });
+            
+            imageUploadBtn.addEventListener('touchend', function() {
+                if (imageButtonPressTimer) {
+                    clearTimeout(imageButtonPressTimer);
+                    imageButtonPressTimer = null;
+                }
+            });
+            
+            // Mouse events (desktop)
+            imageUploadBtn.addEventListener('mousedown', function(e) {
+                if (e.button === 0) { // Left mouse button
+                    imageButtonPressTimer = setTimeout(() => {
+                        pasteLatestScreenshot();
+                    }, 1000); // 1 second hold
+                }
+            });
+            
+            imageUploadBtn.addEventListener('mouseup', function() {
+                if (imageButtonPressTimer) {
+                    clearTimeout(imageButtonPressTimer);
+                    imageButtonPressTimer = null;
+                }
+            });
+            
+            imageUploadBtn.addEventListener('mouseleave', function() {
+                if (imageButtonPressTimer) {
+                    clearTimeout(imageButtonPressTimer);
+                    imageButtonPressTimer = null;
+                }
+            });
             
             // Drag and drop support (bonus functionality)
             const cyContainer = document.getElementById('cy');
