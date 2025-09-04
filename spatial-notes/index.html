@@ -10843,13 +10843,7 @@ Kan ha #taggar överallt.
                 <!-- Color Section -->
                 <div style="padding: 12px 16px; border-bottom: 1px solid #eee;">
                     <div style="font-weight: bold; margin-bottom: 8px; color: #333;">Färg</div>
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-                        <div class="mobile-color-dot card-color-1" data-color="1" style="background: var(--card-color-1); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; cursor: pointer;">1</div>
-                        <div class="mobile-color-dot card-color-2" data-color="2" style="background: var(--card-color-2); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; cursor: pointer;">2</div>
-                        <div class="mobile-color-dot card-color-3" data-color="3" style="background: var(--card-color-3); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; cursor: pointer;">3</div>
-                        <div class="mobile-color-dot card-color-4" data-color="4" style="background: var(--card-color-4); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; cursor: pointer;">4</div>
-                        <div class="mobile-color-dot card-color-5" data-color="5" style="background: var(--card-color-5); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; cursor: pointer;">5</div>
-                        <div class="mobile-color-dot card-color-6" data-color="6" style="background: var(--card-color-6); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; cursor: pointer;">6</div>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;" id="mobileColorGrid">
                     </div>
                     <div style="margin-top: 8px;">
                         <div class="mobile-clear-color" style="background: #f5f5f5; padding: 6px 12px; border-radius: 16px; text-align: center; cursor: pointer; border: 1px solid #ddd;">Ta bort färg</div>
@@ -10865,6 +10859,32 @@ Kan ha #taggar överallt.
             `;
             
             document.body.appendChild(menu);
+            
+            // Create color dots dynamically with real colors
+            const colorGrid = menu.querySelector('#mobileColorGrid');
+            const currentTheme = getCurrentTheme();
+            
+            for (let i = 1; i <= 6; i++) {
+                const colorValue = getCardColorValue(`card-color-${i}`, currentTheme);
+                const colorDot = document.createElement('div');
+                colorDot.className = 'mobile-color-dot';
+                colorDot.dataset.color = i;
+                colorDot.style.cssText = `
+                    background: ${colorValue};
+                    width: 32px;
+                    height: 32px;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-weight: bold;
+                    color: ${currentTheme === 'light' ? '#333' : '#fff'};
+                    cursor: pointer;
+                    border: 2px solid #ddd;
+                `;
+                colorDot.textContent = i;
+                colorGrid.appendChild(colorDot);
+            }
             
             // Add color click handlers
             menu.querySelectorAll('.mobile-color-dot').forEach(dot => {
