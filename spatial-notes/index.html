@@ -10303,6 +10303,12 @@ Kan ha #taggar överallt.
                     showMultiCardPasteDialog();
                 }
                 
+                // K för toggla mellan bräd och kolumnvy
+                if (e.key === 'k' && !e.ctrlKey && !e.altKey) {
+                    e.preventDefault();
+                    toggleView();
+                }
+                
             });
             
             // Clear pressed keys on keyup for combination detection
@@ -10665,20 +10671,18 @@ Kan ha #taggar överallt.
             const hasImage = node.data('imageData');
             
             if (hasImage && !showText) {
-                // Show image
+                // Show image ONLY - no text/annotation in image mode
                 const img = document.createElement('img');
                 img.src = node.data('imageData');
                 img.className = 'column-card-image';
                 img.alt = node.data('originalFileName') || 'Bild';
                 contentDiv.appendChild(img);
-                
-                // Add annotation if exists
+            } else if (hasImage && showText) {
+                // Show text/annotation ONLY - no image in text mode
                 const annotation = node.data('annotation');
                 if (annotation) {
-                    const annotationDiv = document.createElement('div');
-                    annotationDiv.className = 'column-card-annotation';
-                    annotationDiv.innerHTML = '📝 ' + convertMarkdownToHtml(annotation);
-                    contentDiv.appendChild(annotationDiv);
+                    const displayText = convertMarkdownToHtml(annotation);
+                    contentDiv.innerHTML = displayText;
                 }
             } else {
                 // Show text content
@@ -10749,7 +10753,195 @@ Kan ha #taggar överallt.
                 showColumnContextMenu(e, node.id());
             });
             
+            // Add iPad/mobile long-press functionality for tagging and color change
+            let longPressTimer = null;
+            let touchStartTime = 0;
+            let touchMoved = false;
+            
+            cardDiv.addEventListener('touchstart', (e) => {
+                touchStartTime = Date.now();
+                touchMoved = false;
+                
+                // Set up long press detection (800ms)
+                longPressTimer = setTimeout(() => {
+                    if (!touchMoved) {
+                        e.preventDefault();
+                        // Show combined tag/color context menu for iPad
+                        showMobileCardMenu(e.touches[0], node.id());
+                    }
+                }, 800);
+            }, { passive: false });
+            
+            cardDiv.addEventListener('touchmove', () => {
+                touchMoved = true;
+                if (longPressTimer) {
+                    clearTimeout(longPressTimer);
+                    longPressTimer = null;
+                }
+            });
+            
+            cardDiv.addEventListener('touchend', (e) => {
+                if (longPressTimer) {
+                    clearTimeout(longPressTimer);
+                    longPressTimer = null;
+                }
+                
+                // If it was a quick tap (< 200ms) and didn't move, treat as normal click
+                if (!touchMoved && (Date.now() - touchStartTime) < 200) {
+                    // Trigger normal click behavior
+                    const clickEvent = new MouseEvent('click', {
+                        bubbles: true,
+                        cancelable: true,
+                        clientX: e.changedTouches[0].clientX,
+                        clientY: e.changedTouches[0].clientY
+                    });
+                    cardDiv.dispatchEvent(clickEvent);
+                }
+            });
+            
             return cardDiv;
+        }
+
+        // Mobile/iPad context menu with tagging and color options
+        function showMobileCardMenu(touch, nodeId) {
+            // Remove any existing mobile menu
+            const existingMenu = document.getElementById('mobileCardMenu');
+            if (existingMenu) {
+                document.body.removeChild(existingMenu);
+            }
+            
+            const node = cy.getElementById(nodeId);
+            const selectedNodes = cy.$('node:selected');
+            const isMultipleSelected = selectedNodes.length > 1;
+            const targetNodes = isMultipleSelected ? selectedNodes : cy.$(`#${nodeId}`);
+            
+            // Create mobile menu
+            const menu = document.createElement('div');
+            menu.id = 'mobileCardMenu';
+            menu.style.cssText = `
+                position: fixed;
+                left: ${Math.min(touch.clientX, window.innerWidth - 280)}px;
+                top: ${Math.min(touch.clientY, window.innerHeight - 400)}px;
+                background: white;
+                border: 1px solid #ccc;
+                border-radius: 12px;
+                box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+                z-index: 10000;
+                min-width: 260px;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                font-size: 16px;
+                padding: 12px 0;
+            `;
+            
+            const targetText = isMultipleSelected ? `${selectedNodes.length} kort` : '1 kort';
+            
+            menu.innerHTML = `
+                <div style="padding: 8px 16px; font-weight: bold; color: #666; border-bottom: 1px solid #eee;">
+                    ${targetText}
+                </div>
+                
+                <!-- Color Section -->
+                <div style="padding: 12px 16px; border-bottom: 1px solid #eee;">
+                    <div style="font-weight: bold; margin-bottom: 8px; color: #333;">Färg</div>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                        <div class="mobile-color-dot card-color-1" data-color="1" style="background: var(--card-color-1); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; cursor: pointer;">1</div>
+                        <div class="mobile-color-dot card-color-2" data-color="2" style="background: var(--card-color-2); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; cursor: pointer;">2</div>
+                        <div class="mobile-color-dot card-color-3" data-color="3" style="background: var(--card-color-3); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; cursor: pointer;">3</div>
+                        <div class="mobile-color-dot card-color-4" data-color="4" style="background: var(--card-color-4); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; cursor: pointer;">4</div>
+                        <div class="mobile-color-dot card-color-5" data-color="5" style="background: var(--card-color-5); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; cursor: pointer;">5</div>
+                        <div class="mobile-color-dot card-color-6" data-color="6" style="background: var(--card-color-6); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; cursor: pointer;">6</div>
+                    </div>
+                    <div style="margin-top: 8px;">
+                        <div class="mobile-clear-color" style="background: #f5f5f5; padding: 6px 12px; border-radius: 16px; text-align: center; cursor: pointer; border: 1px solid #ddd;">Ta bort färg</div>
+                    </div>
+                </div>
+                
+                <!-- Tags Section -->
+                <div style="padding: 12px 16px;">
+                    <div style="font-weight: bold; margin-bottom: 8px; color: #333;">Taggar</div>
+                    <div class="mobile-menu-item" data-action="add-tag" style="padding: 8px 12px; cursor: pointer; border-radius: 8px; margin-bottom: 4px;">➕ Lägg till tagg</div>
+                    <div class="mobile-menu-item" data-action="remove-tag" style="padding: 8px 12px; cursor: pointer; border-radius: 8px;">➖ Ta bort tagg</div>
+                </div>
+            `;
+            
+            document.body.appendChild(menu);
+            
+            // Add color click handlers
+            menu.querySelectorAll('.mobile-color-dot').forEach(dot => {
+                dot.addEventListener('click', () => {
+                    const colorNum = dot.dataset.color;
+                    const colorId = `card-color-${colorNum}`;
+                    
+                    targetNodes.forEach(node => {
+                        node.data('cardColor', colorId);
+                        const colorValue = getCardColorValue(colorId, getCurrentTheme());
+                        node.style('background-color', colorValue);
+                    });
+                    
+                    // Update column view if active
+                    if (isColumnView) {
+                        renderColumnViewDebounced();
+                    }
+                    
+                    // Show feedback
+                    const statusDiv = document.getElementById('selectionInfo');
+                    if (statusDiv) {
+                        statusDiv.textContent = `Färgade ${targetNodes.length} kort med färg ${colorNum}`;
+                        statusDiv.classList.add('visible');
+                        setTimeout(() => statusDiv.classList.remove('visible'), 2000);
+                    }
+                    
+                    document.body.removeChild(menu);
+                });
+            });
+            
+            // Clear color handler
+            menu.querySelector('.mobile-clear-color').addEventListener('click', () => {
+                targetNodes.forEach(node => {
+                    removeCardColor(node);
+                });
+                
+                if (isColumnView) {
+                    renderColumnViewDebounced();
+                }
+                
+                const statusDiv = document.getElementById('selectionInfo');
+                if (statusDiv) {
+                    statusDiv.textContent = `Tog bort färg från ${targetNodes.length} kort`;
+                    statusDiv.classList.add('visible');
+                    setTimeout(() => statusDiv.classList.remove('visible'), 2000);
+                }
+                
+                document.body.removeChild(menu);
+            });
+            
+            // Tag action handlers
+            menu.querySelectorAll('.mobile-menu-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const action = item.dataset.action;
+                    if (action === 'add-tag') {
+                        addTagToSelected();
+                    } else if (action === 'remove-tag') {
+                        removeTagFromSelected();
+                    }
+                    document.body.removeChild(menu);
+                });
+            });
+            
+            // Close menu when clicking outside
+            setTimeout(() => {
+                const closeHandler = (e) => {
+                    if (!menu.contains(e.target)) {
+                        if (document.body.contains(menu)) {
+                            document.body.removeChild(menu);
+                        }
+                        document.removeEventListener('click', closeHandler);
+                        document.removeEventListener('touchstart', closeHandler);
+                    }
+                };
+                document.addEventListener('click', closeHandler);
+                document.addEventListener('touchstart', closeHandler);
+            }, 100);
         }
 
         function toggleColumnCardSelection(nodeId, cardDiv) {
