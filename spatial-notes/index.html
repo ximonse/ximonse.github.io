@@ -1031,6 +1031,151 @@
                 display: none !important;
             }
         }
+
+        /* Column View Styles */
+        .column-view {
+            position: fixed;
+            top: 60px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #f5f5f5;
+            overflow-y: auto;
+            padding: 20px;
+            z-index: 1;
+        }
+
+        .column-container {
+            max-width: 800px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .column-card {
+            background: white;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .column-card:hover {
+            border-color: #aaa;
+        }
+
+        .column-card.search-match {
+            border-color: #28a745;
+            background: #f8fff9;
+        }
+
+        .column-card.selected {
+            border-color: #007bff;
+            background: #f8f9ff;
+        }
+
+        .column-card-content {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.4;
+            word-wrap: break-word;
+        }
+
+        .column-card-content h1 {
+            font-size: 1.3em;
+            margin: 0.5em 0 0.3em 0;
+            font-weight: bold;
+        }
+
+        .column-card-content h2 {
+            font-size: 1.1em;
+            margin: 0.4em 0 0.2em 0;
+            font-weight: bold;
+        }
+
+        .column-card-content h3 {
+            font-size: 1em;
+            margin: 0.3em 0 0.1em 0;
+            font-weight: bold;
+        }
+
+        .column-card-image {
+            max-width: 100%;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+
+        .column-card-annotation {
+            font-style: italic;
+            color: #666;
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+
+        .column-card-tags {
+            margin-top: 15px;
+            font-size: 0.85em;
+            color: #666;
+        }
+
+        .column-card-tags .tag {
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-right: 5px;
+        }
+
+        /* Dark theme for column view */
+        .dark-theme .column-view {
+            background: #2d3748;
+        }
+
+        .dark-theme .column-card {
+            background: #4a5568;
+            border-color: #718096;
+            color: white;
+        }
+
+        .dark-theme .column-card:hover {
+            border-color: #a0aec0;
+        }
+
+        .dark-theme .column-card.search-match {
+            border-color: #48bb78;
+            background: #2f4f3f;
+        }
+
+        .dark-theme .column-card.selected {
+            border-color: #63b3ed;
+            background: #2c5aa0;
+        }
+
+        /* Sepia theme for column view */
+        .sepia-theme .column-view {
+            background: #f4f1e8;
+        }
+
+        .sepia-theme .column-card {
+            background: #faf8f1;
+            border-color: #d4c4a8;
+            color: #5d4e37;
+        }
+
+        .sepia-theme .column-card:hover {
+            border-color: #b8a082;
+        }
+
+        .sepia-theme .column-card.search-match {
+            border-color: #8fbc8f;
+            background: #f0f8f0;
+        }
+
+        .sepia-theme .column-card.selected {
+            border-color: #6b8db5;
+            background: #e8f0f8;
+        }
     </style>
 </head>
 <body>
@@ -1049,6 +1194,9 @@
         </button>
         <button class="toolbar-btn" id="imageUploadBtn" onclick="triggerImageUpload()" title="Tre bildval: Kamera, Galleri, Filväljare">
             📷 Bilder
+        </button>
+        <button class="toolbar-btn" id="viewToggleBtn" onclick="toggleView()" title="Växla mellan brädvy och kolumnvy">
+            📋 Kolumnvy
         </button>
         
         <!-- Mobile controls (hidden on desktop) -->
@@ -1114,6 +1262,13 @@
     <button class="desktop-zoom-btn" onclick="zoomOutToCenter()" title="Zooma ut för att visa alla kort">🔍</button>
     
     <div id="cy"></div>
+    
+    <!-- Column view container -->
+    <div id="columnView" class="column-view" style="display: none;">
+        <div class="column-container" id="columnContainer">
+            <!-- Column view cards will be rendered here -->
+        </div>
+    </div>
 
     <!-- Annotation Toolbar -->
     <div class="annotation-toolbar" id="annotationToolbar">
@@ -2010,7 +2165,6 @@
                 
                 // Last resort: Use a reasonable default to avoid creating Image objects
                 // which can be expensive and cause performance issues
-                console.log('Image node missing dimensions, using default height');
                 return 260; // Safe default for images - avoid creating Image objects
             }
             
@@ -2295,6 +2449,12 @@
                         style: {
                             'background-color': '#f0f0f0',
                             'border-color': '#ddd',
+                            'opacity': 0.3
+                        }
+                    },
+                    {
+                        selector: 'node.search-non-match',
+                        style: {
                             'opacity': 0.3
                         }
                     },
@@ -2799,11 +2959,13 @@
                 
                 if (matches) {
                     node.addClass('search-match');
+                    node.removeClass('search-non-match'); // Remove blur if it was there
                     node.data('searchMatch', true);
                     // Don't select directly - let ESC convert to selected
                     matchCount++;
                 } else {
                     node.removeClass('search-match');
+                    node.addClass('search-non-match'); // Add blur for non-matches
                     node.data('searchMatch', false);
                     node.unselect(); // Avmarkera kortet
                 }
@@ -3570,12 +3732,205 @@
             return 'light';
         }
         
+        // Multi-card paste dialog
+        function showMultiCardPasteDialog() {
+            // Remove any existing dialog
+            const existingDialog = document.querySelector('.multi-card-paste-dialog');
+            if (existingDialog) {
+                existingDialog.remove();
+            }
+            
+            // Create dialog overlay
+            const overlay = document.createElement('div');
+            overlay.className = 'multi-card-paste-dialog';
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 5000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
+            
+            // Create dialog content
+            const dialog = document.createElement('div');
+            dialog.style.cssText = `
+                background: white;
+                border-radius: 8px;
+                padding: 20px;
+                width: 90%;
+                max-width: 600px;
+                max-height: 80vh;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            `;
+            
+            dialog.innerHTML = `
+                <h3 style="margin: 0 0 15px 0; color: #333;">Skapa flera kort från text</h3>
+                <p style="margin: 0 0 15px 0; color: #666; font-size: 14px;">
+                    Klistra in text. Två tomma rader = nytt kort.<br>
+                    Sista raden med #tagg1 #tagg2 blir riktiga taggar.
+                </p>
+                <textarea id="multiCardText" placeholder="Första anteckningen här...
+
+Andra anteckningen...
+#work #urgent
+
+Tredje anteckningen...
+#personal #todo" style="
+                    width: 100%;
+                    height: 300px;
+                    padding: 10px;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    font-family: monospace;
+                    font-size: 14px;
+                    resize: vertical;
+                    box-sizing: border-box;
+                "></textarea>
+                <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: flex-end;">
+                    <button id="cancelMultiCard" style="
+                        padding: 8px 16px;
+                        border: 1px solid #ddd;
+                        background: white;
+                        border-radius: 4px;
+                        cursor: pointer;
+                    ">Avbryt</button>
+                    <button id="createMultiCards" style="
+                        padding: 8px 16px;
+                        border: none;
+                        background: #007bff;
+                        color: white;
+                        border-radius: 4px;
+                        cursor: pointer;
+                    ">Skapa kort</button>
+                </div>
+            `;
+            
+            overlay.appendChild(dialog);
+            document.body.appendChild(overlay);
+            
+            // Focus textarea
+            const textarea = document.getElementById('multiCardText');
+            textarea.focus();
+            
+            // Event handlers
+            document.getElementById('cancelMultiCard').onclick = () => {
+                overlay.remove();
+            };
+            
+            document.getElementById('createMultiCards').onclick = () => {
+                const text = textarea.value.trim();
+                if (text) {
+                    createMultipleCardsFromText(text);
+                    overlay.remove();
+                } else {
+                    alert('Skriv in lite text först!');
+                }
+            };
+            
+            // Close on Escape
+            function handleEscape(e) {
+                if (e.key === 'Escape') {
+                    overlay.remove();
+                    document.removeEventListener('keydown', handleEscape);
+                }
+            }
+            document.addEventListener('keydown', handleEscape);
+            
+            // Close on click outside dialog
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    overlay.remove();
+                }
+            });
+        }
+        
+        // Parse and create multiple cards from text
+        function createMultipleCardsFromText(text) {
+            // Split on double line breaks (two consecutive newlines)
+            const blocks = text.split(/\n\s*\n/).filter(block => block.trim());
+            
+            console.log('Found', blocks.length, 'text blocks');
+            
+            let createdCount = 0;
+            const startPosition = { x: 200, y: 200 };
+            
+            blocks.forEach((block, index) => {
+                const lines = block.trim().split('\n');
+                const lastLine = lines[lines.length - 1].trim();
+                
+                let cardText = '';
+                let tags = [];
+                
+                // Check if last line contains tags (starts with # and has #words)
+                if (lastLine.startsWith('#') && lastLine.includes('#')) {
+                    // Extract tags from last line: #tagg1 #tagg2 #tagg3
+                    const tagMatches = lastLine.match(/#\w+/g);
+                    if (tagMatches) {
+                        tags = tagMatches.map(tag => tag.substring(1)); // Remove # prefix
+                        // Card text is everything except the last line
+                        cardText = lines.slice(0, -1).join('\n').trim();
+                    } else {
+                        // Last line starts with # but no valid tags, include it in text
+                        cardText = lines.join('\n').trim();
+                    }
+                } else {
+                    // No tags, all lines become card text
+                    cardText = lines.join('\n').trim();
+                }
+                
+                // Skip empty cards
+                if (!cardText) return;
+                
+                // Create card
+                const cardId = generateCardId();
+                const position = {
+                    x: startPosition.x + (index * 50), // Offset each card
+                    y: startPosition.y + (index * 50)
+                };
+                
+                const nodeData = {
+                    id: cardId,
+                    text: cardText,
+                    isManualCard: true,
+                    tags: tags
+                };
+                
+                cy.add({
+                    group: 'nodes',
+                    data: nodeData,
+                    position: position
+                });
+                
+                createdCount++;
+                console.log(`Created card ${index + 1}: "${cardText.substring(0, 30)}..." with tags:`, tags);
+            });
+            
+            // Show success message
+            const statusDiv = document.getElementById('selectionInfo');
+            if (statusDiv) {
+                statusDiv.textContent = `Skapade ${createdCount} kort från texten`;
+                statusDiv.classList.add('visible');
+                setTimeout(() => {
+                    statusDiv.classList.remove('visible');
+                }, 3000);
+            }
+            
+            console.log(`Multi-card paste complete: ${createdCount} cards created`);
+        }
+        
         
         // Clear search
         function clearSearch() {
             searchActive = false;
             
             cy.nodes().removeClass('search-match');
+            cy.nodes().removeClass('search-non-match'); // Remove blur from non-matches
             cy.nodes().data('searchMatch', false);
             cy.nodes().unselect(); // Avmarkera alla kort när sökning rensas
             
@@ -3728,7 +4083,14 @@
             event.preventDefault();
             event.stopPropagation();
             
-            // Check if we have selected nodes
+            // Column view: no selection required, automatic sorting
+            if (isColumnView) {
+                // Show column view specific sort menu
+                showColumnViewSortMenu(event);
+                return;
+            }
+            
+            // Board view: Check if we have selected nodes
             const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
             if (selectedNodes.length < 2) {
                 alert('Markera minst 2 kort för att sortera');
@@ -3785,19 +4147,86 @@
             console.log('Sort mode set to:', mode);
             closeSortMenu();
             
-            // Show instruction
-            const statusDiv = document.getElementById('selectionInfo');
-            if (statusDiv) {
-                statusDiv.textContent = `Sorteringsläge: ${getSortModeDescription(mode)}. Tryck H/V/G+V/G+H/G+T för layout.`;
-                statusDiv.classList.add('visible');
-                
-                // Auto-hide after 5 seconds
-                setTimeout(() => {
-                    if (sortMode === mode) { // Only hide if we're still in same sort mode
-                        statusDiv.classList.remove('visible');
-                    }
-                }, 5000);
+            if (isColumnView) {
+                // Column view: apply sorting immediately
+                setColumnViewSortFromBoardMode(mode);
+            } else {
+                // Board view: show instruction
+                const statusDiv = document.getElementById('selectionInfo');
+                if (statusDiv) {
+                    statusDiv.textContent = `Sorteringsläge: ${getSortModeDescription(mode)}. Tryck H/V/G+V/G+H/G+T för layout.`;
+                    statusDiv.classList.add('visible');
+                    
+                    // Auto-hide after 5 seconds
+                    setTimeout(() => {
+                        if (sortMode === mode) { // Only hide if we're still in same sort mode
+                            statusDiv.classList.remove('visible');
+                        }
+                    }, 5000);
+                }
             }
+        }
+
+        // Column view specific sort menu
+        function showColumnViewSortMenu(event) {
+            // Create sort menu
+            const sortMenu = document.createElement('div');
+            sortMenu.id = 'sortMenu';
+            sortMenu.style.cssText = `
+                position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                background: white; border: 2px solid #007acc; border-radius: 8px;
+                padding: 15px; z-index: 10001; box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            `;
+            
+            sortMenu.innerHTML = `
+                <h3 style="margin: 0 0 15px 0; text-align: center; color: #007acc;">📊 Kolumnvy Sortering</h3>
+                <p style="margin: 0 0 15px 0; text-align: center; font-size: 14px; color: #666;">
+                    Välj sortering - appliceras automatiskt på alla kort
+                </p>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <button onclick="setColumnViewSort('alphabetical')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🔤 A → Z</button>
+                    <button onclick="setColumnViewSort('reverse-alphabetical')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🔤 Z → A</button>
+                    <button onclick="setColumnViewSort('creation')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">📅 Skapande: Äldst → Nyast</button>
+                    <button onclick="setColumnViewSort('reverse-creation')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">📅 Skapande: Nyast → Äldst</button>
+                    <button onclick="setColumnViewSort('tags')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🏷️ Tags</button>
+                    <button onclick="setColumnViewSort('color')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🎨 Färg 1→6</button>
+                    <button onclick="setColumnViewSort('tagged-date')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">📆 @datum Äldst → Nyast</button>
+                    <button onclick="setColumnViewSort('reverse-tagged-date')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">📆 @datum Nyast → Äldst</button>
+                </div>
+                <div style="text-align: center; margin-top: 15px;">
+                    <button onclick="closeSortMenu()" style="padding: 8px 16px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer;">Avbryt</button>
+                </div>
+            `;
+            
+            document.body.appendChild(sortMenu);
+        }
+
+        // Convert board sort mode to column sort mode
+        function setColumnViewSortFromBoardMode(boardMode) {
+            let columnMode = 'creation'; // default
+            
+            switch(boardMode) {
+                case 'alphabetic-asc':
+                    columnMode = 'alphabetical';
+                    break;
+                case 'alphabetic-desc':
+                    columnMode = 'reverse-alphabetical';
+                    break;
+                case 'date-asc':
+                    columnMode = 'creation';
+                    break;
+                case 'date-desc':
+                    columnMode = 'reverse-creation';
+                    break;
+                case 'tagCount':
+                    columnMode = 'tags';
+                    break;
+                default:
+                    columnMode = 'creation';
+            }
+            
+            setColumnViewSort(columnMode);
         }
         
         function closeSortMenu() {
@@ -4070,13 +4499,19 @@
             return 1 + Math.ceil((firstThursday - target) / 604800000);
         }
         
-        // Check if content has #todo tag
-        function hasTodoTag(content) {
-            return /#todo\b/i.test(content);
+        // Check if node has todo tag in tags array
+        function hasTodoTag(node) {
+            const tags = node.data('tags') || [];
+            return tags.some(tag => tag.toLowerCase() === 'todo');
+        }
+
+        function hasDoneTag(node) {
+            const tags = node.data('tags') || [];
+            return tags.some(tag => tag.toLowerCase() === 'done');
         }
         
         // Calculate temporal relevance and get marking intensity
-        function getTemporalMarking(datePatterns, hasTodo, today = new Date()) {
+        function getTemporalMarking(datePatterns, hasTodo, hasDone, today = new Date()) {
             if (!datePatterns || datePatterns.length === 0) {
                 return null;
             }
@@ -4104,8 +4539,11 @@
                         // 2-14 days future - gradual fade
                         const intensity = 0.8 - ((daysDiff - 2) / 12) * 0.6; // 0.8 -> 0.2
                         marking = { intensity, color: 'future', reason: `${daysDiff} days ahead` };
+                    } else if (daysDiff < 0 && hasDone) {
+                        // Past + #done - light green marking
+                        marking = { intensity: 0.7, color: 'past-done', reason: 'Past + #done' };
                     } else if (daysDiff < 0 && hasTodo) {
-                        // Past + #todo - persistent marking
+                        // Past + #todo - black marking (highest intensity for past)
                         marking = { intensity: 0.85, color: 'past-todo', reason: 'Past + #todo' };
                     }
                 } else if (pattern.type === 'week') {
@@ -4132,13 +4570,14 @@
         function getTemporalBorderStyle(marking) {
             if (!marking) return null;
             
-            const baseWidth = Math.ceil(marking.intensity * 6); // 1-6px width based on intensity
+            const baseWidth = Math.max(1, Math.ceil(marking.intensity * 1.5) + 0.5); // 1-2px width based on intensity
             
             const colorMap = {
                 'today': '#ff4500', // Red-orange for today
                 'tomorrow-todo': '#ff8c00', // Orange for tomorrow+todo
                 'future': '#1e90ff', // Blue for future dates
-                'past-todo': '#dc143c', // Crimson for past+todo
+                'past-todo': '#000000', // Black for past+todo
+                'past-done': '#90EE90', // Light green for past+done
                 'current-week': '#32cd32', // Lime green for current week
                 'next-week': '#9370db' // Medium slate blue for next week
             };
@@ -4165,15 +4604,17 @@
                 
                 console.log(`Checking card "${title}": "${fullContent}"`);
                 
-                // Parse dates and check for todo
+                // Parse dates and check for todo/done
                 const datePatterns = parseDateFromContent(fullContent);
-                const hasTodo = hasTodoTag(fullContent);
+                const hasTodo = hasTodoTag(node);
+                const hasDone = hasDoneTag(node);
                 
                 console.log(`  - Date patterns found:`, datePatterns);
                 console.log(`  - Has #todo:`, hasTodo);
+                console.log(`  - Has #done:`, hasDone);
                 
                 // Get temporal marking
-                const marking = getTemporalMarking(datePatterns, hasTodo, today);
+                const marking = getTemporalMarking(datePatterns, hasTodo, hasDone, today);
                 console.log(`  - Temporal marking:`, marking);
                 
                 if (marking) {
@@ -9391,6 +9832,11 @@ Kan ha #taggar överallt.
                         originalSaveBoard();
                     }
                     
+                    // Update column view if active (for markdown and other changes)
+                    if (isColumnView) {
+                        renderColumnViewDebounced();
+                    }
+                    
                     // Also save to Drive if signed in
                     if (isSignedIn && accessToken) {
                         saveToGoogleDrive();
@@ -9470,6 +9916,7 @@ Kan ha #taggar överallt.
                         // Clear search visuals but keep cards selected
                         searchActive = false;
                         cy.nodes().removeClass('search-match');
+                        cy.nodes().removeClass('search-non-match'); // Remove blur
                         cy.nodes().data('searchMatch', false);
                         // Don't unselect cards like clearSearch() does
                         
@@ -9497,6 +9944,28 @@ Kan ha #taggar överallt.
             tagFilterInput.addEventListener('keyup', function() {
                 if (!this.value.trim()) {
                     clearTagFilter();
+                }
+            });
+            
+            // Handle Enter key to convert tag filter matches to selected cards
+            tagFilterInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    // For tag filtering, matches are nodes WITHOUT .tag-filtered class
+                    const tagMatches = cy.nodes().not('.tag-filtered');
+                    console.log('Enter in tag filter box, found tag matches:', tagMatches.length);
+                    if (tagMatches.length > 0) {
+                        // Convert tag filter matches to selected cards
+                        tagMatches.select();
+                        console.log('Selected tag filter matches, now clearing tag filter visual');
+                        
+                        // Clear tag filter visuals but keep cards selected
+                        clearTagFilter();
+                        
+                        // Remove focus from input so keyboard shortcuts work
+                        this.blur();
+                        
+                        e.preventDefault();
+                    }
                 }
             });
             
@@ -9815,7 +10284,24 @@ Kan ha #taggar överallt.
                 // Gamla arrangement shortcuts 1,2,3 borttagna för färgfunktionen
                 // Använd istället V (kolumn), H (rad), Q (rutnät)
                 
+                // Column view specific shortcuts
+                // I för importance sorting (äldsta datum + #todo först) - endast i kolumnvy
+                if (e.key === 'i' && !e.ctrlKey && !e.altKey && isColumnView) {
+                    e.preventDefault();
+                    setColumnViewSort('importance');
+                }
                 
+                // W för background-color sorting (röd→blå) - endast i kolumnvy
+                if (e.key === 'w' && !e.ctrlKey && !e.altKey && isColumnView) {
+                    e.preventDefault();
+                    setColumnViewSort('background-color');
+                }
+                
+                // M för multi-card paste (öppna dialog)
+                if (e.key === 'm' && !e.ctrlKey && !e.altKey) {
+                    e.preventDefault();
+                    showMultiCardPasteDialog();
+                }
                 
             });
             
@@ -9866,6 +10352,780 @@ Kan ha #taggar överallt.
             });
             
         });
+
+        // Column View Implementation
+        let isColumnView = false;
+        let columnCardStates = new Map(); // Track which cards show text vs image
+
+        function toggleView() {
+            isColumnView = !isColumnView;
+            const btn = document.getElementById('viewToggleBtn');
+            const cyContainer = document.getElementById('cy');
+            const columnContainer = document.getElementById('columnView');
+            
+            if (isColumnView) {
+                // Switch to column view
+                btn.innerHTML = '🗺️ Brädvy';
+                btn.title = 'Växla tillbaka till brädvy';
+                cyContainer.style.display = 'none';
+                columnContainer.style.display = 'block';
+                renderColumnViewDebounced();
+            } else {
+                // Switch to board view
+                btn.innerHTML = '📋 Kolumnvy';
+                btn.title = 'Växla till kolumnvy';
+                cyContainer.style.display = 'block';
+                columnContainer.style.display = 'none';
+            }
+            
+            // Save view state to localStorage
+            localStorage.setItem('spatial-notes-view', isColumnView ? 'column' : 'board');
+        }
+
+        function convertMarkdownToHtml(text) {
+            if (!text) return '';
+            
+            let html = text;
+            // Convert markdown to HTML (opposite of what Cytoscape does)
+            html = html.replace(/^### (.*$)/gm, '<h3>$1</h3>'); // ### H3
+            html = html.replace(/^## (.*$)/gm, '<h2>$1</h2>'); // ## H2
+            html = html.replace(/^# (.*$)/gm, '<h1>$1</h1>'); // # H1
+            html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>'); // **bold**
+            html = html.replace(/\*(.*?)\*/g, '<em>$1</em>'); // *italic*
+            html = html.replace(/`(.*?)`/g, '<code>$1</code>'); // `code`
+            html = html.replace(/~~(.*?)~~/g, '<del>$1</del>'); // ~~strikethrough~~
+            html = html.replace(/^- /gm, '• '); // Convert - to bullets
+            html = html.replace(/\n/g, '<br>'); // Line breaks
+            
+            return html;
+        }
+
+        // Debounced render to avoid excessive updates
+        let renderColumnViewTimeout = null;
+        function renderColumnView() {
+            const container = document.getElementById('columnContainer');
+            container.innerHTML = '';
+            
+            if (!cy) return;
+            
+            // Apply temporal markings before rendering
+            if (typeof applyTemporalMarkings === 'function') {
+                applyTemporalMarkings();
+            }
+            
+            // Get all nodes and apply automatic sorting
+            let nodes = cy.nodes().stdFilter(function(node) {
+                return !node.data('isAnnotation'); // Exclude annotation nodes
+            });
+            
+            // Apply sorting based on current sort preference
+            nodes = sortColumnViewNodes(nodes);
+            
+            // Use document fragment for better performance
+            const fragment = document.createDocumentFragment();
+            nodes.forEach(node => {
+                const cardDiv = createColumnCard(node);
+                fragment.appendChild(cardDiv);
+            });
+            container.appendChild(fragment);
+            
+            // Apply current search highlighting
+            updateColumnViewSearch();
+        }
+        
+        function renderColumnViewDebounced() {
+            if (renderColumnViewTimeout) {
+                clearTimeout(renderColumnViewTimeout);
+            }
+            renderColumnViewTimeout = setTimeout(renderColumnView, 16); // ~60fps
+        }
+
+        // Column view sorting function
+        let currentColumnSort = 'creation'; // default sort
+        function sortColumnViewNodes(nodes) {
+            const nodeArray = nodes.toArray();
+            
+            switch(currentColumnSort) {
+                case 'alphabetical':
+                    return nodeArray.sort((a, b) => {
+                        const aText = (a.data('title') || a.data('text') || '').toLowerCase();
+                        const bText = (b.data('title') || b.data('text') || '').toLowerCase();
+                        return aText.localeCompare(bText);
+                    });
+                
+                case 'reverse-alphabetical':
+                    return nodeArray.sort((a, b) => {
+                        const aText = (a.data('title') || a.data('text') || '').toLowerCase();
+                        const bText = (b.data('title') || b.data('text') || '').toLowerCase();
+                        return bText.localeCompare(aText);
+                    });
+                
+                case 'creation':
+                    return nodeArray.sort((a, b) => {
+                        // Sort by ID (assuming timestamp-based IDs)
+                        return a.id().localeCompare(b.id());
+                    });
+                
+                case 'reverse-creation':
+                    return nodeArray.sort((a, b) => {
+                        return b.id().localeCompare(a.id());
+                    });
+                
+                case 'tags':
+                    return nodeArray.sort((a, b) => {
+                        const aTags = (a.data('tags') || []).join(' ').toLowerCase();
+                        const bTags = (b.data('tags') || []).join(' ').toLowerCase();
+                        return aTags.localeCompare(bTags);
+                    });
+
+                case 'color':
+                    return nodeArray.sort((a, b) => {
+                        const aColor = a.data('cardColor') || '';
+                        const bColor = b.data('cardColor') || '';
+                        // Sort by color number (card-color-1, card-color-2, etc.)
+                        const aNum = aColor ? parseInt(aColor.replace('card-color-', '')) || 0 : 0;
+                        const bNum = bColor ? parseInt(bColor.replace('card-color-', '')) || 0 : 0;
+                        return aNum - bNum;
+                    });
+
+                case 'tagged-date':
+                    return nodeArray.sort((a, b) => {
+                        const aText = a.data('title') + ' ' + a.data('text');
+                        const bText = b.data('title') + ' ' + b.data('text');
+                        
+                        // Extract @yymmdd dates
+                        const aDateMatch = aText.match(/@(\d{6})/);
+                        const bDateMatch = bText.match(/@(\d{6})/);
+                        
+                        const aDate = aDateMatch ? aDateMatch[1] : '999999'; // No date = last
+                        const bDate = bDateMatch ? bDateMatch[1] : '999999';
+                        
+                        return aDate.localeCompare(bDate);
+                    });
+
+                case 'reverse-tagged-date':
+                    return nodeArray.sort((a, b) => {
+                        const aText = a.data('title') + ' ' + a.data('text');
+                        const bText = b.data('title') + ' ' + b.data('text');
+                        
+                        // Extract @yymmdd dates
+                        const aDateMatch = aText.match(/@(\d{6})/);
+                        const bDateMatch = bText.match(/@(\d{6})/);
+                        
+                        const aDate = aDateMatch ? aDateMatch[1] : '000000'; // No date = first
+                        const bDate = bDateMatch ? bDateMatch[1] : '000000';
+                        
+                        return bDate.localeCompare(aDate);
+                    });
+
+                case 'importance':
+                    return nodeArray.sort((a, b) => {
+                        const aText = a.data('title') + ' ' + a.data('text');
+                        const bText = b.data('title') + ' ' + b.data('text');
+                        const aTags = a.data('tags') || [];
+                        const bTags = b.data('tags') || [];
+                        
+                        // Check for search matches OR selected cards (after Enter)
+                        const aIsSearchMatch = a.hasClass('search-match') || a.data('searchMatch') || a.selected();
+                        const bIsSearchMatch = b.hasClass('search-match') || b.data('searchMatch') || b.selected();
+                        
+                        // Prioritize search matches and selected cards
+                        if (aIsSearchMatch && !bIsSearchMatch) return -1;
+                        if (!aIsSearchMatch && bIsSearchMatch) return 1;
+                        
+                        // Check for #todo tag
+                        const aHasTodo = aTags.some(tag => tag.toLowerCase() === 'todo');
+                        const bHasTodo = bTags.some(tag => tag.toLowerCase() === 'todo');
+                        
+                        // Extract @yymmdd dates
+                        const aDateMatch = aText.match(/@(\d{6})/);
+                        const bDateMatch = bText.match(/@(\d{6})/);
+                        
+                        const aDate = aDateMatch ? aDateMatch[1] : '999999'; // No date = last
+                        const bDate = bDateMatch ? bDateMatch[1] : '999999';
+                        
+                        // Priority: oldest date + #todo first, then by date, then no date
+                        if (aHasTodo && !bHasTodo) return -1; // a has todo, b doesn't
+                        if (!aHasTodo && bHasTodo) return 1;  // b has todo, a doesn't
+                        
+                        // Both have todo or both don't have todo - sort by date (oldest first)
+                        return aDate.localeCompare(bDate);
+                    });
+
+                case 'background-color':
+                    return nodeArray.sort((a, b) => {
+                        // Check for search matches OR selected cards (after Enter)
+                        const aIsSearchMatch = a.hasClass('search-match') || a.data('searchMatch') || a.selected();
+                        const bIsSearchMatch = b.hasClass('search-match') || b.data('searchMatch') || b.selected();
+                        
+                        // Prioritize search matches and selected cards
+                        if (aIsSearchMatch && !bIsSearchMatch) return -1;
+                        if (!aIsSearchMatch && bIsSearchMatch) return 1;
+                        
+                        const aColor = a.data('cardColor') || '';
+                        const bColor = b.data('cardColor') || '';
+                        
+                        // Color priority: 3(röd), 2(orange), 4(gul), 5(grön), 6(blå), 0(ofärgad)
+                        const colorOrder = {
+                            'card-color-3': 1, // röd
+                            'card-color-2': 2, // orange  
+                            'card-color-4': 3, // gul
+                            'card-color-5': 4, // grön
+                            'card-color-6': 5, // blå
+                            '': 6              // ofärgad
+                        };
+                        
+                        const aPriority = colorOrder[aColor] || 6;
+                        const bPriority = colorOrder[bColor] || 6;
+                        
+                        return aPriority - bPriority;
+                    });
+                
+                default:
+                    return nodeArray;
+            }
+        }
+
+        // Function to change column view sorting
+        function setColumnViewSort(sortType) {
+            currentColumnSort = sortType;
+            console.log('Column view sort set to:', sortType);
+            
+            if (isColumnView) {
+                renderColumnViewDebounced();
+                
+                // Show feedback
+                const statusDiv = document.getElementById('selectionInfo');
+                if (statusDiv) {
+                    let sortName = 'Okänd sortering';
+                    switch(sortType) {
+                        case 'alphabetical': sortName = 'A → Z'; break;
+                        case 'reverse-alphabetical': sortName = 'Z → A'; break;
+                        case 'creation': sortName = 'Äldst → Nyast'; break;
+                        case 'reverse-creation': sortName = 'Nyast → Äldst'; break;
+                        case 'tags': sortName = 'Sorterat efter taggar'; break;
+                        case 'color': sortName = 'Färg 1→6'; break;
+                        case 'tagged-date': sortName = '@datum Äldst → Nyast'; break;
+                        case 'reverse-tagged-date': sortName = '@datum Nyast → Äldst'; break;
+                        case 'importance': sortName = 'Viktighet (äldsta #todo först)'; break;
+                        case 'background-color': sortName = 'Bakgrundsfärg (röd→blå)'; break;
+                    }
+                    statusDiv.textContent = `Kolumnvy sorterad: ${sortName}`;
+                    statusDiv.classList.add('visible');
+                    
+                    // Auto-hide after 3 seconds
+                    setTimeout(() => {
+                        statusDiv.classList.remove('visible');
+                    }, 3000);
+                }
+            }
+            
+            // Close sort menu
+            closeSortMenu();
+        }
+
+        function createColumnCard(node) {
+            const cardDiv = document.createElement('div');
+            cardDiv.className = 'column-card';
+            cardDiv.dataset.nodeId = node.id();
+            
+            // Apply current state classes
+            if (node.hasClass('search-match')) {
+                cardDiv.classList.add('search-match');
+            }
+            if (node.selected()) {
+                cardDiv.classList.add('selected');
+            }
+            
+            // Apply card color if it exists
+            const cardColor = node.data('cardColor');
+            if (cardColor) {
+                const currentTheme = getCurrentTheme();
+                const color = getCardColorValue(cardColor, currentTheme);
+                if (color) {
+                    cardDiv.style.backgroundColor = color;
+                }
+            }
+
+            // Apply temporal markings if they exist
+            const temporalBorderWidth = node.data('temporalBorderWidth');
+            const temporalBorderColor = node.data('temporalBorderColor');
+            if (temporalBorderWidth && temporalBorderColor) {
+                cardDiv.style.borderWidth = temporalBorderWidth + 'px';
+                cardDiv.style.borderColor = temporalBorderColor;
+                cardDiv.style.borderStyle = 'solid';
+            }
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'column-card-content';
+            
+            // Check if card should show image or text
+            const nodeId = node.id();
+            const showText = columnCardStates.get(nodeId) || false;
+            const hasImage = node.data('imageData');
+            
+            if (hasImage && !showText) {
+                // Show image
+                const img = document.createElement('img');
+                img.src = node.data('imageData');
+                img.className = 'column-card-image';
+                img.alt = node.data('originalFileName') || 'Bild';
+                contentDiv.appendChild(img);
+                
+                // Add annotation if exists
+                const annotation = node.data('annotation');
+                if (annotation) {
+                    const annotationDiv = document.createElement('div');
+                    annotationDiv.className = 'column-card-annotation';
+                    annotationDiv.innerHTML = '📝 ' + convertMarkdownToHtml(annotation);
+                    contentDiv.appendChild(annotationDiv);
+                }
+            } else {
+                // Show text content
+                const title = node.data('title') || '';
+                const text = node.data('text') || '';
+                const isManualCard = node.data('isManualCard') || false;
+                
+                let displayText = '';
+                if (title && !isManualCard) {
+                    displayText = `<strong>${title}</strong><br><br>`;
+                }
+                displayText += convertMarkdownToHtml(text);
+                
+                contentDiv.innerHTML = displayText;
+            }
+            
+            // Add tags
+            const tags = node.data('tags') || [];
+            if (tags.length > 0) {
+                const visibleTags = tags.filter(tag => {
+                    const pdfPattern = /^[A-Za-z\-]+\-\d{4}\-[a-z\-]+$/;
+                    return !pdfPattern.test(tag);
+                });
+                
+                if (visibleTags.length > 0) {
+                    const tagsDiv = document.createElement('div');
+                    tagsDiv.className = 'column-card-tags';
+                    visibleTags.forEach(tag => {
+                        const tagSpan = document.createElement('span');
+                        tagSpan.className = 'tag';
+                        tagSpan.textContent = '#' + tag;
+                        tagsDiv.appendChild(tagSpan);
+                    });
+                    contentDiv.appendChild(tagsDiv);
+                }
+            }
+            
+            cardDiv.appendChild(contentDiv);
+            
+            // Add click handlers
+            cardDiv.addEventListener('click', (e) => {
+                if (e.ctrlKey || e.metaKey) {
+                    // Ctrl+click for multi-select
+                    toggleColumnCardSelection(node.id(), cardDiv);
+                } else if (hasImage) {
+                    // Toggle between image and text for image cards
+                    const currentState = columnCardStates.get(nodeId) || false;
+                    columnCardStates.set(nodeId, !currentState);
+                    
+                    // Re-render just this card
+                    const newCard = createColumnCard(node);
+                    cardDiv.parentNode.replaceChild(newCard, cardDiv);
+                } else {
+                    // Select single card
+                    selectColumnCard(node.id(), cardDiv);
+                }
+            });
+            
+            // Add double-click handler for editing
+            cardDiv.addEventListener('dblclick', (e) => {
+                e.preventDefault();
+                editCard(node); // Reuse existing edit function
+            });
+
+            // Add right-click context menu
+            cardDiv.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                showColumnContextMenu(e, node.id());
+            });
+            
+            return cardDiv;
+        }
+
+        function toggleColumnCardSelection(nodeId, cardDiv) {
+            const node = cy.getElementById(nodeId);
+            if (node.selected()) {
+                node.unselect();
+                cardDiv.classList.remove('selected');
+            } else {
+                node.select();
+                cardDiv.classList.add('selected');
+            }
+        }
+
+        function selectColumnCard(nodeId, cardDiv) {
+            // Deselect all
+            cy.nodes().unselect();
+            document.querySelectorAll('.column-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            
+            // Select this one
+            const node = cy.getElementById(nodeId);
+            node.select();
+            cardDiv.classList.add('selected');
+        }
+
+        function updateColumnViewSearch() {
+            if (!isColumnView) return;
+            
+            document.querySelectorAll('.column-card').forEach(cardDiv => {
+                const nodeId = cardDiv.dataset.nodeId;
+                const node = cy.getElementById(nodeId);
+                
+                if (node.hasClass('search-match')) {
+                    cardDiv.classList.add('search-match');
+                } else {
+                    cardDiv.classList.remove('search-match');
+                }
+            });
+        }
+
+        function getCurrentTheme() {
+            if (document.body.classList.contains('dark-theme')) return 'dark';
+            if (document.body.classList.contains('sepia-theme')) return 'sepia';
+            return 'light';
+        }
+
+        // Hook into existing search functions to update column view
+        const originalPerformSearch = performSearch;
+        performSearch = function(query) {
+            const result = originalPerformSearch.call(this, query);
+            updateColumnViewSearch();
+            return result;
+        };
+
+        const originalClearSearch = clearSearch;
+        clearSearch = function() {
+            const result = originalClearSearch.call(this);
+            updateColumnViewSearch();
+            return result;
+        };
+
+        const originalPerformTagFilter = performTagFilter;
+        performTagFilter = function() {
+            const result = originalPerformTagFilter.apply(this, arguments);
+            updateColumnViewSearch();
+            return result;
+        };
+
+        const originalClearTagFilter = clearTagFilter;
+        clearTagFilter = function() {
+            const result = originalClearTagFilter.call(this);
+            updateColumnViewSearch();
+            return result;
+        };
+
+        // Function to update column view colors immediately
+        function updateColumnViewColors() {
+            if (!isColumnView) return;
+            
+            document.querySelectorAll('.column-card').forEach(cardDiv => {
+                const nodeId = cardDiv.dataset.nodeId;
+                const node = cy.getElementById(nodeId);
+                const cardColor = node.data('cardColor');
+                
+                if (cardColor) {
+                    const currentTheme = getCurrentTheme();
+                    const color = getCardColorValue(cardColor, currentTheme);
+                    if (color) {
+                        cardDiv.style.backgroundColor = color;
+                    }
+                } else {
+                    // Remove background color if no card color
+                    cardDiv.style.backgroundColor = '';
+                }
+            });
+        }
+
+        // Function to update column view selections
+        function updateColumnViewSelections() {
+            if (!isColumnView) return;
+            
+            document.querySelectorAll('.column-card').forEach(cardDiv => {
+                const nodeId = cardDiv.dataset.nodeId;
+                const node = cy.getElementById(nodeId);
+                
+                if (node.selected()) {
+                    cardDiv.classList.add('selected');
+                } else {
+                    cardDiv.classList.remove('selected');
+                }
+            });
+        }
+
+        // Hook into color functions - need to find where colors are applied
+        // Override the color application functions to update column view
+        setTimeout(() => {
+            // Hook into the existing color functions after they're defined
+            if (typeof applyColorToNodes === 'function') {
+                const originalApplyColorToNodes = applyColorToNodes;
+                applyColorToNodes = function() {
+                    const result = originalApplyColorToNodes.apply(this, arguments);
+                    updateColumnViewColors();
+                    return result;
+                };
+            }
+
+            // Hook into removeCardColor function
+            if (typeof removeCardColor === 'function') {
+                const originalRemoveCardColor = removeCardColor;
+                removeCardColor = function(node) {
+                    const result = originalRemoveCardColor.call(this, node);
+                    updateColumnViewColors();
+                    return result;
+                };
+            }
+
+            // Hook into direct style updates via Cytoscape events
+            if (cy) {
+                cy.on('style', function(evt) {
+                    // Update column view when any node style changes
+                    setTimeout(updateColumnViewColors, 10);
+                });
+                
+                cy.on('data', function(evt) {
+                    // Update column view when node data changes (like cardColor)
+                    setTimeout(updateColumnViewColors, 10);
+                });
+
+                // Hook into selection events
+                cy.on('select unselect', function(evt) {
+                    // Update column view when selections change
+                    setTimeout(updateColumnViewSelections, 10);
+                });
+
+                // Hook into add/remove events to re-render column view
+                cy.on('add remove', function(evt) {
+                    if (isColumnView) {
+                        renderColumnViewDebounced();
+                    }
+                });
+            }
+        }, 500);
+
+        // Restore view state on page load
+        setTimeout(() => {
+            const savedView = localStorage.getItem('spatial-notes-view');
+            if (savedView === 'column' && !isColumnView) {
+                toggleView(); // Switch to column view if it was saved
+            }
+        }, 1000); // Wait a bit longer to ensure everything is initialized
+
+        // Function to update column view for specific node after text changes
+        function updateColumnViewCard(nodeId) {
+            if (!isColumnView) return;
+            
+            const cardDiv = document.querySelector(`[data-node-id="${nodeId}"]`);
+            if (cardDiv) {
+                const node = cy.getElementById(nodeId);
+                const newCard = createColumnCard(node);
+                cardDiv.parentNode.replaceChild(newCard, cardDiv);
+            }
+        }
+
+        // Hook into edit dialogs to update column view on text changes
+        // We'll monitor for text changes in edit dialogs
+        let editDialogObserver = null;
+        function watchEditDialogs() {
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.type === 'childList') {
+                        // Check if edit dialog was added
+                        mutation.addedNodes.forEach(function(node) {
+                            if (node.nodeType === 1 && node.querySelector && node.querySelector('textarea')) {
+                                const textarea = node.querySelector('textarea');
+                                const nodeId = node.dataset?.nodeId || getEditingNodeId();
+                                
+                                if (textarea && nodeId && isColumnView) {
+                                    // Add input listener to textarea
+                                    textarea.addEventListener('input', function() {
+                                        // Update node data temporarily for preview
+                                        const cyNode = cy.getElementById(nodeId);
+                                        if (cyNode) {
+                                            cyNode.data('text', this.value);
+                                            setTimeout(() => updateColumnViewCard(nodeId), 10);
+                                        }
+                                    });
+                                }
+                            }
+                        });
+                    }
+                });
+            });
+            
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+            
+            return observer;
+        }
+
+        // Helper function to get currently editing node ID (best effort)
+        function getEditingNodeId() {
+            // Try to find the node being edited by looking for selected nodes
+            const selected = cy.$('node:selected');
+            return selected.length > 0 ? selected[0].id() : null;
+        }
+
+        // Start watching for edit dialogs
+        setTimeout(() => {
+            editDialogObserver = watchEditDialogs();
+        }, 2000);
+
+        // Column view context menu
+        function showColumnContextMenu(e, nodeId) {
+            // Remove any existing context menu
+            const existingMenu = document.getElementById('columnContextMenu');
+            if (existingMenu) {
+                document.body.removeChild(existingMenu);
+            }
+
+            const selectedNodes = cy.$('node:selected');
+            const isMultipleSelected = selectedNodes.length > 1;
+            
+            // Create context menu
+            const menu = document.createElement('div');
+            menu.id = 'columnContextMenu';
+            menu.style.cssText = `
+                position: fixed;
+                left: ${e.clientX}px;
+                top: ${e.clientY}px;
+                background: white;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+                z-index: 10000;
+                min-width: 150px;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                font-size: 14px;
+            `;
+
+            const targetText = isMultipleSelected ? `${selectedNodes.length} kort` : '1 kort';
+
+            menu.innerHTML = `
+                <div style="padding: 8px 0; border-bottom: 1px solid #eee;">
+                    <div style="padding: 4px 12px; font-weight: bold; color: #666;">Taggar för ${targetText}</div>
+                </div>
+                <div style="padding: 4px 0;">
+                    <div class="context-menu-item" onclick="addTagToSelected()" style="padding: 8px 12px; cursor: pointer;">➕ Lägg till tagg</div>
+                    <div class="context-menu-item" onclick="removeTagFromSelected()" style="padding: 8px 12px; cursor: pointer;">➖ Ta bort tagg</div>
+                </div>
+            `;
+
+            // Add hover effects to menu items
+            menu.querySelectorAll('.context-menu-item').forEach(item => {
+                item.addEventListener('mouseenter', () => {
+                    item.style.backgroundColor = '#f0f0f0';
+                });
+                item.addEventListener('mouseleave', () => {
+                    item.style.backgroundColor = '';
+                });
+            });
+
+            document.body.appendChild(menu);
+
+            // Close menu when clicking outside
+            const closeMenu = (e) => {
+                if (!menu.contains(e.target)) {
+                    document.body.removeChild(menu);
+                    document.removeEventListener('click', closeMenu);
+                }
+            };
+            
+            setTimeout(() => {
+                document.addEventListener('click', closeMenu);
+            }, 10);
+        }
+
+        // Add tag to selected cards
+        function addTagToSelected() {
+            const selectedNodes = cy.$('node:selected');
+            if (selectedNodes.length === 0) return;
+
+            const tagName = prompt('Ange taggnamn:');
+            if (!tagName || !tagName.trim()) return;
+
+            const cleanTag = tagName.trim().replace(/^#/, ''); // Remove # if present
+
+            selectedNodes.forEach(node => {
+                const currentTags = node.data('tags') || [];
+                if (!currentTags.includes(cleanTag)) {
+                    currentTags.push(cleanTag);
+                    node.data('tags', currentTags);
+                }
+            });
+
+            // Save and update views
+            saveBoard();
+            if (isColumnView) {
+                renderColumnViewDebounced();
+            }
+
+            // Close context menu
+            const menu = document.getElementById('columnContextMenu');
+            if (menu) document.body.removeChild(menu);
+        }
+
+        // Remove tag from selected cards
+        function removeTagFromSelected() {
+            const selectedNodes = cy.$('node:selected');
+            if (selectedNodes.length === 0) return;
+
+            // Collect all unique tags from selected nodes
+            const allTags = new Set();
+            selectedNodes.forEach(node => {
+                const tags = node.data('tags') || [];
+                tags.forEach(tag => allTags.add(tag));
+            });
+
+            if (allTags.size === 0) {
+                alert('Inga taggar hittades på de markerade korten.');
+                return;
+            }
+
+            const tagList = Array.from(allTags).sort();
+            const tagName = prompt('Vilken tagg ska tas bort?\n\nTillgängliga taggar:\n' + tagList.map(tag => `• ${tag}`).join('\n') + '\n\nAnge taggnamn:');
+            
+            if (!tagName || !tagName.trim()) return;
+
+            const cleanTag = tagName.trim().replace(/^#/, '');
+
+            let removedCount = 0;
+            selectedNodes.forEach(node => {
+                const currentTags = node.data('tags') || [];
+                const filteredTags = currentTags.filter(tag => tag !== cleanTag);
+                if (filteredTags.length !== currentTags.length) {
+                    node.data('tags', filteredTags);
+                    removedCount++;
+                }
+            });
+
+            if (removedCount > 0) {
+                // Save and update views
+                saveBoard();
+                if (isColumnView) {
+                    renderColumnViewDebounced();
+                }
+            } else {
+                alert(`Taggen "${cleanTag}" hittades inte på de markerade korten.`);
+            }
+
+            // Close context menu
+            const menu = document.getElementById('columnContextMenu');
+            if (menu) document.body.removeChild(menu);
+        }
     </script>
 
 </body>
