@@ -10535,25 +10535,45 @@ Kan ha #taggar överallt.
                         e.preventDefault(); // Prevent text selection on iPad
                         columnTouchPos = { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
                         console.log('DEBUG column background touch detected, pos:', columnTouchPos);
+                        let backgroundTouchStartTime = Date.now();
+                        
                         columnBackgroundTimer = setTimeout(() => {
                             const selectedNodes = cy.$('node:selected');
-                            console.log('DEBUG column background timeout fired, selected nodes:', selectedNodes.length, 'columnTouchPos:', columnTouchPos);
+                            console.log('DEBUG column background LONG PRESS timeout fired, selected nodes:', selectedNodes.length, 'columnTouchPos:', columnTouchPos);
                             if (selectedNodes.length > 0 && columnTouchPos) {
                                 // Show mobile card menu for selected cards
                                 console.log('DEBUG calling showMobileCardMenu from column background');
                                 showMobileCardMenu(columnTouchPos, selectedNodes[0].id());
                             }
                         }, 750);
+                        
+                        // Handle short tap on background to deselect all
+                        const handleBackgroundTouchEnd = (endEvent) => {
+                            if (columnBackgroundTimer) {
+                                clearTimeout(columnBackgroundTimer);
+                                columnBackgroundTimer = null;
+                            }
+                            
+                            const tapDuration = Date.now() - backgroundTouchStartTime;
+                            console.log('DEBUG background touch end, duration:', tapDuration);
+                            
+                            if (tapDuration < 300) { // Short tap
+                                console.log('DEBUG background short tap - deselecting all cards');
+                                cy.nodes().unselect();
+                                document.querySelectorAll('.column-card').forEach(card => {
+                                    card.classList.remove('selected');
+                                });
+                            }
+                            
+                            columnTouchPos = null;
+                            container.removeEventListener('touchend', handleBackgroundTouchEnd);
+                            container.removeEventListener('touchmove', handleBackgroundTouchEnd);
+                        };
+                        
+                        container.addEventListener('touchend', handleBackgroundTouchEnd, { once: true });
+                        container.addEventListener('touchmove', handleBackgroundTouchEnd, { once: true });
                     }
                 }, { passive: false });
-                
-                container.addEventListener('touchend touchmove', () => {
-                    if (columnBackgroundTimer) {
-                        clearTimeout(columnBackgroundTimer);
-                        columnBackgroundTimer = null;
-                        columnTouchPos = null;
-                    }
-                }, { passive: true });
             }
             
             if (!cy) return;
@@ -10886,15 +10906,15 @@ Kan ha #taggar överallt.
             cardDiv.addEventListener('click', (e) => {
                 console.log('DEBUG column card click:', node.id(), 'ctrlKey:', e.ctrlKey, 'metaKey:', e.metaKey, 'isMobileDevice():', isMobileDevice(), 'selected nodes:', cy.$('node:selected').length, 'node.selected():', node.selected());
                 if (e.ctrlKey || e.metaKey) {
-                    // Ctrl+click for multi-select
+                    // Ctrl+click for multi-select (desktop)
                     console.log('DEBUG ctrl+click -> toggleColumnCardSelection');
                     toggleColumnCardSelection(node.id(), cardDiv);
-                } else if (isMobileDevice() && cy.$('node:selected').length > 0) {
-                    // On mobile, if other cards are selected, enable multi-select mode
-                    console.log('DEBUG mobile multi-select -> toggleColumnCardSelection');
+                } else if (isMobileDevice()) {
+                    // On mobile, always toggle selection - simple tap to select/deselect
+                    console.log('DEBUG mobile tap -> toggleColumnCardSelection');
                     toggleColumnCardSelection(node.id(), cardDiv);
                 } else if (hasImage) {
-                    // Toggle between image and text for image cards
+                    // Desktop: Toggle between image and text for image cards
                     const currentState = columnCardStates.get(nodeId) || false;
                     columnCardStates.set(nodeId, !currentState);
                     
@@ -10902,7 +10922,7 @@ Kan ha #taggar överallt.
                     const newCard = createColumnCard(node);
                     cardDiv.parentNode.replaceChild(newCard, cardDiv);
                 } else {
-                    // Select single card
+                    // Desktop: Select single card
                     selectColumnCard(node.id(), cardDiv);
                 }
             });
