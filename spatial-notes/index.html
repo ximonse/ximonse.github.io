@@ -10512,12 +10512,14 @@ Kan ha #taggar överallt.
         }
 
         // Debounced render to avoid excessive updates
-        let renderColumnViewTimeout = null;
-        function renderColumnView() {
-            const container = document.getElementById('columnContainer');
-            container.innerHTML = '';
+        // Setup column view background handlers (one time only)
+        let columnBackgroundHandlersSetup = false;
+        function setupColumnBackgroundHandlers() {
+            if (columnBackgroundHandlersSetup) return;
+            columnBackgroundHandlersSetup = true;
             
-            // Add background long-press support for selected cards menu
+            const container = document.getElementById('columnContainer');
+            
             if (isMobileDevice()) {
                 let columnBackgroundTimer = null;
                 let columnTouchPos = null;
@@ -10529,7 +10531,7 @@ Kan ha #taggar överallt.
                                         e.target.classList.contains('column-view') ||
                                         e.target.classList.contains('column-container') ||
                                         e.target.id === 'columnContainer');
-                    console.log('DEBUG column background touchstart:', e.target, 'isBackground:', isBackground, 'classList:', e.target.classList, 'touches:', e.touches?.length);
+                    console.log('DEBUG column background touchstart:', e.target, 'isBackground:', isBackground);
                     
                     if (isBackground) {
                         e.preventDefault(); // Prevent text selection on iPad
@@ -10539,7 +10541,7 @@ Kan ha #taggar överallt.
                         
                         columnBackgroundTimer = setTimeout(() => {
                             const selectedNodes = cy.$('node:selected');
-                            console.log('DEBUG column background LONG PRESS timeout fired, selected nodes:', selectedNodes.length, 'columnTouchPos:', columnTouchPos);
+                            console.log('DEBUG column background LONG PRESS timeout fired, selected nodes:', selectedNodes.length);
                             if (selectedNodes.length > 0 && columnTouchPos) {
                                 // Show mobile card menu for selected cards
                                 console.log('DEBUG calling showMobileCardMenu from column background');
@@ -10574,7 +10576,28 @@ Kan ha #taggar överallt.
                         container.addEventListener('touchmove', handleBackgroundTouchEnd, { once: true });
                     }
                 }, { passive: false });
+            } else {
+                // Desktop: Simple click handler for background
+                container.addEventListener('click', (e) => {
+                    const isCard = e.target.closest('.column-card');
+                    if (!isCard) {
+                        console.log('DEBUG desktop background click - deselecting all cards');
+                        cy.nodes().unselect();
+                        document.querySelectorAll('.column-card').forEach(card => {
+                            card.classList.remove('selected');
+                        });
+                    }
+                });
             }
+        }
+
+        let renderColumnViewTimeout = null;
+        function renderColumnView() {
+            const container = document.getElementById('columnContainer');
+            container.innerHTML = '';
+            
+            // Setup background handlers once
+            setupColumnBackgroundHandlers();
             
             if (!cy) return;
             
