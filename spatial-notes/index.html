@@ -591,28 +591,34 @@
         }
         
         /* Color picker dot colors - Light theme */
-        .color-picker-dot.card-color-1 { background-color: #e8f5e8; } /* Grön */
-        .color-picker-dot.card-color-2 { background-color: #fff3e0; } /* Orange */
-        .color-picker-dot.card-color-3 { background-color: #ffebee; } /* Röd */
-        .color-picker-dot.card-color-4 { background-color: #fffde7; } /* Gul */
-        .color-picker-dot.card-color-5 { background-color: #f1f8e9; } /* Gröngul */
-        .color-picker-dot.card-color-6 { background-color: #e3f2fd; } /* Blå */
+        .color-picker-dot.card-color-1 { background-color: #d4f2d4; } /* Grön */
+        .color-picker-dot.card-color-2 { background-color: #ffe4b3; } /* Orange */
+        .color-picker-dot.card-color-3 { background-color: #ffc1cc; } /* Röd */
+        .color-picker-dot.card-color-4 { background-color: #fff7b3; } /* Gul */
+        .color-picker-dot.card-color-5 { background-color: #f3e5f5; } /* Lila */
+        .color-picker-dot.card-color-6 { background-color: #c7e7ff; } /* Blå */
+        .color-picker-dot.card-color-7 { background-color: #e0e0e0; } /* Grå */
+        .color-picker-dot.card-color-8 { background-color: #ffffff; } /* Vit */
         
         /* Dark theme color picker dots */
-        .dark-theme .color-picker-dot.card-color-1 { background-color: #2d4a2d; } /* Mörk Grön */
-        .dark-theme .color-picker-dot.card-color-2 { background-color: #4a3d2a; } /* Mörk Orange */
-        .dark-theme .color-picker-dot.card-color-3 { background-color: #4a2c2a; } /* Mörk Röd */
-        .dark-theme .color-picker-dot.card-color-4 { background-color: #4a4a2a; } /* Mörk Gul */
-        .dark-theme .color-picker-dot.card-color-5 { background-color: #3a4a2d; } /* Mörk Gröngul */
-        .dark-theme .color-picker-dot.card-color-6 { background-color: #1e3a5f; } /* Mörk Blå */
+        .dark-theme .color-picker-dot.card-color-1 { background-color: #3d5a3d; } /* Mörk Grön */
+        .dark-theme .color-picker-dot.card-color-2 { background-color: #5a4d3a; } /* Mörk Orange */
+        .dark-theme .color-picker-dot.card-color-3 { background-color: #5a3c3a; } /* Mörk Röd */
+        .dark-theme .color-picker-dot.card-color-4 { background-color: #5a5a3a; } /* Mörk Gul */
+        .dark-theme .color-picker-dot.card-color-5 { background-color: #4a3d5a; } /* Mörk Lila */
+        .dark-theme .color-picker-dot.card-color-6 { background-color: #2e4a6f; } /* Mörk Blå */
+        .dark-theme .color-picker-dot.card-color-7 { background-color: #555555; } /* Mörk Grå */
+        .dark-theme .color-picker-dot.card-color-8 { background-color: #8a8a8a; } /* Ljusgrå */
         
         /* Sepia theme color picker dots */
-        .sepia-theme .color-picker-dot.card-color-1 { background-color: #e8e6d7; } /* Sepia Grön */
-        .sepia-theme .color-picker-dot.card-color-2 { background-color: #f0e6d2; } /* Sepia Orange */
-        .sepia-theme .color-picker-dot.card-color-3 { background-color: #f4e6d7; } /* Sepia Röd */
-        .sepia-theme .color-picker-dot.card-color-4 { background-color: #f5f2e6; } /* Sepia Gul */
-        .sepia-theme .color-picker-dot.card-color-5 { background-color: #eae6d7; } /* Sepia Gröngul */
-        .sepia-theme .color-picker-dot.card-color-6 { background-color: #e6d7c3; } /* Sepia Blå */
+        .sepia-theme .color-picker-dot.card-color-1 { background-color: #ded6c7; } /* Sepia Grön */
+        .sepia-theme .color-picker-dot.card-color-2 { background-color: #e6d6c2; } /* Sepia Orange */
+        .sepia-theme .color-picker-dot.card-color-3 { background-color: #ead6c7; } /* Sepia Röd */
+        .sepia-theme .color-picker-dot.card-color-4 { background-color: #ebe2d6; } /* Sepia Gul */
+        .sepia-theme .color-picker-dot.card-color-5 { background-color: #e2d6c7; } /* Sepia Lila */
+        .sepia-theme .color-picker-dot.card-color-6 { background-color: #d6c7b3; } /* Sepia Blå */
+        .sepia-theme .color-picker-dot.card-color-7 { background-color: #c0b8a8; } /* Sepia Grå */
+        .sepia-theme .color-picker-dot.card-color-8 { background-color: #f5f2e8; } /* Sepia Vit */
         
         .color-picker-title {
             text-align: center;
@@ -2486,8 +2492,29 @@
                             },
                             'background-image': 'data(imageData)',
                             'background-fit': 'cover',
-                            'border-width': 3,
-                            'border-color': '#ddd',
+                            'background-color': function(node) {
+                                // Support color styling for image cards
+                                const cardColor = node.data('cardColor');
+                                if (cardColor) {
+                                    const colorValue = getCardColorValue(cardColor, getCurrentTheme());
+                                    return colorValue;
+                                }
+                                return '#ffffff'; // Default white background
+                            },
+                            'border-width': function(node) {
+                                // Thicker border when colored to show the color better
+                                const cardColor = node.data('cardColor');
+                                return cardColor ? 6 : 3;
+                            },
+                            'border-color': function(node) {
+                                // Use the card color for border, or default gray
+                                const cardColor = node.data('cardColor');
+                                if (cardColor) {
+                                    const colorValue = getCardColorValue(cardColor, getCurrentTheme());
+                                    return colorValue;
+                                }
+                                return '#ddd';
+                            },
                             'shape': 'round-rectangle',
                             'label': function(node) {
                                 // Only show annotation icon if present, no filename
@@ -2859,7 +2886,15 @@
                     backgroundTouchPos = { x: touch.clientX, y: touch.clientY };
                     backgroundTouchTimer = setTimeout(() => {
                         if (isMobileDevice() && backgroundTouchPos) {
-                            showImageSourceMenu(backgroundTouchPos.x, backgroundTouchPos.y);
+                            // Check if we have selected cards
+                            const selectedNodes = cy.$('node:selected');
+                            if (selectedNodes.length > 0) {
+                                // Show mobile card menu for selected cards
+                                showMobileCardMenu(backgroundTouchPos, selectedNodes[0].id());
+                            } else {
+                                // Show image source menu if no cards selected
+                                showImageSourceMenu(backgroundTouchPos.x, backgroundTouchPos.y);
+                            }
                         }
                     }, 1000);
                 }
@@ -3593,6 +3628,10 @@
                     // Add the tag
                     const newTags = [...currentTags, tagName];
                     node.data('tags', newTags);
+                    
+                    // Apply auto-gray coloring for #done tags
+                    applyAutoDoneColoring(node);
+                    
                     addedCount++;
                     console.log(`Added tag "${tagName}" to card: ${node.data('title') || node.id()}`);
                 } else {
@@ -3650,8 +3689,8 @@
             const colorGrid = document.createElement('div');
             colorGrid.className = 'color-picker-grid';
             
-            // Add the 6 color options
-            for (let i = 1; i <= 6; i++) {
+            // Add the 8 color options
+            for (let i = 1; i <= 8; i++) {
                 const colorDot = document.createElement('div');
                 colorDot.className = `color-picker-dot card-color-${i}`;
                 colorDot.textContent = i; // Add number inside the dot
@@ -3901,11 +3940,14 @@ Tredje anteckningen...
                     tags: tags
                 };
                 
-                cy.add({
+                const newNode = cy.add({
                     group: 'nodes',
                     data: nodeData,
                     position: position
                 });
+                
+                // Apply auto-gray coloring for #done tags
+                applyAutoDoneColoring(newNode);
                 
                 createdCount++;
                 console.log(`Created card ${index + 1}: "${cardText.substring(0, 30)}..." with tags:`, tags);
@@ -4278,9 +4320,25 @@ Tredje anteckningen...
                         return bTextDesc.localeCompare(aTextDesc, 'sv');
                         
                     case 'color':
-                        const aColor = a.data('cardColor') || 'zzz'; // No color goes last
-                        const bColor = b.data('cardColor') || 'zzz';
-                        return aColor.localeCompare(bColor);
+                        const aColor = a.data('cardColor') || '';
+                        const bColor = b.data('cardColor') || '';
+                        
+                        // Same color order as background-color: röd, orange, gul, lila, blå, vit, grön, grå
+                        const colorOrder = {
+                            'card-color-3': 1, // röd
+                            'card-color-2': 2, // orange  
+                            'card-color-4': 3, // gul
+                            'card-color-5': 4, // lila
+                            'card-color-6': 5, // blå
+                            'card-color-8': 6, // vit
+                            'card-color-1': 7, // grön
+                            'card-color-7': 8, // grå
+                            '': 9              // ofärgad (kommer sist)
+                        };
+                        
+                        const aPriority = colorOrder[aColor] || 9;
+                        const bPriority = colorOrder[bColor] || 9;
+                        return aPriority - bPriority;
                         
                     case 'date-asc':
                         const aDate = extractDateFromId(a.id());
@@ -4509,6 +4567,20 @@ Tredje anteckningen...
             const tags = node.data('tags') || [];
             return tags.some(tag => tag.toLowerCase() === 'done');
         }
+
+        // Automatically assign gray color to cards with #done tags
+        function applyAutoDoneColoring(node) {
+            if (hasDoneTag(node)) {
+                // Set gray color (card-color-7) for done tasks
+                node.data('cardColor', 'card-color-7');
+                
+                // Update cytoscape styling immediately
+                const colorValue = getCardColorValue('card-color-7', getCurrentTheme());
+                node.style('background-color', colorValue);
+                
+                console.log(`Auto-colored card ${node.id()} gray for #done tag`);
+            }
+        }
         
         // Calculate temporal relevance and get marking intensity
         function getTemporalMarking(datePatterns, hasTodo, hasDone, today = new Date()) {
@@ -4728,6 +4800,10 @@ Tredje anteckningen...
                     },
                     position: { x: card.x, y: card.y }
                 });
+                
+                // Apply auto-gray coloring for #done tags
+                applyAutoDoneColoring(node);
+                
                 node.grabify();
             });
             
@@ -6982,28 +7058,34 @@ Tredje anteckningen...
         function getCardColorValue(colorId, theme) {
             const colors = {
                 light: {
-                    1: '#d4f2d4', // Grön (stronger)
-                    2: '#ffe4b3', // Orange (stronger)
-                    3: '#ffc1cc', // Röd (stronger)
-                    4: '#fff7b3', // Gul (stronger)
-                    5: '#e1f0c1', // Gröngul (stronger)
-                    6: '#c7e7ff'  // Blå (stronger)
+                    1: '#d4f2d4', // Grön
+                    2: '#ffe4b3', // Orange
+                    3: '#ffc1cc', // Röd
+                    4: '#fff7b3', // Gul
+                    5: '#f3e5f5', // Lila
+                    6: '#c7e7ff', // Blå
+                    7: '#e0e0e0', // Grå
+                    8: '#ffffff'  // Vit
                 },
                 dark: {
-                    1: '#3d5a3d', // Mörk Grön (stronger)
-                    2: '#5a4d3a', // Mörk Orange (stronger)
-                    3: '#5a3c3a', // Mörk Röd (stronger)
-                    4: '#5a5a3a', // Mörk Gul (stronger)
-                    5: '#4a5a3d', // Mörk Gröngul (stronger)
-                    6: '#2e4a6f'  // Mörk Blå (stronger)
+                    1: '#3d5a3d', // Mörk Grön
+                    2: '#5a4d3a', // Mörk Orange
+                    3: '#5a3c3a', // Mörk Röd
+                    4: '#5a5a3a', // Mörk Gul
+                    5: '#4a3d5a', // Mörk Lila
+                    6: '#2e4a6f', // Mörk Blå
+                    7: '#555555', // Mörk Grå
+                    8: '#8a8a8a'  // Ljusgrå (vit blir för ljus i dark theme)
                 },
                 sepia: {
-                    1: '#ded6c7', // Sepia Grön (stronger)
-                    2: '#e6d6c2', // Sepia Orange (stronger)
-                    3: '#ead6c7', // Sepia Röd (stronger)
-                    4: '#ebe2d6', // Sepia Gul (stronger)
-                    5: '#dad6c7', // Sepia Gröngul (stronger)
-                    6: '#d6c7b3'  // Sepia Blå (stronger)
+                    1: '#ded6c7', // Sepia Grön
+                    2: '#e6d6c2', // Sepia Orange
+                    3: '#ead6c7', // Sepia Röd
+                    4: '#ebe2d6', // Sepia Gul
+                    5: '#e2d6c7', // Sepia Lila
+                    6: '#d6c7b3', // Sepia Blå
+                    7: '#c0b8a8', // Sepia Grå
+                    8: '#f5f2e8'  // Sepia Vit
                 }
             };
             
@@ -7454,6 +7536,9 @@ Tredje anteckningen...
                 });
                 console.log(`📷 Created image copy: ${cardData.originalFileName}`);
             }
+
+            // Apply auto-gray coloring for #done tags
+            applyAutoDoneColoring(newNode);
 
             return newNode;
         }
@@ -8451,6 +8536,9 @@ Kan ha #taggar överallt.
                 
                 node.data('tags', newTags);
                 
+                // Apply auto-gray coloring for #done tags
+                applyAutoDoneColoring(node);
+                
                 refreshSearchAndFilter();
                 cleanup();
             };
@@ -8558,6 +8646,9 @@ Kan ha #taggar överallt.
                 // Update node data
                 node.data('text', newText);
                 node.data('tags', newTags);
+                
+                // Apply auto-gray coloring for #done tags
+                applyAutoDoneColoring(node);
                 
                 // Re-run search if active
                 const searchInput = document.getElementById('searchInput');
@@ -8674,6 +8765,9 @@ Kan ha #taggar överallt.
                 node.data('title', newTitle);
                 node.data('text', newText);
                 node.data('tags', newTags);
+                
+                // Apply auto-gray coloring for #done tags
+                applyAutoDoneColoring(node);
                 
                 refreshSearchAndFilter();
                 cleanup();
@@ -9546,6 +9640,9 @@ Kan ha #taggar överallt.
                                 position: { x: card.x || 0, y: card.y || 0 }
                             });
                             
+                            // Apply auto-gray coloring for #done tags
+                            applyAutoDoneColoring(node);
+                            
                             // Apply colors and pinning immediately, skip height for now
                             const cardColor = node.data('cardColor');
                             if (cardColor) {
@@ -10209,8 +10306,8 @@ Kan ha #taggar överallt.
                     }
                 }
                 
-                // Siffertangenter 1-6 för direktfärgning
-                if (['1', '2', '3', '4', '5', '6'].includes(e.key) && !e.ctrlKey && !e.altKey && !window.keysPressed.has('g')) {
+                // Siffertangenter 1-8 för direktfärgning
+                if (['1', '2', '3', '4', '5', '6', '7', '8'].includes(e.key) && !e.ctrlKey && !e.altKey && !window.keysPressed.has('g')) {
                     const selectedNodes = cy.$('node:selected');
                     if (selectedNodes.length > 0) {
                         e.preventDefault();
@@ -10412,6 +10509,34 @@ Kan ha #taggar överallt.
             const container = document.getElementById('columnContainer');
             container.innerHTML = '';
             
+            // Add background long-press support for selected cards menu
+            if (isMobileDevice()) {
+                let columnBackgroundTimer = null;
+                let columnTouchPos = null;
+                
+                container.addEventListener('touchstart', (e) => {
+                    // Only trigger if touching the background (not a card)
+                    if (e.target === container || e.target.classList.contains('column-view')) {
+                        columnTouchPos = { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
+                        columnBackgroundTimer = setTimeout(() => {
+                            const selectedNodes = cy.$('node:selected');
+                            if (selectedNodes.length > 0 && columnTouchPos) {
+                                // Show mobile card menu for selected cards
+                                showMobileCardMenu(columnTouchPos, selectedNodes[0].id());
+                            }
+                        }, 750);
+                    }
+                }, { passive: true });
+                
+                container.addEventListener('touchend touchmove', () => {
+                    if (columnBackgroundTimer) {
+                        clearTimeout(columnBackgroundTimer);
+                        columnBackgroundTimer = null;
+                        columnTouchPos = null;
+                    }
+                }, { passive: true });
+            }
+            
             if (!cy) return;
             
             // Apply temporal markings before rendering
@@ -10488,10 +10613,23 @@ Kan ha #taggar överallt.
                     return nodeArray.sort((a, b) => {
                         const aColor = a.data('cardColor') || '';
                         const bColor = b.data('cardColor') || '';
-                        // Sort by color number (card-color-1, card-color-2, etc.)
-                        const aNum = aColor ? parseInt(aColor.replace('card-color-', '')) || 0 : 0;
-                        const bNum = bColor ? parseInt(bColor.replace('card-color-', '')) || 0 : 0;
-                        return aNum - bNum;
+                        
+                        // Same color order as background-color: röd, orange, gul, lila, blå, vit, grön, grå
+                        const colorOrder = {
+                            'card-color-3': 1, // röd
+                            'card-color-2': 2, // orange  
+                            'card-color-4': 3, // gul
+                            'card-color-5': 4, // lila
+                            'card-color-6': 5, // blå
+                            'card-color-8': 6, // vit
+                            'card-color-1': 7, // grön
+                            'card-color-7': 8, // grå
+                            '': 9              // ofärgad (kommer sist)
+                        };
+                        
+                        const aPriority = colorOrder[aColor] || 9;
+                        const bPriority = colorOrder[bColor] || 9;
+                        return aPriority - bPriority;
                     });
 
                 case 'tagged-date':
@@ -10571,18 +10709,21 @@ Kan ha #taggar överallt.
                         const aColor = a.data('cardColor') || '';
                         const bColor = b.data('cardColor') || '';
                         
-                        // Color priority: 3(röd), 2(orange), 4(gul), 5(grön), 6(blå), 0(ofärgad)
+                        // Color priority: röd, orange, gul, lila, blå, vit, grön, grå
                         const colorOrder = {
                             'card-color-3': 1, // röd
                             'card-color-2': 2, // orange  
                             'card-color-4': 3, // gul
-                            'card-color-5': 4, // grön
+                            'card-color-5': 4, // lila
                             'card-color-6': 5, // blå
-                            '': 6              // ofärgad
+                            'card-color-8': 6, // vit
+                            'card-color-1': 7, // grön
+                            'card-color-7': 8, // grå
+                            '': 9              // ofärgad (kommer sist)
                         };
                         
-                        const aPriority = colorOrder[aColor] || 6;
-                        const bPriority = colorOrder[bColor] || 6;
+                        const aPriority = colorOrder[aColor] || 9;
+                        const bPriority = colorOrder[bColor] || 9;
                         
                         return aPriority - bPriority;
                     });
@@ -10614,7 +10755,7 @@ Kan ha #taggar överallt.
                         case 'tagged-date': sortName = '@datum Äldst → Nyast'; break;
                         case 'reverse-tagged-date': sortName = '@datum Nyast → Äldst'; break;
                         case 'importance': sortName = 'Viktighet (äldsta #todo först)'; break;
-                        case 'background-color': sortName = 'Bakgrundsfärg (röd→blå)'; break;
+                        case 'background-color': sortName = 'Bakgrundsfärg (röd→grå)'; break;
                     }
                     statusDiv.textContent = `Kolumnvy sorterad: ${sortName}`;
                     statusDiv.classList.add('visible');
@@ -10726,6 +10867,9 @@ Kan ha #taggar överallt.
             cardDiv.addEventListener('click', (e) => {
                 if (e.ctrlKey || e.metaKey) {
                     // Ctrl+click for multi-select
+                    toggleColumnCardSelection(node.id(), cardDiv);
+                } else if (isMobileDevice() && cy.$('node:selected').length > 0) {
+                    // On mobile, if we have selected cards, treat tap as multi-select toggle
                     toggleColumnCardSelection(node.id(), cardDiv);
                 } else if (hasImage) {
                     // Toggle between image and text for image cards
@@ -10864,7 +11008,7 @@ Kan ha #taggar överallt.
             const colorGrid = menu.querySelector('#mobileColorGrid');
             const currentTheme = getCurrentTheme();
             
-            for (let i = 1; i <= 6; i++) {
+            for (let i = 1; i <= 8; i++) {
                 const colorValue = getCardColorValue(`card-color-${i}`, currentTheme);
                 const colorDot = document.createElement('div');
                 colorDot.className = 'mobile-color-dot';
@@ -11234,6 +11378,13 @@ Kan ha #taggar överallt.
                     <div class="context-menu-item" onclick="addTagToSelected()" style="padding: 8px 12px; cursor: pointer;">➕ Lägg till tagg</div>
                     <div class="context-menu-item" onclick="removeTagFromSelected()" style="padding: 8px 12px; cursor: pointer;">➖ Ta bort tagg</div>
                 </div>
+                <div style="padding: 8px 0; border-top: 1px solid #eee;">
+                    <div style="padding: 4px 12px; font-weight: bold; color: #666;">Färger för ${targetText}</div>
+                </div>
+                <div style="padding: 4px 0;">
+                    <div class="context-menu-item" onclick="showColumnColorPicker(event, '${nodeId}')" style="padding: 8px 12px; cursor: pointer;">🎨 Färga kort</div>
+                    <div class="context-menu-item" onclick="removeColorFromSelected()" style="padding: 8px 12px; cursor: pointer;">❌ Ta bort färg</div>
+                </div>
             `;
 
             // Add hover effects to menu items
@@ -11332,6 +11483,51 @@ Kan ha #taggar överallt.
                 }
             } else {
                 alert(`Taggen "${cleanTag}" hittades inte på de markerade korten.`);
+            }
+
+            // Close context menu
+            const menu = document.getElementById('columnContextMenu');
+            if (menu) document.body.removeChild(menu);
+        }
+
+        // Show color picker for column view cards
+        function showColumnColorPicker(event, nodeId) {
+            // Close context menu first
+            const menu = document.getElementById('columnContextMenu');
+            if (menu) document.body.removeChild(menu);
+
+            // Get the clicked node and selected nodes
+            const clickedNode = cy.getElementById(nodeId);
+            const selectedNodes = cy.$('node:selected');
+            
+            // Determine nodes to color - same logic as regular context menu
+            const nodesToColor = clickedNode.selected() && selectedNodes.length > 1 ? selectedNodes : [clickedNode];
+            
+            // Create a fake event object for showColorPicker
+            const fakeEvent = {
+                clientX: event.clientX || window.innerWidth / 2,
+                clientY: event.clientY || window.innerHeight / 2,
+                pageX: event.pageX || window.innerWidth / 2,
+                pageY: event.pageY || window.innerHeight / 2
+            };
+            
+            // Use the existing color picker
+            showColorPicker(fakeEvent, nodesToColor);
+        }
+
+        // Remove color from selected cards in column view
+        function removeColorFromSelected() {
+            const selectedNodes = cy.$('node:selected');
+            if (selectedNodes.length === 0) return;
+
+            selectedNodes.forEach(node => {
+                removeCardColor(node);
+            });
+
+            // Save and update views
+            saveBoard();
+            if (isColumnView) {
+                renderColumnViewDebounced();
             }
 
             // Close context menu
