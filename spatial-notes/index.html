@@ -10524,9 +10524,11 @@ Kan ha #taggar överallt.
                 
                 container.addEventListener('touchstart', (e) => {
                     // Only trigger if touching the background (not a card or card content)
-                    const isBackground = e.target === container || 
+                    const isCard = e.target.closest('.column-card');
+                    const isBackground = !isCard && (e.target === container || 
                                         e.target.classList.contains('column-view') ||
-                                        e.target.classList.contains('column-container');
+                                        e.target.classList.contains('column-container') ||
+                                        e.target.id === 'columnContainer');
                     console.log('DEBUG column background touchstart:', e.target, 'isBackground:', isBackground, 'classList:', e.target.classList, 'touches:', e.touches?.length);
                     
                     if (isBackground) {
@@ -10887,8 +10889,8 @@ Kan ha #taggar överallt.
                     // Ctrl+click for multi-select
                     console.log('DEBUG ctrl+click -> toggleColumnCardSelection');
                     toggleColumnCardSelection(node.id(), cardDiv);
-                } else if (isMobileDevice() && (cy.$('node:selected').length > 0 || node.selected())) {
-                    // On mobile, if other cards are selected OR this card is already selected, enable multi-select mode
+                } else if (isMobileDevice() && cy.$('node:selected').length > 0) {
+                    // On mobile, if other cards are selected, enable multi-select mode
                     console.log('DEBUG mobile multi-select -> toggleColumnCardSelection');
                     toggleColumnCardSelection(node.id(), cardDiv);
                 } else if (hasImage) {
@@ -10980,6 +10982,20 @@ Kan ha #taggar överallt.
             }
             
             const node = cy.getElementById(nodeId);
+            
+            // Ensure the target node is selected for tag operations
+            if (!node.selected()) {
+                console.log('DEBUG target node not selected, selecting it');
+                node.select();
+                // Update column view visual selection
+                if (isColumnView) {
+                    const cardDiv = document.querySelector(`[data-node-id="${nodeId}"]`);
+                    if (cardDiv) {
+                        cardDiv.classList.add('selected');
+                    }
+                }
+            }
+            
             const selectedNodes = cy.$('node:selected');
             const isMultipleSelected = selectedNodes.length > 1;
             const targetNodes = isMultipleSelected ? selectedNodes : cy.$(`#${nodeId}`);
