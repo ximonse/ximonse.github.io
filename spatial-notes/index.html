@@ -1331,8 +1331,10 @@
         
         // Detect if user is on mobile/tablet device
         function isMobileDevice() {
-            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+            const result = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
                    (navigator.maxTouchPoints && navigator.maxTouchPoints > 1);
+            console.log('DEBUG isMobileDevice:', result, 'userAgent:', navigator.userAgent, 'maxTouchPoints:', navigator.maxTouchPoints);
+            return result;
         }
         
         // Direct image upload - use the three-choice function directly
@@ -2881,18 +2883,24 @@
             
             // Long press on canvas background (not on nodes)
             cy.on('touchstart', function(evt) {
+                console.log('DEBUG touchstart:', evt.target, 'target===cy:', evt.target === cy, 'touches:', evt.originalEvent?.touches?.length);
                 if (!evt.target || evt.target === cy) { // Background touch
                     const touch = evt.originalEvent.touches[0];
                     backgroundTouchPos = { clientX: touch.clientX, clientY: touch.clientY };
+                    console.log('DEBUG background touchstart, pos:', backgroundTouchPos);
                     backgroundTouchTimer = setTimeout(() => {
+                        console.log('DEBUG timeout fired, isMobileDevice():', isMobileDevice(), 'backgroundTouchPos:', backgroundTouchPos);
                         if (isMobileDevice() && backgroundTouchPos) {
                             // Check if we have selected cards
                             const selectedNodes = cy.$('node:selected');
+                            console.log('DEBUG selectedNodes.length:', selectedNodes.length);
                             if (selectedNodes.length > 0) {
                                 // Show mobile card menu for selected cards
+                                console.log('DEBUG calling showMobileCardMenu with pos:', backgroundTouchPos, 'nodeId:', selectedNodes[0].id());
                                 showMobileCardMenu(backgroundTouchPos, selectedNodes[0].id());
                             } else {
                                 // Show image source menu if no cards selected
+                                console.log('DEBUG calling showImageSourceMenu');
                                 showImageSourceMenu(backgroundTouchPos.clientX, backgroundTouchPos.clientY);
                             }
                         }
@@ -10519,14 +10527,18 @@ Kan ha #taggar överallt.
                     const isBackground = e.target === container || 
                                         e.target.classList.contains('column-view') ||
                                         e.target.classList.contains('column-container');
+                    console.log('DEBUG column background touchstart:', e.target, 'isBackground:', isBackground, 'classList:', e.target.classList, 'touches:', e.touches?.length);
                     
                     if (isBackground) {
                         e.preventDefault(); // Prevent text selection on iPad
                         columnTouchPos = { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
+                        console.log('DEBUG column background touch detected, pos:', columnTouchPos);
                         columnBackgroundTimer = setTimeout(() => {
                             const selectedNodes = cy.$('node:selected');
+                            console.log('DEBUG column background timeout fired, selected nodes:', selectedNodes.length, 'columnTouchPos:', columnTouchPos);
                             if (selectedNodes.length > 0 && columnTouchPos) {
                                 // Show mobile card menu for selected cards
+                                console.log('DEBUG calling showMobileCardMenu from column background');
                                 showMobileCardMenu(columnTouchPos, selectedNodes[0].id());
                             }
                         }, 750);
@@ -10870,11 +10882,14 @@ Kan ha #taggar överallt.
             
             // Add click handlers
             cardDiv.addEventListener('click', (e) => {
+                console.log('DEBUG column card click:', node.id(), 'ctrlKey:', e.ctrlKey, 'metaKey:', e.metaKey, 'isMobileDevice():', isMobileDevice(), 'selected nodes:', cy.$('node:selected').length, 'node.selected():', node.selected());
                 if (e.ctrlKey || e.metaKey) {
                     // Ctrl+click for multi-select
+                    console.log('DEBUG ctrl+click -> toggleColumnCardSelection');
                     toggleColumnCardSelection(node.id(), cardDiv);
                 } else if (isMobileDevice() && (cy.$('node:selected').length > 0 || node.selected())) {
                     // On mobile, if other cards are selected OR this card is already selected, enable multi-select mode
+                    console.log('DEBUG mobile multi-select -> toggleColumnCardSelection');
                     toggleColumnCardSelection(node.id(), cardDiv);
                 } else if (hasImage) {
                     // Toggle between image and text for image cards
@@ -10908,14 +10923,17 @@ Kan ha #taggar överallt.
             let touchMoved = false;
             
             cardDiv.addEventListener('touchstart', (e) => {
+                console.log('DEBUG column touchstart:', node.id(), 'touches:', e.touches?.length);
                 touchStartTime = Date.now();
                 touchMoved = false;
                 
                 // Set up long press detection (800ms)
                 longPressTimer = setTimeout(() => {
+                    console.log('DEBUG column long press timeout fired, touchMoved:', touchMoved);
                     if (!touchMoved) {
                         e.preventDefault();
                         // Show combined tag/color context menu for iPad
+                        console.log('DEBUG calling showMobileCardMenu from column long press:', e.touches[0], node.id());
                         showMobileCardMenu(e.touches[0], node.id());
                     }
                 }, 800);
@@ -10953,16 +10971,19 @@ Kan ha #taggar överallt.
 
         // Mobile/iPad context menu with tagging and color options
         function showMobileCardMenu(touch, nodeId) {
+            console.log('DEBUG showMobileCardMenu called with touch:', touch, 'nodeId:', nodeId);
             // Remove any existing mobile menu
             const existingMenu = document.getElementById('mobileCardMenu');
             if (existingMenu) {
                 document.body.removeChild(existingMenu);
+                console.log('DEBUG removed existing menu');
             }
             
             const node = cy.getElementById(nodeId);
             const selectedNodes = cy.$('node:selected');
             const isMultipleSelected = selectedNodes.length > 1;
             const targetNodes = isMultipleSelected ? selectedNodes : cy.$(`#${nodeId}`);
+            console.log('DEBUG node found:', !!node, 'selectedNodes.length:', selectedNodes.length, 'isMultipleSelected:', isMultipleSelected);
             
             // Create mobile menu
             const menu = document.createElement('div');
@@ -11088,9 +11109,12 @@ Kan ha #taggar överallt.
             menu.querySelectorAll('.mobile-menu-item').forEach(item => {
                 item.addEventListener('click', () => {
                     const action = item.dataset.action;
+                    console.log('DEBUG mobile menu item clicked:', action);
                     if (action === 'add-tag') {
+                        console.log('DEBUG calling addTagToSelected from mobile menu');
                         addTagToSelected();
                     } else if (action === 'remove-tag') {
+                        console.log('DEBUG calling removeTagFromSelected from mobile menu');
                         removeTagFromSelected();
                     }
                     document.body.removeChild(menu);
@@ -11115,16 +11139,21 @@ Kan ha #taggar överallt.
 
         function toggleColumnCardSelection(nodeId, cardDiv) {
             const node = cy.getElementById(nodeId);
+            console.log('DEBUG toggleColumnCardSelection:', nodeId, 'was selected:', node.selected());
             if (node.selected()) {
                 node.unselect();
                 cardDiv.classList.remove('selected');
+                console.log('DEBUG unselected', nodeId);
             } else {
                 node.select();
                 cardDiv.classList.add('selected');
+                console.log('DEBUG selected', nodeId);
             }
+            console.log('DEBUG total selected after toggle:', cy.$('node:selected').length);
         }
 
         function selectColumnCard(nodeId, cardDiv) {
+            console.log('DEBUG selectColumnCard called:', nodeId, 'clearing all selections first');
             // Deselect all
             cy.nodes().unselect();
             document.querySelectorAll('.column-card').forEach(card => {
@@ -11135,6 +11164,7 @@ Kan ha #taggar överallt.
             const node = cy.getElementById(nodeId);
             node.select();
             cardDiv.classList.add('selected');
+            console.log('DEBUG selectColumnCard completed, selected:', nodeId, 'total selected:', cy.$('node:selected').length);
         }
 
         function updateColumnViewSearch() {
@@ -11420,9 +11450,11 @@ Kan ha #taggar överallt.
         // Add tag to selected cards
         function addTagToSelected() {
             const selectedNodes = cy.$('node:selected');
+            console.log('DEBUG addTagToSelected called, selected nodes:', selectedNodes.length);
             if (selectedNodes.length === 0) return;
 
             // Create iPad-friendly tag input dialog
+            console.log('DEBUG calling showTagInputDialog');
             showTagInputDialog((tagName) => {
                 if (!tagName || !tagName.trim()) return;
 
@@ -11454,10 +11486,12 @@ Kan ha #taggar överallt.
 
         // iPad-friendly tag input dialog
         function showTagInputDialog(callback) {
+            console.log('DEBUG showTagInputDialog called');
             // Remove any existing dialog
             const existingDialog = document.querySelector('.tag-input-dialog');
             if (existingDialog) {
                 existingDialog.remove();
+                console.log('DEBUG removed existing tag dialog');
             }
             
             // Create dialog overlay
@@ -11522,6 +11556,7 @@ Kan ha #taggar överallt.
             
             overlay.appendChild(dialog);
             document.body.appendChild(overlay);
+            console.log('DEBUG tag input dialog added to DOM');
             
             // Focus input
             const input = document.getElementById('tagNameInput');
@@ -11529,13 +11564,18 @@ Kan ha #taggar överallt.
             
             // Event handlers
             const cleanup = () => {
+                console.log('DEBUG tag dialog cleanup called');
                 overlay.remove();
             };
             
-            document.getElementById('cancelTagInput').onclick = cleanup;
+            document.getElementById('cancelTagInput').onclick = () => {
+                console.log('DEBUG cancel tag button clicked');
+                cleanup();
+            };
             
             document.getElementById('confirmTagInput').onclick = () => {
                 const tagName = input.value.trim();
+                console.log('DEBUG confirm tag button clicked, tagName:', tagName);
                 cleanup();
                 if (callback) callback(tagName);
             };
