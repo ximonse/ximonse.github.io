@@ -10515,8 +10515,13 @@ Kan ha #taggar överallt.
                 let columnTouchPos = null;
                 
                 container.addEventListener('touchstart', (e) => {
-                    // Only trigger if touching the background (not a card)
-                    if (e.target === container || e.target.classList.contains('column-view')) {
+                    // Only trigger if touching the background (not a card or card content)
+                    const isBackground = e.target === container || 
+                                        e.target.classList.contains('column-view') ||
+                                        e.target.classList.contains('column-container');
+                    
+                    if (isBackground) {
+                        e.preventDefault(); // Prevent text selection on iPad
                         columnTouchPos = { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
                         columnBackgroundTimer = setTimeout(() => {
                             const selectedNodes = cy.$('node:selected');
@@ -10526,7 +10531,7 @@ Kan ha #taggar överallt.
                             }
                         }, 750);
                     }
-                }, { passive: true });
+                }, { passive: false });
                 
                 container.addEventListener('touchend touchmove', () => {
                     if (columnBackgroundTimer) {
@@ -10868,8 +10873,8 @@ Kan ha #taggar överallt.
                 if (e.ctrlKey || e.metaKey) {
                     // Ctrl+click for multi-select
                     toggleColumnCardSelection(node.id(), cardDiv);
-                } else if (isMobileDevice() && cy.$('node:selected').length > 0) {
-                    // On mobile, if we have selected cards, treat tap as multi-select toggle
+                } else if (isMobileDevice() && (cy.$('node:selected').length > 0 || node.selected())) {
+                    // On mobile, if we have selected cards OR this card is selected, treat tap as multi-select toggle
                     toggleColumnCardSelection(node.id(), cardDiv);
                 } else if (hasImage) {
                     // Toggle between image and text for image cards
@@ -11417,28 +11422,142 @@ Kan ha #taggar överallt.
             const selectedNodes = cy.$('node:selected');
             if (selectedNodes.length === 0) return;
 
-            const tagName = prompt('Ange taggnamn:');
-            if (!tagName || !tagName.trim()) return;
+            // Create iPad-friendly tag input dialog
+            showTagInputDialog((tagName) => {
+                if (!tagName || !tagName.trim()) return;
 
-            const cleanTag = tagName.trim().replace(/^#/, ''); // Remove # if present
+                const cleanTag = tagName.trim().replace(/^#/, ''); // Remove # if present
 
-            selectedNodes.forEach(node => {
-                const currentTags = node.data('tags') || [];
-                if (!currentTags.includes(cleanTag)) {
-                    currentTags.push(cleanTag);
-                    node.data('tags', currentTags);
+                selectedNodes.forEach(node => {
+                    const currentTags = node.data('tags') || [];
+                    if (!currentTags.includes(cleanTag)) {
+                        currentTags.push(cleanTag);
+                        node.data('tags', currentTags);
+                    }
+                });
+
+                // Save and update views
+                saveBoard();
+                if (isColumnView) {
+                    renderColumnViewDebounced();
+                }
+                
+                // Show feedback
+                const statusDiv = document.getElementById('selectionInfo');
+                if (statusDiv) {
+                    statusDiv.textContent = `Lade till tagg "${cleanTag}" på ${selectedNodes.length} kort`;
+                    statusDiv.classList.add('visible');
+                    setTimeout(() => statusDiv.classList.remove('visible'), 2000);
                 }
             });
+        }
 
-            // Save and update views
-            saveBoard();
-            if (isColumnView) {
-                renderColumnViewDebounced();
+        // iPad-friendly tag input dialog
+        function showTagInputDialog(callback) {
+            // Remove any existing dialog
+            const existingDialog = document.querySelector('.tag-input-dialog');
+            if (existingDialog) {
+                existingDialog.remove();
             }
-
-            // Close context menu
-            const menu = document.getElementById('columnContextMenu');
-            if (menu) document.body.removeChild(menu);
+            
+            // Create dialog overlay
+            const overlay = document.createElement('div');
+            overlay.className = 'tag-input-dialog';
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 10001;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
+            
+            // Create dialog content
+            const dialog = document.createElement('div');
+            dialog.style.cssText = `
+                background: white;
+                border-radius: 12px;
+                padding: 20px;
+                width: 90%;
+                max-width: 400px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            `;
+            
+            dialog.innerHTML = `
+                <h3 style="margin: 0 0 15px 0; color: #333; text-align: center;">Lägg till tagg</h3>
+                <input type="text" id="tagNameInput" placeholder="Taggnamn (utan #)" style="
+                    width: 100%;
+                    padding: 12px;
+                    border: 2px solid #ddd;
+                    border-radius: 8px;
+                    font-size: 16px;
+                    box-sizing: border-box;
+                    margin-bottom: 15px;
+                " />
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button id="cancelTagInput" style="
+                        padding: 10px 20px;
+                        border: 1px solid #ddd;
+                        background: white;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        font-size: 16px;
+                    ">Avbryt</button>
+                    <button id="confirmTagInput" style="
+                        padding: 10px 20px;
+                        border: none;
+                        background: #007bff;
+                        color: white;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        font-size: 16px;
+                    ">Lägg till</button>
+                </div>
+            `;
+            
+            overlay.appendChild(dialog);
+            document.body.appendChild(overlay);
+            
+            // Focus input
+            const input = document.getElementById('tagNameInput');
+            setTimeout(() => input.focus(), 100);
+            
+            // Event handlers
+            const cleanup = () => {
+                overlay.remove();
+            };
+            
+            document.getElementById('cancelTagInput').onclick = cleanup;
+            
+            document.getElementById('confirmTagInput').onclick = () => {
+                const tagName = input.value.trim();
+                cleanup();
+                if (callback) callback(tagName);
+            };
+            
+            // Enter key to confirm
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const tagName = input.value.trim();
+                    cleanup();
+                    if (callback) callback(tagName);
+                } else if (e.key === 'Escape') {
+                    cleanup();
+                }
+            });
+            
+            // Close on click outside dialog
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    cleanup();
+                }
+            });
         }
 
         // Remove tag from selected cards
@@ -11459,35 +11578,148 @@ Kan ha #taggar överallt.
             }
 
             const tagList = Array.from(allTags).sort();
-            const tagName = prompt('Vilken tagg ska tas bort?\n\nTillgängliga taggar:\n' + tagList.map(tag => `• ${tag}`).join('\n') + '\n\nAnge taggnamn:');
             
-            if (!tagName || !tagName.trim()) return;
+            // Show iPad-friendly tag selection dialog
+            showTagSelectionDialog(tagList, (selectedTag) => {
+                if (!selectedTag) return;
 
-            const cleanTag = tagName.trim().replace(/^#/, '');
+                const cleanTag = selectedTag.trim().replace(/^#/, '');
 
-            let removedCount = 0;
-            selectedNodes.forEach(node => {
-                const currentTags = node.data('tags') || [];
-                const filteredTags = currentTags.filter(tag => tag !== cleanTag);
-                if (filteredTags.length !== currentTags.length) {
-                    node.data('tags', filteredTags);
-                    removedCount++;
+                let removedCount = 0;
+                selectedNodes.forEach(node => {
+                    const currentTags = node.data('tags') || [];
+                    const filteredTags = currentTags.filter(tag => tag !== cleanTag);
+                    if (filteredTags.length !== currentTags.length) {
+                        node.data('tags', filteredTags);
+                        removedCount++;
+                    }
+                });
+
+                if (removedCount > 0) {
+                    // Save and update views
+                    saveBoard();
+                    if (isColumnView) {
+                        renderColumnViewDebounced();
+                    }
+                    
+                    // Show feedback
+                    const statusDiv = document.getElementById('selectionInfo');
+                    if (statusDiv) {
+                        statusDiv.textContent = `Tog bort tagg "${cleanTag}" från ${removedCount} kort`;
+                        statusDiv.classList.add('visible');
+                        setTimeout(() => statusDiv.classList.remove('visible'), 2000);
+                    }
+                } else {
+                    alert(`Taggen "${cleanTag}" hittades inte på de markerade korten.`);
                 }
             });
+        }
 
-            if (removedCount > 0) {
-                // Save and update views
-                saveBoard();
-                if (isColumnView) {
-                    renderColumnViewDebounced();
-                }
-            } else {
-                alert(`Taggen "${cleanTag}" hittades inte på de markerade korten.`);
+        // iPad-friendly tag selection dialog
+        function showTagSelectionDialog(tagList, callback) {
+            // Remove any existing dialog
+            const existingDialog = document.querySelector('.tag-selection-dialog');
+            if (existingDialog) {
+                existingDialog.remove();
             }
-
-            // Close context menu
-            const menu = document.getElementById('columnContextMenu');
-            if (menu) document.body.removeChild(menu);
+            
+            // Create dialog overlay
+            const overlay = document.createElement('div');
+            overlay.className = 'tag-selection-dialog';
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 10001;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
+            
+            // Create dialog content
+            const dialog = document.createElement('div');
+            dialog.style.cssText = `
+                background: white;
+                border-radius: 12px;
+                padding: 20px;
+                width: 90%;
+                max-width: 400px;
+                max-height: 70vh;
+                overflow-y: auto;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            `;
+            
+            dialog.innerHTML = `
+                <h3 style="margin: 0 0 15px 0; color: #333; text-align: center;">Ta bort tagg</h3>
+                <p style="margin: 0 0 15px 0; color: #666; text-align: center; font-size: 14px;">
+                    Välj vilken tagg som ska tas bort:
+                </p>
+                <div id="tagSelectionList" style="margin-bottom: 15px;">
+                    ${tagList.map(tag => `
+                        <div class="tag-selection-item" data-tag="${tag}" style="
+                            padding: 12px;
+                            border: 1px solid #ddd;
+                            border-radius: 8px;
+                            margin-bottom: 8px;
+                            cursor: pointer;
+                            background: #f8f9fa;
+                            text-align: center;
+                            font-size: 16px;
+                        ">${tag}</div>
+                    `).join('')}
+                </div>
+                <div style="text-align: center;">
+                    <button id="cancelTagSelection" style="
+                        padding: 10px 20px;
+                        border: 1px solid #ddd;
+                        background: white;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        font-size: 16px;
+                    ">Avbryt</button>
+                </div>
+            `;
+            
+            overlay.appendChild(dialog);
+            document.body.appendChild(overlay);
+            
+            // Event handlers
+            const cleanup = () => {
+                overlay.remove();
+            };
+            
+            // Tag selection handlers
+            overlay.querySelectorAll('.tag-selection-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const selectedTag = item.dataset.tag;
+                    cleanup();
+                    if (callback) callback(selectedTag);
+                });
+                
+                // Hover effects
+                item.addEventListener('mouseenter', () => {
+                    item.style.backgroundColor = '#e9ecef';
+                    item.style.borderColor = '#007bff';
+                });
+                
+                item.addEventListener('mouseleave', () => {
+                    item.style.backgroundColor = '#f8f9fa';
+                    item.style.borderColor = '#ddd';
+                });
+            });
+            
+            document.getElementById('cancelTagSelection').onclick = cleanup;
+            
+            // Close on click outside dialog
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    cleanup();
+                }
+            });
         }
 
         // Show color picker for column view cards
