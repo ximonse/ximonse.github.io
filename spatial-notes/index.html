@@ -10900,31 +10900,106 @@ Kan ha #taggar överallt.
                 }
             }
             
-            cardDiv.appendChild(contentDiv);
+            // Create wrapper for content and selection area
+            const cardWrapper = document.createElement('div');
+            cardWrapper.style.cssText = `
+                display: flex;
+                width: 100%;
+                min-height: 100%;
+            `;
             
-            // Add click handlers
-            cardDiv.addEventListener('click', (e) => {
-                console.log('DEBUG column card click:', node.id(), 'ctrlKey:', e.ctrlKey, 'metaKey:', e.metaKey, 'isMobileDevice():', isMobileDevice(), 'selected nodes:', cy.$('node:selected').length, 'node.selected():', node.selected());
-                if (e.ctrlKey || e.metaKey) {
-                    // Ctrl+click for multi-select (desktop)
-                    console.log('DEBUG ctrl+click -> toggleColumnCardSelection');
-                    toggleColumnCardSelection(node.id(), cardDiv);
-                } else if (isMobileDevice()) {
-                    // On mobile, always toggle selection - simple tap to select/deselect
-                    console.log('DEBUG mobile tap -> toggleColumnCardSelection');
-                    toggleColumnCardSelection(node.id(), cardDiv);
-                } else if (hasImage) {
-                    // Desktop: Toggle between image and text for image cards
-                    const currentState = columnCardStates.get(nodeId) || false;
-                    columnCardStates.set(nodeId, !currentState);
-                    
-                    // Re-render just this card
-                    const newCard = createColumnCard(node);
-                    cardDiv.parentNode.replaceChild(newCard, cardDiv);
+            // Content takes most of the space
+            contentDiv.style.cssText = `
+                flex: 1;
+                min-width: 0;
+                user-select: text;
+                -webkit-user-select: text;
+            `;
+            
+            // Create selection area on the right (40px wide)
+            const selectionArea = document.createElement('div');
+            selectionArea.className = 'column-card-selection-area';
+            selectionArea.style.cssText = `
+                width: 40px;
+                min-height: 60px;
+                background: transparent;
+                cursor: pointer;
+                flex-shrink: 0;
+                user-select: none;
+                -webkit-user-select: none;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                opacity: 0.3;
+                transition: opacity 0.2s;
+            `;
+            
+            // Add visual indicator that changes based on selection state
+            const indicator = document.createElement('div');
+            indicator.style.cssText = `
+                width: 12px; 
+                height: 12px; 
+                border-radius: 50%; 
+                border: 2px solid currentColor;
+                background: ${node.selected() ? 'currentColor' : 'transparent'};
+                transition: all 0.2s;
+            `;
+            selectionArea.appendChild(indicator);
+            
+            // Update indicator when selection changes
+            const updateIndicator = () => {
+                if (cardDiv.classList.contains('selected')) {
+                    indicator.style.background = 'currentColor';
+                    selectionArea.style.opacity = '0.8';
                 } else {
-                    // Desktop: Select single card
-                    selectColumnCard(node.id(), cardDiv);
+                    indicator.style.background = 'transparent';
+                    selectionArea.style.opacity = '0.3';
                 }
+            };
+            
+            // Initial state
+            updateIndicator();
+            
+            // Hover effect for desktop
+            selectionArea.addEventListener('mouseenter', () => {
+                selectionArea.style.opacity = '0.8';
+            });
+            selectionArea.addEventListener('mouseleave', updateIndicator);
+            
+            cardWrapper.appendChild(contentDiv);
+            cardWrapper.appendChild(selectionArea);
+            cardDiv.appendChild(cardWrapper);
+            
+            // Add selection click handler to the selection area
+            selectionArea.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent event bubbling
+                console.log('DEBUG selection area click:', node.id(), 'isMobileDevice():', isMobileDevice());
+                console.log('DEBUG mobile tap -> toggleColumnCardSelection');
+                toggleColumnCardSelection(node.id(), cardDiv);
+            });
+            
+            // Add click handlers for content area (desktop functionality)
+            contentDiv.addEventListener('click', (e) => {
+                if (!isMobileDevice()) {
+                    console.log('DEBUG content area click (desktop):', node.id(), 'ctrlKey:', e.ctrlKey, 'metaKey:', e.metaKey);
+                    if (e.ctrlKey || e.metaKey) {
+                        // Ctrl+click for multi-select (desktop)
+                        console.log('DEBUG ctrl+click -> toggleColumnCardSelection');
+                        toggleColumnCardSelection(node.id(), cardDiv);
+                    } else if (hasImage) {
+                        // Desktop: Toggle between image and text for image cards
+                        const currentState = columnCardStates.get(nodeId) || false;
+                        columnCardStates.set(nodeId, !currentState);
+                        
+                        // Re-render just this card
+                        const newCard = createColumnCard(node);
+                        cardDiv.parentNode.replaceChild(newCard, cardDiv);
+                    } else {
+                        // Desktop: Select single card
+                        selectColumnCard(node.id(), cardDiv);
+                    }
+                }
+                // On mobile, content area clicks do nothing (avoid text selection conflicts)
             });
             
             // Add double-click handler for editing
