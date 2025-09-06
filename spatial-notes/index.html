@@ -2883,7 +2883,7 @@
             cy.on('touchstart', function(evt) {
                 if (!evt.target || evt.target === cy) { // Background touch
                     const touch = evt.originalEvent.touches[0];
-                    backgroundTouchPos = { x: touch.clientX, y: touch.clientY };
+                    backgroundTouchPos = { clientX: touch.clientX, clientY: touch.clientY };
                     backgroundTouchTimer = setTimeout(() => {
                         if (isMobileDevice() && backgroundTouchPos) {
                             // Check if we have selected cards
@@ -2893,7 +2893,7 @@
                                 showMobileCardMenu(backgroundTouchPos, selectedNodes[0].id());
                             } else {
                                 // Show image source menu if no cards selected
-                                showImageSourceMenu(backgroundTouchPos.x, backgroundTouchPos.y);
+                                showImageSourceMenu(backgroundTouchPos.clientX, backgroundTouchPos.clientY);
                             }
                         }
                     }, 1000);
@@ -10874,7 +10874,7 @@ Kan ha #taggar överallt.
                     // Ctrl+click for multi-select
                     toggleColumnCardSelection(node.id(), cardDiv);
                 } else if (isMobileDevice() && (cy.$('node:selected').length > 0 || node.selected())) {
-                    // On mobile, if we have selected cards OR this card is selected, treat tap as multi-select toggle
+                    // On mobile, if other cards are selected OR this card is already selected, enable multi-select mode
                     toggleColumnCardSelection(node.id(), cardDiv);
                 } else if (hasImage) {
                     // Toggle between image and text for image cards
