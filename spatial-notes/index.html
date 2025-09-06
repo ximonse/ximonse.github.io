@@ -2881,15 +2881,17 @@
             let backgroundTouchTimer = null;
             let backgroundTouchPos = null;
             
-            // Long press on canvas background (not on nodes)
+            // Touch handling on canvas background (not on nodes)
             cy.on('touchstart', function(evt) {
                 console.log('DEBUG touchstart:', evt.target, 'target===cy:', evt.target === cy, 'touches:', evt.originalEvent?.touches?.length);
                 if (!evt.target || evt.target === cy) { // Background touch
                     const touch = evt.originalEvent.touches[0];
                     backgroundTouchPos = { clientX: touch.clientX, clientY: touch.clientY };
+                    let backgroundTouchStartTime = Date.now();
                     console.log('DEBUG background touchstart, pos:', backgroundTouchPos);
+                    
                     backgroundTouchTimer = setTimeout(() => {
-                        console.log('DEBUG timeout fired, isMobileDevice():', isMobileDevice(), 'backgroundTouchPos:', backgroundTouchPos);
+                        console.log('DEBUG LONG PRESS timeout fired, isMobileDevice():', isMobileDevice(), 'backgroundTouchPos:', backgroundTouchPos);
                         if (isMobileDevice() && backgroundTouchPos) {
                             // Check if we have selected cards
                             const selectedNodes = cy.$('node:selected');
@@ -2904,11 +2906,34 @@
                                 showImageSourceMenu(backgroundTouchPos.clientX, backgroundTouchPos.clientY);
                             }
                         }
+                        backgroundTouchStartTime = null; // Mark as long press handled
                     }, 1000);
+                    
+                    // Store start time for short tap detection
+                    evt._boardTouchStartTime = backgroundTouchStartTime;
                 }
             });
             
-            cy.on('touchend touchmove', function(evt) {
+            cy.on('touchend', function(evt) {
+                if (backgroundTouchTimer) {
+                    clearTimeout(backgroundTouchTimer);
+                    backgroundTouchTimer = null;
+                }
+                
+                if (backgroundTouchPos && evt._boardTouchStartTime && (!evt.target || evt.target === cy)) {
+                    const tapDuration = Date.now() - evt._boardTouchStartTime;
+                    console.log('DEBUG board background touch end, duration:', tapDuration);
+                    
+                    if (tapDuration < 300) { // Short tap
+                        console.log('DEBUG board background short tap - deselecting all cards');
+                        cy.nodes().unselect();
+                    }
+                }
+                
+                backgroundTouchPos = null;
+            });
+            
+            cy.on('touchmove', function(evt) {
                 if (backgroundTouchTimer) {
                     clearTimeout(backgroundTouchTimer);
                     backgroundTouchTimer = null;
@@ -2916,19 +2941,41 @@
                 }
             });
             
-            // Desktop mouse long press on background
+            // Desktop mouse handling on background
             cy.on('mousedown', function(evt) {
                 if (!evt.target || evt.target === cy) { // Background click
                     const mouseEvent = evt.originalEvent;
+                    let mouseDownTime = Date.now();
+                    
                     canvasPressTimer = setTimeout(() => {
                         if (!isMobileDevice()) {
                             pasteClipboardContent(mouseEvent.clientX, mouseEvent.clientY);
                         }
+                        mouseDownTime = null; // Mark as long press handled
                     }, 1000);
+                    
+                    evt._mouseDownTime = mouseDownTime;
                 }
             });
             
-            cy.on('mouseup mousemove', function(evt) {
+            cy.on('mouseup', function(evt) {
+                if (canvasPressTimer) {
+                    clearTimeout(canvasPressTimer);
+                    canvasPressTimer = null;
+                }
+                
+                if (evt._mouseDownTime && (!evt.target || evt.target === cy)) {
+                    const clickDuration = Date.now() - evt._mouseDownTime;
+                    console.log('DEBUG board background click end, duration:', clickDuration);
+                    
+                    if (clickDuration < 300) { // Short click
+                        console.log('DEBUG board background short click - deselecting all cards');
+                        cy.nodes().unselect();
+                    }
+                }
+            });
+            
+            cy.on('mousemove', function(evt) {
                 if (canvasPressTimer) {
                     clearTimeout(canvasPressTimer);
                     canvasPressTimer = null;
