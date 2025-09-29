@@ -4473,6 +4473,7 @@ Tredje anteckningen...
                     <button onclick="setSortMode('date-desc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">📅 Skapande: Nyast → Äldst</button>
                     <button onclick="setSortMode('temporal-asc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🕒 Datum: Tidigare → Senare</button>
                     <button onclick="setSortMode('temporal-desc')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🕒 Datum: Senare → Tidigare</button>
+                    <button onclick="setSortMode('today-first')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🌅 Idag först</button>
                     <button onclick="setSortMode('tagCount')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🏷️ Färre → Fler taggar</button>
                 </div>
                 <div style="text-align: center; margin-top: 15px;">
@@ -4544,6 +4545,7 @@ Tredje anteckningen...
                     <button onclick="setColumnViewSort('color')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🎨 Färg 1→6</button>
                     <button onclick="setColumnViewSort('tagged-date')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">📆 @datum Äldst → Nyast</button>
                     <button onclick="setColumnViewSort('reverse-tagged-date')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">📆 @datum Nyast → Äldst</button>
+                    <button onclick="setColumnViewSort('today-first')" style="padding: 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🌅 Idag först</button>
                 </div>
                 <div style="text-align: center; margin-top: 15px;">
                     <button onclick="closeSortMenu()" style="padding: 8px 16px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer;">Avbryt</button>
@@ -4598,6 +4600,7 @@ Tredje anteckningen...
                 case 'date-desc': return 'Skapande: Nyast → äldst';
                 case 'temporal-asc': return 'Datum: Tidigare → senare';
                 case 'temporal-desc': return 'Datum: Senare → tidigare';
+                case 'today-first': return 'Idag först';
                 case 'tagCount': return 'Färre → fler taggar';
                 default: return 'Okänt';
             }
@@ -4673,6 +4676,11 @@ Tredje anteckningen...
                         const aTagCount = (a.data('tags') || []).length;
                         const bTagCount = (b.data('tags') || []).length;
                         return aTagCount - bTagCount;
+                        
+                    case 'today-first':
+                        const aTodayScore = getTodayScore(a);
+                        const bTodayScore = getTodayScore(b);
+                        return bTodayScore - aTodayScore; // Higher score = today content = first
                         
                     default:
                         return 0;
@@ -5147,6 +5155,105 @@ Tredje anteckningen...
             });
             
             return earliestDate || extractDateFromId(node.id());
+        }
+        
+        // Get today score for sorting - higher score means more likely to be today's content
+        function getTodayScore(node) {
+            const title = node.data('title') || '';
+            const text = node.data('text') || '';
+            const tags = (node.data('tags') || []).join(' ');
+            const fullContent = title + ' ' + text + ' ' + tags;
+            
+            const today = new Date();
+            const todayYYMMDD = getTodayYYMMDD();
+            const todayMonthDay = getTodayMonthDay();
+            
+            let score = 0;
+            
+            // Check for YYMMDD format (e.g., 250912)
+            if (fullContent.includes(todayYYMMDD)) {
+                score += 100;
+            }
+            
+            // Check for full date format (e.g., "12 september" or "12/9")
+            const todayDay = today.getDate();
+            const todayMonth = today.getMonth() + 1;
+            const monthNames = ['januari', 'februari', 'mars', 'april', 'maj', 'juni', 
+                              'juli', 'augusti', 'september', 'oktober', 'november', 'december'];
+            const todayMonthName = monthNames[today.getMonth()];
+            
+            // Check for "12 september" format
+            const dayMonthPattern = new RegExp(`\\b${todayDay}\\s+${todayMonthName}`, 'i');
+            if (dayMonthPattern.test(fullContent)) {
+                score += 100;
+            }
+            
+            // Check for "12/9" or "12-9" format
+            const numericPattern = new RegExp(`\\b${todayDay}[/-]${todayMonth}\\b`);
+            if (numericPattern.test(fullContent)) {
+                score += 100;
+            }
+            
+            // Check for @YYMMDD format used by the date system
+            if (fullContent.includes(`@${todayYYMMDD}`)) {
+                score += 100;
+            }
+            
+            // Check if card was created today by examining the card ID
+            const cardCreationDate = getCardCreationDate(node.id());
+            if (cardCreationDate && isSameDay(cardCreationDate, today)) {
+                score += 50; // Lower score than explicit date mentions, but still prioritized
+            }
+            
+            return score;
+        }
+        
+        // Extract creation date from card ID (format: YYYYMMDD-HHMMSS)
+        function getCardCreationDate(cardId) {
+            try {
+                // Handle timestamp-based IDs like "20250929-142030"
+                const timestampMatch = cardId.match(/^(\d{8})-(\d{6})$/);
+                if (timestampMatch) {
+                    const dateStr = timestampMatch[1]; // YYYYMMDD
+                    const timeStr = timestampMatch[2]; // HHMMSS
+                    
+                    const year = parseInt(dateStr.substr(0, 4));
+                    const month = parseInt(dateStr.substr(4, 2)) - 1; // Month is 0-indexed
+                    const day = parseInt(dateStr.substr(6, 2));
+                    const hour = parseInt(timeStr.substr(0, 2));
+                    const minute = parseInt(timeStr.substr(2, 2));
+                    const second = parseInt(timeStr.substr(4, 2));
+                    
+                    return new Date(year, month, day, hour, minute, second);
+                }
+                
+                // Handle other card ID formats if needed
+                return null;
+            } catch (error) {
+                return null;
+            }
+        }
+        
+        // Check if two dates are on the same day
+        function isSameDay(date1, date2) {
+            return date1.getFullYear() === date2.getFullYear() &&
+                   date1.getMonth() === date2.getMonth() &&
+                   date1.getDate() === date2.getDate();
+        }
+        
+        // Helper function to get today in YYMMDD format
+        function getTodayYYMMDD() {
+            const today = new Date();
+            const year = today.getFullYear().toString().slice(-2);
+            const month = (today.getMonth() + 1).toString().padStart(2, '0');
+            const day = today.getDate().toString().padStart(2, '0');
+            return year + month + day;
+        }
+        
+        // Helper function to get today as month-day
+        function getTodayMonthDay() {
+            const today = new Date();
+            return `${today.getDate()}/${today.getMonth() + 1}`;
         }
         
         // ========================================
@@ -12013,6 +12120,13 @@ Kan ha #taggar överallt.
                         
                         return aPriority - bPriority;
                     });
+
+                case 'today-first':
+                    return nodeArray.sort((a, b) => {
+                        const aTodayScore = getTodayScore(a);
+                        const bTodayScore = getTodayScore(b);
+                        return bTodayScore - aTodayScore; // Higher score = today content = first
+                    });
                 
                 default:
                     return nodeArray;
@@ -12042,6 +12156,7 @@ Kan ha #taggar överallt.
                         case 'reverse-tagged-date': sortName = '@datum Nyast → Äldst'; break;
                         case 'importance': sortName = 'Viktighet (äldsta #todo först)'; break;
                         case 'background-color': sortName = 'Bakgrundsfärg (röd→grå)'; break;
+                        case 'today-first': sortName = 'Idag först'; break;
                     }
                     statusDiv.textContent = `Kolumnvy sorterad: ${sortName}`;
                     statusDiv.classList.add('visible');
