@@ -7576,6 +7576,204 @@ Tredje anteckningen...
                    `Källor: ${sources.size}`;
         }
         
+        // ====================================================================================================
+        // 📱 SIMPLIFIED TOOLBAR FUNCTIONS
+        // ====================================================================================================
+        
+        let isSimplifiedToolbar = localStorage.getItem('spatial-notes-simplified-toolbar') === 'true';
+        
+        function toggleSimplifiedToolbar() {
+            isSimplifiedToolbar = !isSimplifiedToolbar;
+            localStorage.setItem('spatial-notes-simplified-toolbar', isSimplifiedToolbar);
+            updateToolbarDisplay();
+            
+            const statusMessage = isSimplifiedToolbar ? 
+                'Förenklad toolbar aktiverad' : 
+                'Full toolbar aktiverad';
+            
+            // Show status message using existing searchInfo element
+            const searchInfo = document.getElementById('searchInfo');
+            if (searchInfo) {
+                searchInfo.textContent = statusMessage;
+                searchInfo.classList.add('visible');
+                setTimeout(() => {
+                    searchInfo.classList.remove('visible');
+                }, 3000);
+            }
+        }
+        
+        function updateToolbarDisplay() {
+            const toolbar = document.querySelector('.toolbar');
+            const allElements = toolbar.children;
+            
+            if (isSimplifiedToolbar) {
+                // Hide all elements
+                Array.from(allElements).forEach(el => {
+                    if (!el.classList.contains('simplified-keep')) {
+                        el.style.display = 'none';
+                    }
+                });
+                
+                // Show simplified elements
+                showSimplifiedToolbar();
+            } else {
+                // Show all elements
+                Array.from(allElements).forEach(el => {
+                    el.style.display = '';
+                });
+                
+                // Hide simplified elements
+                hideSimplifiedToolbar();
+            }
+        }
+        
+        function showSimplifiedToolbar() {
+            let simplifiedToolbar = document.getElementById('simplifiedToolbar');
+            if (!simplifiedToolbar) {
+                createSimplifiedToolbar();
+            } else {
+                simplifiedToolbar.style.display = 'flex';
+            }
+        }
+        
+        function hideSimplifiedToolbar() {
+            const simplifiedToolbar = document.getElementById('simplifiedToolbar');
+            if (simplifiedToolbar) {
+                simplifiedToolbar.style.display = 'none';
+            }
+        }
+        
+        function createSimplifiedToolbar() {
+            const toolbar = document.querySelector('.toolbar');
+            
+            const simplifiedDiv = document.createElement('div');
+            simplifiedDiv.id = 'simplifiedToolbar';
+            simplifiedDiv.className = 'simplified-keep';
+            simplifiedDiv.style.cssText = `
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                flex: 1;
+            `;
+            
+            // Menu toggle button
+            const menuBtn = document.createElement('button');
+            menuBtn.innerHTML = '☰';
+            menuBtn.className = 'toolbar-btn';
+            menuBtn.title = 'Visa fullständig meny';
+            menuBtn.style.cssText = 'padding: 8px 12px;';
+            menuBtn.onclick = () => {
+                isSimplifiedToolbar = false;
+                localStorage.setItem('spatial-notes-simplified-toolbar', 'false');
+                updateToolbarDisplay();
+            };
+            
+            // Plus button (new card)
+            const plusBtn = document.createElement('button');
+            plusBtn.innerHTML = '➕';
+            plusBtn.className = 'toolbar-btn';
+            plusBtn.title = 'Nytt kort (N)';
+            plusBtn.style.cssText = 'padding: 8px 12px;';
+            plusBtn.onclick = addNewCard;
+            
+            // Multi-import button
+            const importBtn = document.createElement('button');
+            importBtn.innerHTML = '📋';
+            importBtn.className = 'toolbar-btn';
+            importBtn.title = 'Multi-import (M)';
+            importBtn.style.cssText = 'padding: 8px 12px;';
+            importBtn.onclick = showMultiCardPasteDialog;
+            
+            // Smart search button
+            const searchBtn = document.createElement('button');
+            searchBtn.innerHTML = '🔍';
+            searchBtn.className = 'toolbar-btn';
+            searchBtn.title = 'Smart sök (söker + sorterar som W)';
+            searchBtn.style.cssText = 'padding: 8px 12px;';
+            searchBtn.onclick = showSmartSearch;
+            
+            simplifiedDiv.appendChild(menuBtn);
+            simplifiedDiv.appendChild(plusBtn);
+            simplifiedDiv.appendChild(importBtn);
+            simplifiedDiv.appendChild(searchBtn);
+            
+            toolbar.appendChild(simplifiedDiv);
+        }
+        
+        function showSmartSearch() {
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+                searchInput.focus();
+                searchInput.placeholder = 'Smart sök: söker + sorterar';
+                
+                // Override search behavior temporarily
+                const originalPerformSearch = window.performSearch;
+                window.performSearch = function(searchText) {
+                    // Do normal search
+                    originalPerformSearch(searchText);
+                    
+                    // If in column view and has results, sort by color
+                    if (isColumnView && searchText.trim()) {
+                        setTimeout(() => {
+                            setColumnViewSort('background-color');
+                        }, 100);
+                    }
+                };
+                
+                // Restore original function after 5 seconds
+                setTimeout(() => {
+                    window.performSearch = originalPerformSearch;
+                    searchInput.placeholder = 'Sök: "bias and social" OR "not psychology"';
+                }, 5000);
+            }
+        }
+        
+        // ====================================================================================================
+        // 📅 WEEK NUMBERING FUNCTIONS
+        // ====================================================================================================
+        
+        function getISOWeek(date) {
+            const tempDate = new Date(date.getTime());
+            const dayNum = (date.getDay() + 6) % 7; // Make Monday = 0
+            tempDate.setDate(tempDate.getDate() - dayNum + 3); // Thursday of this week
+            const firstThursday = tempDate.valueOf();
+            tempDate.setMonth(0, 1); // January 1
+            if (tempDate.getDay() !== 4) {
+                tempDate.setMonth(0, 1 + ((4 - tempDate.getDay()) + 7) % 7);
+            }
+            return 1 + Math.ceil((firstThursday - tempDate) / 604800000); // 604800000 = 7 * 24 * 3600 * 1000
+        }
+        
+        function getCurrentWeekData() {
+            const now = new Date();
+            const currentYear = now.getFullYear();
+            const shortYear = currentYear.toString().slice(-2); // "25" for 2025
+            const currentWeek = getISOWeek(now);
+            
+            // Calculate next weeks, handle year transition
+            const nextWeek = currentWeek + 1;
+            const weekAfter = currentWeek + 2;
+            
+            // Handle year transition (approximately - ISO weeks can be tricky at year boundaries)
+            let nextWeekYear = shortYear;
+            let weekAfterYear = shortYear;
+            
+            if (nextWeek > 52) {
+                nextWeekYear = (parseInt(shortYear) + 1).toString().padStart(2, '0');
+                if (weekAfter > 52) {
+                    weekAfterYear = nextWeekYear;
+                }
+            }
+            
+            return {
+                thisWeek: `${shortYear}v${currentWeek}`,
+                nextWeek: nextWeek > 52 ? `${nextWeekYear}v${nextWeek - 52}` : `${shortYear}v${nextWeek}`,
+                weekAfter: weekAfter > 52 ? `${weekAfterYear}v${weekAfter - 52}` : `${shortYear}v${weekAfter}`
+            };
+        }
+        
+        // ====================================================================================================
+        
         // Add new card
         function addNewCard() {
             // Clear any existing edit dialogs first
@@ -7606,11 +7804,44 @@ Tredje anteckningen...
                                border: 1px solid #ccc; border-radius: 4px; padding: 8px;
                                box-sizing: border-box; resize: vertical;"></textarea>
                 </div>
-                <div style="margin-bottom: 20px;">
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #555;">Färg (valfritt):</label>
+                    <div id="newCardColorPicker" style="display: flex; gap: 8px; align-items: center;">
+                        <div class="color-dot" data-color="" style="width: 24px; height: 24px; border-radius: 50%; 
+                             background: #f5f5f5; border: 2px solid #ddd; cursor: pointer; position: relative;"
+                             title="Ingen färg">
+                            <span style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+                                  font-size: 16px; color: #666;">⭘</span>
+                        </div>
+                        <div class="color-dot" data-color="1" style="width: 24px; height: 24px; border-radius: 50%; 
+                             background: #d4f2d4; border: 2px solid transparent; cursor: pointer;" title="Grön"></div>
+                        <div class="color-dot" data-color="2" style="width: 24px; height: 24px; border-radius: 50%; 
+                             background: #ffe4b3; border: 2px solid transparent; cursor: pointer;" title="Orange"></div>
+                        <div class="color-dot" data-color="3" style="width: 24px; height: 24px; border-radius: 50%; 
+                             background: #ffc1cc; border: 2px solid transparent; cursor: pointer;" title="Röd"></div>
+                        <div class="color-dot" data-color="4" style="width: 24px; height: 24px; border-radius: 50%; 
+                             background: #fff7b3; border: 2px solid transparent; cursor: pointer;" title="Gul"></div>
+                        <div class="color-dot" data-color="5" style="width: 24px; height: 24px; border-radius: 50%; 
+                             background: #f3e5f5; border: 2px solid transparent; cursor: pointer;" title="Lila"></div>
+                        <div class="color-dot" data-color="6" style="width: 24px; height: 24px; border-radius: 50%; 
+                             background: #c7e7ff; border: 2px solid transparent; cursor: pointer;" title="Blå"></div>
+                        <div class="color-dot" data-color="7" style="width: 24px; height: 24px; border-radius: 50%; 
+                             background: #e0e0e0; border: 2px solid transparent; cursor: pointer;" title="Grå"></div>
+                        <div class="color-dot" data-color="8" style="width: 24px; height: 24px; border-radius: 50%; 
+                             background: #ffffff; border: 2px solid transparent; cursor: pointer;" title="Vit"></div>
+                    </div>
+                </div>
+                <div style="margin-bottom: 15px;">
                     <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #555;">Tags (valfritt):</label>
                     <input type="text" id="newCardTags" placeholder="tech, psychology, design..."
                         style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;
                                box-sizing: border-box; font-size: 14px;">
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #555;">📅 Snabbveckor:</label>
+                    <div id="weekButtons" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <!-- Week buttons will be populated by JavaScript -->
+                    </div>
                 </div>
                 <div style="text-align: right;">
                     <button id="cancelCard" style="background: #666; color: white; border: none; 
@@ -7631,6 +7862,84 @@ Tredje anteckningen...
             // Focus on textarea
             const textarea = document.getElementById('newCardText');
             textarea.focus();
+            
+            // Handle color picker selection
+            let selectedColor = '';
+            const colorDots = document.querySelectorAll('#newCardColorPicker .color-dot');
+            colorDots.forEach(dot => {
+                dot.addEventListener('click', function() {
+                    // Remove selection from all dots
+                    colorDots.forEach(d => d.style.border = d.dataset.color ? '2px solid transparent' : '2px solid #ddd');
+                    
+                    // Select this dot
+                    this.style.border = '2px solid #007acc';
+                    selectedColor = this.dataset.color;
+                });
+            });
+            
+            // Populate week buttons
+            const weekData = getCurrentWeekData();
+            const weekButtonsContainer = document.getElementById('weekButtons');
+            const weekButtons = [
+                { text: weekData.thisWeek, label: 'denna vecka', title: 'Denna vecka' },
+                { text: weekData.nextWeek, label: 'nästa vecka', title: 'Nästa vecka' },
+                { text: weekData.weekAfter, label: 'nästnästa vecka', title: 'Veckan efter nästa' }
+            ];
+            
+            weekButtons.forEach(btn => {
+                const weekBtn = document.createElement('button');
+                weekBtn.type = 'button';
+                weekBtn.innerHTML = `<strong>${btn.text}</strong><br><small>${btn.label}</small>`;
+                weekBtn.title = btn.title;
+                weekBtn.style.cssText = `
+                    background: #f8f9fa;
+                    border: 1px solid #dee2e6;
+                    border-radius: 6px;
+                    padding: 8px 12px;
+                    cursor: pointer;
+                    font-size: 12px;
+                    line-height: 1.2;
+                    transition: all 0.2s ease;
+                    text-align: center;
+                    min-width: 70px;
+                `;
+                
+                weekBtn.addEventListener('mouseenter', function() {
+                    this.style.background = '#e9ecef';
+                    this.style.borderColor = '#007acc';
+                });
+                
+                weekBtn.addEventListener('mouseleave', function() {
+                    this.style.background = '#f8f9fa';
+                    this.style.borderColor = '#dee2e6';
+                });
+                
+                weekBtn.addEventListener('click', function() {
+                    const tagsInput = document.getElementById('newCardTags');
+                    const currentTags = tagsInput.value.trim();
+                    const weekTag = btn.text;
+                    
+                    if (currentTags) {
+                        // Add to existing tags
+                        if (!currentTags.includes(weekTag)) {
+                            tagsInput.value = currentTags + ', ' + weekTag;
+                        }
+                    } else {
+                        // First tag
+                        tagsInput.value = weekTag;
+                    }
+                    
+                    // Visual feedback
+                    this.style.background = '#d4edda';
+                    this.style.borderColor = '#28a745';
+                    setTimeout(() => {
+                        this.style.background = '#f8f9fa';
+                        this.style.borderColor = '#dee2e6';
+                    }, 500);
+                });
+                
+                weekButtonsContainer.appendChild(weekBtn);
+            });
             
             // Handle save
             document.getElementById('saveCard').onclick = function() {
@@ -7672,6 +7981,11 @@ Tredje anteckningen...
                     },
                     position: { x: x, y: y }
                 });
+                
+                // Apply selected color if any
+                if (selectedColor) {
+                    newNode.data('cardColor', `card-color-${selectedColor}`);
+                }
                 
                 newNode.grabify();
                 
@@ -10553,6 +10867,9 @@ Kan ha #taggar överallt.
             // Initialize project name UI
             initializeProjectName();
             
+            // Initialize simplified toolbar state
+            updateToolbarDisplay();
+            
             // Enhanced save function that includes Drive sync (after original function is defined)
             setTimeout(() => {
                 const originalSaveBoard = window.saveBoard;
@@ -10926,7 +11243,7 @@ Kan ha #taggar överallt.
                 }
                 
                 // T för färgval (markerade kort) - only if G is not pressed
-                if (e.key === 't' && !e.ctrlKey && !e.altKey && !window.keysPressed.has('g')) {
+                if (e.key === 't' && !e.ctrlKey && !e.altKey && !e.shiftKey && !window.keysPressed.has('g')) {
                     e.preventDefault();
                     const selectedNodes = cy.$('node:selected');
                     if (selectedNodes.length > 0) {
@@ -10937,6 +11254,12 @@ Kan ha #taggar överallt.
                         };
                         showColorPicker(fakeEvent, selectedNodes);
                     }
+                }
+                
+                // Shift+T för att växla förenklad/full toolbar
+                if (e.shiftKey && e.key === 'T' && !e.ctrlKey && !e.altKey) {
+                    e.preventDefault();
+                    toggleSimplifiedToolbar();
                 }
                 
                 // Siffertangenter 1-8 för direktfärgning
@@ -11222,6 +11545,45 @@ Kan ha #taggar överallt.
         function renderColumnView() {
             const container = document.getElementById('columnContainer');
             container.innerHTML = '';
+            
+            // Add sort button for touch devices at the top
+            if (isMobileDevice()) {
+                const sortHeader = document.createElement('div');
+                sortHeader.style.cssText = `
+                    padding: 10px 15px;
+                    background: #f8f9fa;
+                    border-bottom: 1px solid #dee2e6;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    position: sticky;
+                    top: 0;
+                    z-index: 100;
+                `;
+                
+                const sortLabel = document.createElement('span');
+                sortLabel.textContent = 'Kolumnvy';
+                sortLabel.style.cssText = 'font-weight: 500; color: #495057;';
+                
+                const sortButton = document.createElement('button');
+                sortButton.innerHTML = '📊 Sortera';
+                sortButton.style.cssText = `
+                    padding: 8px 16px;
+                    background: #007acc;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    cursor: pointer;
+                    touch-action: manipulation;
+                `;
+                
+                sortButton.onclick = () => showColumnViewSortMenu();
+                
+                sortHeader.appendChild(sortLabel);
+                sortHeader.appendChild(sortButton);
+                container.appendChild(sortHeader);
+            }
             
             // Setup background handlers once
             setupColumnBackgroundHandlers();
