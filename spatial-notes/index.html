@@ -1277,6 +1277,11 @@
 </head>
 <body>
     <div class="toolbar">
+        <!-- Mobile hamburger toggle (hidden on desktop) -->
+        <button class="toolbar-btn mobile-only" id="mobileHamburgerBtn" onclick="toggleSimplifiedToolbar()" title="Växla till mini-meny" style="display: none; padding: 8px 12px;">
+            ☰
+        </button>
+        
         <!-- Project Selector -->
         <div class="project-selector">
             <button class="project-button" id="projectButton" onclick="toggleProjectDropdown()">
