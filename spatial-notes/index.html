@@ -1326,9 +1326,6 @@
         <button class="toolbar-btn" id="viewToggleBtn" onclick="toggleView()" title="Växla mellan brädvy och kolumnvy" style="padding: 8px 16px;">
             📋 Kolumnvy
         </button>
-        <button class="toolbar-btn" id="sortBtn" onclick="showSortMenu(event)" title="Sortera kort" style="padding: 8px 16px;">
-            📊 Sortera
-        </button>
         
         <!-- Mobile controls (hidden on desktop) -->
         <div class="mobile-controls">
@@ -7753,18 +7750,6 @@ Tredje anteckningen...
                 flex: 1;
             `;
             
-            // Menu toggle button
-            const menuBtn = document.createElement('button');
-            menuBtn.innerHTML = '☰';
-            menuBtn.className = 'toolbar-btn';
-            menuBtn.title = 'Visa fullständig meny';
-            menuBtn.style.cssText = 'padding: 8px 12px;';
-            menuBtn.onclick = () => {
-                isSimplifiedToolbar = false;
-                localStorage.setItem('spatial-notes-simplified-toolbar', 'false');
-                updateToolbarDisplay();
-            };
-            
             // Multi-import button  
             const importBtn = document.createElement('button');
             importBtn.innerHTML = '📋';
@@ -7781,9 +7766,17 @@ Tredje anteckningen...
             searchBtn.style.cssText = 'padding: 8px 12px;';
             searchBtn.onclick = showSmartSearchDialog;
             
-            simplifiedDiv.appendChild(menuBtn);
+            // Sort button 
+            const sortBtn = document.createElement('button');
+            sortBtn.innerHTML = '📊';
+            sortBtn.className = 'toolbar-btn';
+            sortBtn.title = 'Sortera kort';
+            sortBtn.style.cssText = 'padding: 8px 12px;';
+            sortBtn.onclick = (event) => showSortMenu(event);
+            
             simplifiedDiv.appendChild(importBtn);
             simplifiedDiv.appendChild(searchBtn);
+            simplifiedDiv.appendChild(sortBtn);
             
             toolbar.appendChild(simplifiedDiv);
         }
