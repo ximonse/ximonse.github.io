@@ -1052,12 +1052,18 @@
             .mobile-controls {
                 display: flex !important;
             }
+            .mobile-only {
+                display: inline-block !important;
+            }
         }
         
         /* Alternative: Show on small screens */
         @media (max-width: 768px) {
             .mobile-controls {
                 display: flex !important;
+            }
+            .mobile-only {
+                display: inline-block !important;
             }
         }
         
@@ -1308,6 +1314,9 @@
         </div>
         <button class="toolbar-btn" id="annotationToggleBtn" onclick="toggleAnnotationToolbar()" title="Aktivera/inaktivera annotation-verktyg" style="padding: 8px 16px;">
             ⬜→⭕
+        </button>
+        <button class="toolbar-btn mobile-only" id="toolbarToggleBtn" onclick="toggleSimplifiedToolbar()" title="Växla förenklad/full toolbar" style="padding: 8px 16px; display: none;">
+            📱
         </button>
         <button class="toolbar-btn" id="imageUploadBtn" onclick="triggerImageUpload()" title="Tre bildval: Kamera, Galleri, Filväljare" style="padding: 8px 16px;">
             📷 Bilder
@@ -7625,6 +7634,9 @@ Tredje anteckningen...
                 // Hide simplified elements
                 hideSimplifiedToolbar();
             }
+            
+            // Update mobile toggle button icon
+            updateMobileToggleButton();
         }
         
         function showSimplifiedToolbar() {
@@ -7725,6 +7737,19 @@ Tredje anteckningen...
                     window.performSearch = originalPerformSearch;
                     searchInput.placeholder = 'Sök: "bias and social" OR "not psychology"';
                 }, 5000);
+            }
+        }
+        
+        function updateMobileToggleButton() {
+            const toggleBtn = document.getElementById('toolbarToggleBtn');
+            if (toggleBtn) {
+                if (isSimplifiedToolbar) {
+                    toggleBtn.innerHTML = '🔧'; // Show "tools" icon when in simplified mode
+                    toggleBtn.title = 'Visa full toolbar';
+                } else {
+                    toggleBtn.innerHTML = '📱'; // Show "mobile" icon when in full mode
+                    toggleBtn.title = 'Visa förenklad toolbar';
+                }
             }
         }
         
