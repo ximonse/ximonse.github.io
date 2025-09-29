@@ -1302,7 +1302,7 @@
             </button>
         </div>
         <div class="tag-filter-box">
-            <input type="text" class="tag-filter-input" placeholder="Filter på tags: tech, psychology..." id="tagFilterInput">
+            <input type="text" class="tag-filter-input" placeholder='Tag-filter: tech AND psychology OR "exact tag" NOT done' id="tagFilterInput">
         </div>
         <button class="toolbar-btn" id="annotationToggleBtn" onclick="toggleAnnotationToolbar()" title="Aktivera/inaktivera annotation-verktyg">
             ⬜→⭕
@@ -4149,36 +4149,84 @@ Tredje anteckningen...
             selectBtn.style.display = 'none';
         }
         
-        // Tag filtering functions
+        // Tag filtering functions with Boolean logic
         function performTagFilter(filterText) {
             if (!filterText.trim()) {
                 clearTagFilter();
                 return;
             }
             
-            // Split by comma and clean up
-            const filterTags = filterText.toLowerCase().split(',').map(tag => tag.trim()).filter(tag => tag);
+            const query = filterText.toLowerCase().trim();
+            let matchCount = 0;
             
             cy.nodes().forEach(node => {
                 const nodeTags = node.data('tags') || [];
                 const nodeTagsLower = nodeTags.map(tag => tag.toLowerCase());
                 
-                // Check if node has any of the filter tags (search in ALL tags, including PDF filename tags)
-                const hasMatchingTag = filterTags.some(filterTag => 
-                    nodeTagsLower.some(nodeTag => nodeTag.includes(filterTag))
-                );
+                // Create searchable tag string (space-separated for boolean evaluation)
+                const searchableTagText = nodeTagsLower.join(' ');
                 
-                if (hasMatchingTag) {
+                // Use boolean evaluation on tags
+                const matches = evaluateBooleanTagQuery(query, searchableTagText, nodeTagsLower);
+                
+                if (matches) {
                     node.removeClass('tag-filtered');
+                    matchCount++;
                 } else {
                     node.addClass('tag-filtered');
                 }
             });
             
-            const visibleNodes = cy.nodes().not('.tag-filtered');
             const searchInfo = document.getElementById('searchInfo');
-            searchInfo.textContent = `${visibleNodes.length} kort med tags: ${filterTags.join(', ')}`;
+            searchInfo.textContent = `${matchCount} kort matchade tag-filter: "${filterText}"`;
             searchInfo.classList.add('visible');
+        }
+        
+        // Boolean query evaluation specifically for tags
+        function evaluateBooleanTagQuery(query, searchableTagText, nodeTagsArray) {
+            // Handle different boolean operators for tags
+            
+            // Split by OR first (lowest precedence)
+            if (query.includes(' or ')) {
+                const orParts = query.split(' or ');
+                return orParts.some(part => evaluateBooleanTagQuery(part.trim(), searchableTagText, nodeTagsArray));
+            }
+            
+            // Handle NOT operations
+            if (query.includes(' not ')) {
+                const notIndex = query.indexOf(' not ');
+                const beforeNot = query.substring(0, notIndex).trim();
+                const afterNot = query.substring(notIndex + 5).trim(); // ' not '.length = 5
+                
+                // If there's something before NOT, it must match
+                let beforeMatches = true;
+                if (beforeNot) {
+                    beforeMatches = evaluateBooleanTagQuery(beforeNot, searchableTagText, nodeTagsArray);
+                }
+                
+                // The part after NOT must NOT match
+                const afterMatches = evaluateBooleanTagQuery(afterNot, searchableTagText, nodeTagsArray);
+                
+                return beforeMatches && !afterMatches;
+            }
+            
+            // Handle AND operations (default behavior and explicit)
+            const andParts = query.includes(' and ') ? 
+                query.split(' and ') : 
+                query.split(' ').filter(term => term.length > 0);
+                
+            return andParts.every(term => {
+                term = term.trim();
+                
+                if (term.startsWith('"') && term.endsWith('"')) {
+                    // Exact tag search - must match complete tag
+                    const exactTag = term.slice(1, -1);
+                    return nodeTagsArray.some(tag => tag === exactTag);
+                } else {
+                    // Partial tag search - can be part of any tag
+                    return nodeTagsArray.some(tag => tag.includes(term));
+                }
+            });
         }
         
         function clearTagFilter() {
