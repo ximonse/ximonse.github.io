@@ -1315,14 +1315,14 @@
         <button class="toolbar-btn" id="annotationToggleBtn" onclick="toggleAnnotationToolbar()" title="Aktivera/inaktivera annotation-verktyg" style="padding: 8px 16px;">
             ⬜→⭕
         </button>
-        <button class="toolbar-btn mobile-only" id="toolbarToggleBtn" onclick="toggleSimplifiedToolbar()" title="Växla förenklad/full toolbar" style="padding: 8px 16px; display: none;">
-            📱
-        </button>
         <button class="toolbar-btn" id="imageUploadBtn" onclick="triggerImageUpload()" title="Tre bildval: Kamera, Galleri, Filväljare" style="padding: 8px 16px;">
             📷 Bilder
         </button>
         <button class="toolbar-btn" id="viewToggleBtn" onclick="toggleView()" title="Växla mellan brädvy och kolumnvy" style="padding: 8px 16px;">
             📋 Kolumnvy
+        </button>
+        <button class="toolbar-btn" id="sortBtn" onclick="showSortMenu(event)" title="Sortera kort" style="padding: 8px 16px;">
+            📊 Sortera
         </button>
         
         <!-- Mobile controls (hidden on desktop) -->
@@ -3194,6 +3194,89 @@
             } else {
                 selectBtn.style.display = 'none';
             }
+            
+            // Apply smart sorting to search results if in column view
+            if (isColumnView && matchCount > 0) {
+                applySmartSearchSorting();
+            }
+        }
+        
+        // Smart search sorting: week+todo priorities, then color order
+        function applySmartSearchSorting() {
+            // Get all search-matched nodes
+            const matchedNodes = cy.nodes('.search-match').toArray();
+            
+            // Sort with complex priority system
+            const sortedNodes = matchedNodes.sort((a, b) => {
+                // Priority 1: Week tags + todo tags (oldest week first)
+                const aWeekTodo = getWeekTodoPriority(a);
+                const bWeekTodo = getWeekTodoPriority(b);
+                if (aWeekTodo !== bWeekTodo) {
+                    return aWeekTodo - bWeekTodo; // Lower number = higher priority
+                }
+                
+                // Priority 2: Color order (röd, orange, vit, gul, lila, blå, grön, grå)
+                const aColor = getColorPriority(a);
+                const bColor = getColorPriority(b);
+                return aColor - bColor;
+            });
+            
+            // Apply visual order in column view
+            if (isColumnView) {
+                setTimeout(() => {
+                    renderColumnView(); // This will use the sorted order
+                }, 50);
+            }
+        }
+        
+        function getWeekTodoPriority(node) {
+            const tags = (node.data('tags') || []).map(tag => tag.toLowerCase());
+            const hasTodo = tags.some(tag => tag.includes('todo'));
+            
+            if (!hasTodo) return 1000; // No todo = lowest priority
+            
+            // Find week tags (format: 25v40, 24v52, etc.)
+            const weekTags = tags.filter(tag => /\d{2}v\d{1,2}/.test(tag));
+            if (weekTags.length === 0) return 500; // Todo but no week = medium priority
+            
+            // Get earliest week number for sorting
+            let earliestWeek = 9999;
+            weekTags.forEach(weekTag => {
+                const match = weekTag.match(/(\d{2})v(\d{1,2})/);
+                if (match) {
+                    const year = parseInt(match[1]);
+                    const week = parseInt(match[2]);
+                    const sortValue = year * 100 + week; // 2540 for 25v40
+                    earliestWeek = Math.min(earliestWeek, sortValue);
+                }
+            });
+            
+            return earliestWeek; // Lower week number = higher priority
+        }
+        
+        function getColorPriority(node) {
+            const cardColor = node.data('cardColor');
+            if (!cardColor) return 8; // No color = lowest color priority
+            
+            // Extract color number (card-color-3 -> 3)
+            const colorMatch = cardColor.match(/card-color-(\d)/);
+            if (!colorMatch) return 8;
+            
+            const colorNum = parseInt(colorMatch[1]);
+            
+            // Color priority order: röd(3), orange(2), vit(8), gul(4), lila(5), blå(6), grön(1), grå(7)
+            const colorOrder = {
+                3: 1, // röd
+                2: 2, // orange  
+                8: 3, // vit
+                4: 4, // gul
+                5: 5, // lila
+                6: 6, // blå
+                1: 7, // grön
+                7: 8  // grå
+            };
+            
+            return colorOrder[colorNum] || 9;
         }
         
         // Boolean query evaluation
@@ -7634,9 +7717,6 @@ Tredje anteckningen...
                 // Hide simplified elements
                 hideSimplifiedToolbar();
             }
-            
-            // Update mobile toggle button icon
-            updateMobileToggleButton();
         }
         
         function showSimplifiedToolbar() {
@@ -7680,15 +7760,7 @@ Tredje anteckningen...
                 updateToolbarDisplay();
             };
             
-            // Plus button (new card)
-            const plusBtn = document.createElement('button');
-            plusBtn.innerHTML = '➕';
-            plusBtn.className = 'toolbar-btn';
-            plusBtn.title = 'Nytt kort (N)';
-            plusBtn.style.cssText = 'padding: 8px 12px;';
-            plusBtn.onclick = addNewCard;
-            
-            // Multi-import button
+            // Multi-import button  
             const importBtn = document.createElement('button');
             importBtn.innerHTML = '📋';
             importBtn.className = 'toolbar-btn';
@@ -7700,58 +7772,102 @@ Tredje anteckningen...
             const searchBtn = document.createElement('button');
             searchBtn.innerHTML = '🔍';
             searchBtn.className = 'toolbar-btn';
-            searchBtn.title = 'Smart sök (söker + sorterar som W)';
+            searchBtn.title = 'Smart sökning med automatisk sortering';
             searchBtn.style.cssText = 'padding: 8px 12px;';
-            searchBtn.onclick = showSmartSearch;
+            searchBtn.onclick = showSmartSearchDialog;
             
             simplifiedDiv.appendChild(menuBtn);
-            simplifiedDiv.appendChild(plusBtn);
             simplifiedDiv.appendChild(importBtn);
             simplifiedDiv.appendChild(searchBtn);
             
             toolbar.appendChild(simplifiedDiv);
         }
         
-        function showSmartSearch() {
-            const searchInput = document.getElementById('searchInput');
-            if (searchInput) {
-                searchInput.focus();
-                searchInput.placeholder = 'Smart sök: söker + sorterar';
-                
-                // Override search behavior temporarily
-                const originalPerformSearch = window.performSearch;
-                window.performSearch = function(searchText) {
-                    // Do normal search
-                    originalPerformSearch(searchText);
+        function showSmartSearchDialog() {
+            // Create overlay for search input
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.7); z-index: 10000;
+                display: flex; justify-content: center; align-items: center;
+            `;
+            
+            const dialog = document.createElement('div');
+            dialog.style.cssText = `
+                background: white; padding: 20px; border-radius: 10px;
+                max-width: 400px; width: 90%; max-height: 80vh;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                box-sizing: border-box;
+            `;
+            
+            dialog.innerHTML = `
+                <h3 style="margin-top: 0; color: #333; font-size: 18px;">🔍 Smart sökning</h3>
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #555;">Sök efter:</label>
+                    <input type="text" id="smartSearchInput" placeholder='Exempel: "todo" OR "viktigt"'
+                        style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;
+                               box-sizing: border-box; font-size: 14px;">
+                </div>
+                <div style="margin-bottom: 20px; font-size: 12px; color: #666;">
+                    <strong>Automatisk sortering:</strong><br>
+                    1. Vecko-todos (äldsta först)<br>
+                    2. Färgordning: Röd → Orange → Vit → Gul → Lila → Blå → Grön → Grå
+                </div>
+                <div style="text-align: right;">
+                    <button id="cancelSmartSearch" style="background: #666; color: white; border: none; 
+                                                 padding: 10px 20px; border-radius: 4px; margin-right: 10px;
+                                                 cursor: pointer; font-size: 14px;">Avbryt</button>
+                    <button id="executeSmartSearch" style="background: #007acc; color: white; border: none; 
+                                                padding: 10px 20px; border-radius: 4px; cursor: pointer;
+                                                font-size: 14px;">🔍 Sök & Sortera</button>
+                </div>
+            `;
+            
+            overlay.appendChild(dialog);
+            document.body.appendChild(overlay);
+            
+            // Focus on input
+            const searchInput = document.getElementById('smartSearchInput');
+            searchInput.focus();
+            
+            // Handle search
+            document.getElementById('executeSmartSearch').onclick = function() {
+                const query = searchInput.value.trim();
+                if (query) {
+                    // Perform the search with smart sorting
+                    performSearch(query);
                     
-                    // If in column view and has results, sort by color
-                    if (isColumnView && searchText.trim()) {
-                        setTimeout(() => {
-                            setColumnViewSort('background-color');
-                        }, 100);
+                    // Show success message
+                    const searchInfo = document.getElementById('searchInfo');
+                    if (searchInfo) {
+                        searchInfo.textContent += ' (smart sorterat)';
                     }
-                };
-                
-                // Restore original function after 5 seconds
-                setTimeout(() => {
-                    window.performSearch = originalPerformSearch;
-                    searchInput.placeholder = 'Sök: "bias and social" OR "not psychology"';
-                }, 5000);
-            }
+                }
+                document.body.removeChild(overlay);
+            };
+            
+            // Handle cancel
+            document.getElementById('cancelSmartSearch').onclick = function() {
+                document.body.removeChild(overlay);
+            };
+            
+            // Handle Enter key
+            searchInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    document.getElementById('executeSmartSearch').click();
+                } else if (e.key === 'Escape') {
+                    document.getElementById('cancelSmartSearch').click();
+                }
+            });
+            
+            // Close on overlay click
+            overlay.addEventListener('click', function(e) {
+                if (e.target === overlay) {
+                    document.body.removeChild(overlay);
+                }
+            });
         }
         
-        function updateMobileToggleButton() {
-            const toggleBtn = document.getElementById('toolbarToggleBtn');
-            if (toggleBtn) {
-                if (isSimplifiedToolbar) {
-                    toggleBtn.innerHTML = '🔧'; // Show "tools" icon when in simplified mode
-                    toggleBtn.title = 'Visa full toolbar';
-                } else {
-                    toggleBtn.innerHTML = '📱'; // Show "mobile" icon when in full mode
-                    toggleBtn.title = 'Visa förenklad toolbar';
-                }
-            }
-        }
         
         // ====================================================================================================
         // 📅 WEEK NUMBERING FUNCTIONS
@@ -9022,11 +9138,44 @@ Kan ha #taggar överallt.
                                border: 1px solid #ccc; border-radius: 4px; padding: 8px;
                                box-sizing: border-box; resize: vertical;">${currentText}</textarea>
                 </div>
-                <div style="margin-bottom: 20px;">
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #555;">Färg (valfritt):</label>
+                    <div id="editCardColorPicker" style="display: flex; gap: 8px; align-items: center;">
+                        <div class="color-dot" data-color="" style="width: 24px; height: 24px; border-radius: 50%; 
+                             background: #f5f5f5; border: 2px solid #ddd; cursor: pointer; position: relative;"
+                             title="Ingen färg">
+                            <span style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+                                  font-size: 16px; color: #666;">⭘</span>
+                        </div>
+                        <div class="color-dot" data-color="1" style="width: 24px; height: 24px; border-radius: 50%; 
+                             background: #d4f2d4; border: 2px solid transparent; cursor: pointer;" title="Grön"></div>
+                        <div class="color-dot" data-color="2" style="width: 24px; height: 24px; border-radius: 50%; 
+                             background: #ffe4b3; border: 2px solid transparent; cursor: pointer;" title="Orange"></div>
+                        <div class="color-dot" data-color="3" style="width: 24px; height: 24px; border-radius: 50%; 
+                             background: #ffc1cc; border: 2px solid transparent; cursor: pointer;" title="Röd"></div>
+                        <div class="color-dot" data-color="4" style="width: 24px; height: 24px; border-radius: 50%; 
+                             background: #fff7b3; border: 2px solid transparent; cursor: pointer;" title="Gul"></div>
+                        <div class="color-dot" data-color="5" style="width: 24px; height: 24px; border-radius: 50%; 
+                             background: #f3e5f5; border: 2px solid transparent; cursor: pointer;" title="Lila"></div>
+                        <div class="color-dot" data-color="6" style="width: 24px; height: 24px; border-radius: 50%; 
+                             background: #c7e7ff; border: 2px solid transparent; cursor: pointer;" title="Blå"></div>
+                        <div class="color-dot" data-color="7" style="width: 24px; height: 24px; border-radius: 50%; 
+                             background: #e0e0e0; border: 2px solid transparent; cursor: pointer;" title="Grå"></div>
+                        <div class="color-dot" data-color="8" style="width: 24px; height: 24px; border-radius: 50%; 
+                             background: #ffffff; border: 2px solid transparent; cursor: pointer;" title="Vit"></div>
+                    </div>
+                </div>
+                <div style="margin-bottom: 15px;">
                     <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #555;">Tags (valfritt):</label>
                     <input type="text" id="editCardTags" value="${currentTags.join(', ')}"
                         style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;
                                box-sizing: border-box; font-size: 14px;">
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #555;">📅 Snabbveckor:</label>
+                    <div id="editWeekButtons" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <!-- Week buttons will be populated by JavaScript -->
+                    </div>
                 </div>
                 <div style="text-align: right;">
                     <button id="cancelEdit" style="background: #666; color: white; border: none; 
@@ -9048,6 +9197,96 @@ Kan ha #taggar överallt.
             const textarea = document.getElementById('editCardText');
             textarea.focus();
             textarea.select();
+            
+            // Handle color picker selection and show current color
+            let selectedColor = '';
+            const currentCardColor = node.data('cardColor') || '';
+            const currentColorNumber = currentCardColor.replace('card-color-', '') || '';
+            
+            const colorDots = document.querySelectorAll('#editCardColorPicker .color-dot');
+            colorDots.forEach(dot => {
+                // Show current color as selected
+                if (dot.dataset.color === currentColorNumber) {
+                    dot.style.border = '2px solid #007acc';
+                    selectedColor = currentColorNumber;
+                } else if (!currentColorNumber && dot.dataset.color === '') {
+                    dot.style.border = '2px solid #007acc';
+                    selectedColor = '';
+                }
+                
+                dot.addEventListener('click', function() {
+                    // Remove selection from all dots
+                    colorDots.forEach(d => d.style.border = d.dataset.color ? '2px solid transparent' : '2px solid #ddd');
+                    
+                    // Select this dot
+                    this.style.border = '2px solid #007acc';
+                    selectedColor = this.dataset.color;
+                });
+            });
+            
+            // Populate week buttons
+            const weekData = getCurrentWeekData();
+            const weekButtonsContainer = document.getElementById('editWeekButtons');
+            const weekButtons = [
+                { text: weekData.thisWeek, label: 'denna vecka', title: 'Denna vecka' },
+                { text: weekData.nextWeek, label: 'nästa vecka', title: 'Nästa vecka' },
+                { text: weekData.weekAfter, label: 'nästnästa vecka', title: 'Veckan efter nästa' }
+            ];
+            
+            weekButtons.forEach(btn => {
+                const weekBtn = document.createElement('button');
+                weekBtn.type = 'button';
+                weekBtn.innerHTML = `<strong>${btn.text}</strong><br><small>${btn.label}</small>`;
+                weekBtn.title = btn.title;
+                weekBtn.style.cssText = `
+                    background: #f8f9fa;
+                    border: 1px solid #dee2e6;
+                    border-radius: 6px;
+                    padding: 8px 12px;
+                    cursor: pointer;
+                    font-size: 12px;
+                    line-height: 1.2;
+                    transition: all 0.2s ease;
+                    text-align: center;
+                    min-width: 70px;
+                `;
+                
+                weekBtn.addEventListener('mouseenter', function() {
+                    this.style.background = '#e9ecef';
+                    this.style.borderColor = '#007acc';
+                });
+                
+                weekBtn.addEventListener('mouseleave', function() {
+                    this.style.background = '#f8f9fa';
+                    this.style.borderColor = '#dee2e6';
+                });
+                
+                weekBtn.addEventListener('click', function() {
+                    const tagsInput = document.getElementById('editCardTags');
+                    const currentTags = tagsInput.value.trim();
+                    const weekTag = btn.text;
+                    
+                    if (currentTags) {
+                        // Add to existing tags
+                        if (!currentTags.includes(weekTag)) {
+                            tagsInput.value = currentTags + ', ' + weekTag;
+                        }
+                    } else {
+                        // First tag
+                        tagsInput.value = weekTag;
+                    }
+                    
+                    // Visual feedback
+                    this.style.background = '#d4edda';
+                    this.style.borderColor = '#28a745';
+                    setTimeout(() => {
+                        this.style.background = '#f8f9fa';
+                        this.style.borderColor = '#dee2e6';
+                    }, 500);
+                });
+                
+                weekButtonsContainer.appendChild(weekBtn);
+            });
             
             // Handle keyboard shortcuts with proper cleanup
             function cleanup() {
@@ -9090,8 +9329,19 @@ Kan ha #taggar överallt.
                 
                 node.data('tags', newTags);
                 
+                // Apply selected color if any
+                if (selectedColor) {
+                    node.data('cardColor', `card-color-${selectedColor}`);
+                } else if (selectedColor === '') {
+                    // Remove color if "no color" was selected
+                    node.data('cardColor', null);
+                }
+                
                 // Apply auto-gray coloring for #done tags
                 applyAutoDoneColoring(node);
+                
+                // Force refresh of node styling
+                cy.style().update();
                 
                 refreshSearchAndFilter();
                 cleanup();
@@ -11571,44 +11821,6 @@ Kan ha #taggar överallt.
             const container = document.getElementById('columnContainer');
             container.innerHTML = '';
             
-            // Add sort button for touch devices at the top
-            if (isMobileDevice()) {
-                const sortHeader = document.createElement('div');
-                sortHeader.style.cssText = `
-                    padding: 10px 15px;
-                    background: #f8f9fa;
-                    border-bottom: 1px solid #dee2e6;
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    position: sticky;
-                    top: 0;
-                    z-index: 100;
-                `;
-                
-                const sortLabel = document.createElement('span');
-                sortLabel.textContent = 'Kolumnvy';
-                sortLabel.style.cssText = 'font-weight: 500; color: #495057;';
-                
-                const sortButton = document.createElement('button');
-                sortButton.innerHTML = '📊 Sortera';
-                sortButton.style.cssText = `
-                    padding: 8px 16px;
-                    background: #007acc;
-                    color: white;
-                    border: none;
-                    border-radius: 6px;
-                    font-size: 14px;
-                    cursor: pointer;
-                    touch-action: manipulation;
-                `;
-                
-                sortButton.onclick = () => showColumnViewSortMenu();
-                
-                sortHeader.appendChild(sortLabel);
-                sortHeader.appendChild(sortButton);
-                container.appendChild(sortHeader);
-            }
             
             // Setup background handlers once
             setupColumnBackgroundHandlers();
