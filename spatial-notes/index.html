@@ -10393,12 +10393,14 @@ Kan ha #taggar överallt.
             } else {
                 availableProjects.forEach(project => {
                     const isCurrentProject = project.name === currentProject;
-                    const date = new Date(project.lastModified).toLocaleDateString();
+                    const lastModified = new Date(project.lastModified);
+                    const date = lastModified.toLocaleDateString('sv-SE'); // YYYY-MM-DD format
+                    const time = lastModified.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' }); // HH:MM format
                     html += `
                         <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #eee; ${isCurrentProject ? 'background: #f0f8ff;' : ''}">
                             <div>
                                 <strong>${project.name}</strong> ${isCurrentProject ? '(current)' : ''}
-                                <br><small style="color: #666;">Modified: ${date}</small>
+                                <br><small style="color: #666;">Sparad: ${date} kl. ${time}</small>
                             </div>
                             <div>
                                 ${!isCurrentProject ? `<button onclick="switchToProject('${project.name}')" style="margin-right: 5px; padding: 4px 8px; background: #007acc; color: white; border: none; border-radius: 4px; cursor: pointer;">Switch</button>` : ''}
