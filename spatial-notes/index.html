@@ -30,18 +30,18 @@
             z-index: 1000;
             opacity: 0.8;
             gap: 5px;
-            flex-wrap: nowrap;
-            overflow: hidden;
         }
         
         .search-box {
-            flex: 0 0 280px;
-            min-width: 200px;
+            flex: 1;
+            max-width: 280px;
+            margin-right: 40px;
         }
         
         .tag-filter-box {
-            flex: 0 0 200px;
-            min-width: 150px;
+            flex: 0.7;
+            max-width: 200px;
+            margin-right: 25px;
         }
         
         
@@ -111,10 +111,6 @@
             font-weight: 500;
             transition: all 0.2s ease;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            padding: 8px 16px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
         }
         
         .toolbar-btn:hover {
@@ -145,6 +141,7 @@
         .project-selector {
             position: relative;
             display: inline-block;
+            margin-right: 20px;
             flex-shrink: 0;
         }
         
@@ -187,7 +184,7 @@
             border: 1px solid #dee2e6;
             border-radius: 6px;
             box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
-            z-index: 99999;
+            z-index: 10000;
             min-width: 220px;
             display: none;
             margin-top: 2px;
@@ -245,11 +242,11 @@
             display: none;
             position: absolute;
             right: 0;
-            background: rgba(255, 255, 255, 0.95);
+            background: rgba(255, 255, 255, 0.75);
             min-width: 220px;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
             border-radius: 8px;
-            z-index: 99999;
+            z-index: 10000;
             border: 1px solid rgba(0, 0, 0, 0.1);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
@@ -1309,13 +1306,13 @@
         <div class="tag-filter-box">
             <input type="text" class="tag-filter-input" placeholder='Tags: tech AND psychology NOT done' id="tagFilterInput">
         </div>
-        <button class="toolbar-btn" id="annotationToggleBtn" onclick="toggleAnnotationToolbar()" title="Aktivera/inaktivera annotation-verktyg">
+        <button class="toolbar-btn" id="annotationToggleBtn" onclick="toggleAnnotationToolbar()" title="Aktivera/inaktivera annotation-verktyg" style="padding: 8px 16px;">
             ⬜→⭕
         </button>
-        <button class="toolbar-btn" id="imageUploadBtn" onclick="triggerImageUpload()" title="Tre bildval: Kamera, Galleri, Filväljare">
+        <button class="toolbar-btn" id="imageUploadBtn" onclick="triggerImageUpload()" title="Tre bildval: Kamera, Galleri, Filväljare" style="padding: 8px 16px;">
             📷 Bilder
         </button>
-        <button class="toolbar-btn" id="viewToggleBtn" onclick="toggleView()" title="Växla mellan brädvy och kolumnvy">
+        <button class="toolbar-btn" id="viewToggleBtn" onclick="toggleView()" title="Växla mellan brädvy och kolumnvy" style="padding: 8px 16px;">
             📋 Kolumnvy
         </button>
         
