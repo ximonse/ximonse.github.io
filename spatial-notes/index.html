@@ -1326,11 +1326,14 @@
         <button class="toolbar-btn" id="viewToggleBtn" onclick="toggleView()" title="Växla mellan brädvy och kolumnvy" style="padding: 8px 16px;">
             📋 Kolumnvy
         </button>
-        
+        <button class="toolbar-btn simplified-keep" id="toolbarToggleBtn" onclick="toggleSimplifiedToolbar()" title="Växla mellan förenklad och full toolbar (Shift+T)" style="padding: 8px 16px;">
+            ☰ Toolbar
+        </button>
+
         <!-- Mobile controls (hidden on desktop) -->
         <div class="mobile-controls">
             <button class="mobile-btn zoom-out-btn" onclick="zoomOutToCenter()" title="Zooma ut centralt">🔍−</button>
-            <button class="mobile-btn new-card-btn" onclick="addNewCard()" title="Nytt kort">➕</button>
+            <button class="mobile-btn new-card-btn" onclick="addNewCard()" title="Tap: Nytt kort | Långtryck: Klistra in från clipboard">➕</button>
         </div>
         <div class="menu-dropdown">
             <button class="menu-button toolbar-btn">
@@ -7787,11 +7790,23 @@ Tredje anteckningen...
             isSimplifiedToolbar = !isSimplifiedToolbar;
             localStorage.setItem('spatial-notes-simplified-toolbar', isSimplifiedToolbar);
             updateToolbarDisplay();
-            
-            const statusMessage = isSimplifiedToolbar ? 
-                'Förenklad toolbar aktiverad' : 
+
+            // Update toggle button appearance
+            const toggleBtn = document.getElementById('toolbarToggleBtn');
+            if (toggleBtn) {
+                if (isSimplifiedToolbar) {
+                    toggleBtn.innerHTML = '⚙️ Full Toolbar';
+                    toggleBtn.title = 'Visa full toolbar (Shift+T)';
+                } else {
+                    toggleBtn.innerHTML = '☰ Toolbar';
+                    toggleBtn.title = 'Växla mellan förenklad och full toolbar (Shift+T)';
+                }
+            }
+
+            const statusMessage = isSimplifiedToolbar ?
+                'Förenklad toolbar aktiverad' :
                 'Full toolbar aktiverad';
-            
+
             // Show status message using existing searchInfo element
             const searchInfo = document.getElementById('searchInfo');
             if (searchInfo) {
@@ -7806,7 +7821,19 @@ Tredje anteckningen...
         function updateToolbarDisplay() {
             const toolbar = document.querySelector('.toolbar');
             const allElements = toolbar.children;
-            
+
+            // Update toggle button appearance
+            const toggleBtn = document.getElementById('toolbarToggleBtn');
+            if (toggleBtn) {
+                if (isSimplifiedToolbar) {
+                    toggleBtn.innerHTML = '⚙️ Full Toolbar';
+                    toggleBtn.title = 'Visa full toolbar (Shift+T)';
+                } else {
+                    toggleBtn.innerHTML = '☰ Toolbar';
+                    toggleBtn.title = 'Växla mellan förenklad och full toolbar (Shift+T)';
+                }
+            }
+
             if (isSimplifiedToolbar) {
                 // Hide all elements
                 Array.from(allElements).forEach(el => {
@@ -7814,7 +7841,7 @@ Tredje anteckningen...
                         el.style.display = 'none';
                     }
                 });
-                
+
                 // Show simplified elements
                 showSimplifiedToolbar();
             } else {
@@ -7822,7 +7849,7 @@ Tredje anteckningen...
                 Array.from(allElements).forEach(el => {
                     el.style.display = '';
                 });
-                
+
                 // Hide simplified elements
                 hideSimplifiedToolbar();
             }
@@ -11249,7 +11276,90 @@ Kan ha #taggar överallt.
             
             // Initialize simplified toolbar state
             updateToolbarDisplay();
-            
+
+            // ➕ button long-press functionality for iPad clipboard paste
+            const newCardBtn = document.querySelector('.new-card-btn');
+            if (newCardBtn) {
+                let longPressTimer = null;
+                let isLongPress = false;
+
+                newCardBtn.addEventListener('touchstart', function(e) {
+                    isLongPress = false;
+                    longPressTimer = setTimeout(async () => {
+                        isLongPress = true;
+                        // Long press detected - try to paste from clipboard
+                        try {
+                            const clipboardItems = await navigator.clipboard.read();
+                            for (let item of clipboardItems) {
+                                // Check for image first
+                                for (let type of item.types) {
+                                    if (type.startsWith('image/')) {
+                                        const blob = await item.getAsType(type);
+                                        processImage(blob).then(imageData => {
+                                            // Create at center of viewport
+                                            const centerPos = {
+                                                x: cy.extent().x1 + (cy.extent().x2 - cy.extent().x1) / 2,
+                                                y: cy.extent().y1 + (cy.extent().y2 - cy.extent().y1) / 2
+                                            };
+                                            createImageNodeAtPosition(imageData, 'pasted-' + Date.now() + '.jpg', centerPos);
+
+                                            // Visual feedback
+                                            const searchInfo = document.getElementById('searchInfo');
+                                            if (searchInfo) {
+                                                searchInfo.textContent = '📷 Bild inklistrad från clipboard!';
+                                                searchInfo.classList.add('visible');
+                                                setTimeout(() => searchInfo.classList.remove('visible'), 3000);
+                                            }
+                                        }).catch(err => {
+                                            console.error('Image paste processing failed:', err);
+                                        });
+                                        return;
+                                    }
+                                }
+                            }
+
+                            // If no image, try text
+                            const text = await navigator.clipboard.readText();
+                            if (text && text.trim()) {
+                                const centerPos = {
+                                    x: cy.extent().x1 + (cy.extent().x2 - cy.extent().x1) / 2,
+                                    y: cy.extent().y1 + (cy.extent().y2 - cy.extent().y1) / 2
+                                };
+                                createTextNodeAtPosition(text.trim(), centerPos);
+
+                                // Visual feedback
+                                const searchInfo = document.getElementById('searchInfo');
+                                if (searchInfo) {
+                                    searchInfo.textContent = '📝 Text inklistrad från clipboard!';
+                                    searchInfo.classList.add('visible');
+                                    setTimeout(() => searchInfo.classList.remove('visible'), 3000);
+                                }
+                            }
+                        } catch (err) {
+                            console.error('Clipboard paste failed:', err);
+                            // Show error message
+                            const searchInfo = document.getElementById('searchInfo');
+                            if (searchInfo) {
+                                searchInfo.textContent = '❌ Kunde inte läsa clipboard. Kontrollera behörigheter.';
+                                searchInfo.classList.add('visible');
+                                setTimeout(() => searchInfo.classList.remove('visible'), 3000);
+                            }
+                        }
+                    }, 800); // 800ms for long press
+                });
+
+                newCardBtn.addEventListener('touchend', function(e) {
+                    clearTimeout(longPressTimer);
+                    if (isLongPress) {
+                        e.preventDefault(); // Prevent normal click if it was a long press
+                    }
+                });
+
+                newCardBtn.addEventListener('touchcancel', function(e) {
+                    clearTimeout(longPressTimer);
+                });
+            }
+
             // Enhanced save function that includes Drive sync (after original function is defined)
             setTimeout(() => {
                 const originalSaveBoard = window.saveBoard;
