@@ -5293,13 +5293,13 @@ Svara på svenska och var koncis men hjälpsam. Om du refererar till specifika a
             // Style the annotation
             newNode.addClass('annotation-shape');
             newNode.style({
-                'width': Math.max(text.length * 15, 200),
-                'height': 100,
+                'width': Math.max(text.length * 45, 600),
+                'height': 300,
                 'background-color': colorMap[color] || '#ff4444',
                 'label': text,
                 'text-valign': 'center',
                 'text-halign': 'center',
-                'font-size': '24px',
+                'font-size': '50px',
                 'font-weight': 'bold',
                 'color': '#ffffff',
                 'text-outline-width': 2,
@@ -5308,8 +5308,6 @@ Svara på svenska och var koncis men hjälpsam. Om du refererar till specifika a
                 'border-width': 4,
                 'border-color': '#000000'
             });
-
-            newNode.ungrabify(); // Make it non-draggable initially
 
             // Show status
             const statusDiv = document.getElementById('selectionInfo');
