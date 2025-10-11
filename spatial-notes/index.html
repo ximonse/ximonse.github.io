@@ -27,7 +27,7 @@
             display: flex;
             align-items: center;
             padding: 0 20px;
-            z-index: 1000;
+            z-index: 10000;
             opacity: 0.8;
             gap: 5px;
         }
@@ -1302,8 +1302,30 @@
                 bottom: 0;
                 left: 0;
                 right: 0;
-                height: 300px;
+                height: 40vh;
+                max-height: 280px;
                 border-top: 2px solid #007bff;
+            }
+
+            .ai-panel-header {
+                padding: 10px 15px;
+                min-height: 40px;
+            }
+
+            .ai-panel-messages {
+                flex: 1;
+                min-height: 80px;
+                max-height: calc(40vh - 120px);
+                padding: 10px;
+            }
+
+            .ai-panel-input-area {
+                padding: 10px;
+                flex-shrink: 0;
+            }
+
+            .ai-panel-input {
+                font-size: 16px; /* Prevent zoom on iOS */
             }
         }
 
