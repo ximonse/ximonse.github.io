@@ -1323,17 +1323,17 @@
         <button class="toolbar-btn" id="imageUploadBtn" onclick="triggerImageUpload()" title="Tre bildval: Kamera, Galleri, Filväljare" style="padding: 8px 16px;">
             📷 Bilder
         </button>
+        <button class="toolbar-btn" id="multiImportBtn" onclick="showMultiCardPasteDialog()" title="Skapa flera kort samtidigt (M)" style="padding: 8px 16px;">
+            📋 Multi-import
+        </button>
         <button class="toolbar-btn" id="viewToggleBtn" onclick="toggleView()" title="Växla mellan brädvy och kolumnvy" style="padding: 8px 16px;">
             📋 Kolumnvy
-        </button>
-        <button class="toolbar-btn simplified-keep" id="toolbarToggleBtn" onclick="toggleSimplifiedToolbar()" title="Växla mellan förenklad och full toolbar (Shift+T)" style="padding: 8px 16px;">
-            ☰ Toolbar
         </button>
 
         <!-- Mobile controls (hidden on desktop) -->
         <div class="mobile-controls">
             <button class="mobile-btn zoom-out-btn" onclick="zoomOutToCenter()" title="Zooma ut centralt">🔍−</button>
-            <button class="mobile-btn new-card-btn" onclick="addNewCard()" title="Tap: Nytt kort | Långtryck: Klistra in från clipboard">➕</button>
+            <button class="mobile-btn new-card-btn" onclick="addNewCard()" title="Tap: Nytt kort | Långtryck: Kamera/Bilder">➕</button>
         </div>
         <div class="menu-dropdown">
             <button class="menu-button toolbar-btn">
@@ -1466,6 +1466,85 @@
         // Direct image upload - use the three-choice function directly
         function triggerImageUpload() {
             document.getElementById('hiddenGalleryInput').click();
+        }
+
+        // Show image source menu at specific position (for iPad/mobile)
+        function showImageSourceMenu(clientX, clientY) {
+            // Remove any existing menu
+            const existingMenu = document.getElementById('imageSourceMenu');
+            if (existingMenu) {
+                document.body.removeChild(existingMenu);
+            }
+
+            // Create menu
+            const menu = document.createElement('div');
+            menu.id = 'imageSourceMenu';
+            menu.style.cssText = `
+                position: fixed;
+                left: ${Math.min(clientX, window.innerWidth - 200)}px;
+                top: ${Math.min(clientY, window.innerHeight - 200)}px;
+                background: white;
+                border: 1px solid #ccc;
+                border-radius: 12px;
+                box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+                z-index: 10000;
+                min-width: 180px;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                font-size: 16px;
+                padding: 8px 0;
+            `;
+
+            menu.innerHTML = `
+                <div class="image-menu-item" data-action="camera" style="padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #eee;">
+                    📷 Ta foto
+                </div>
+                <div class="image-menu-item" data-action="gallery" style="padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #eee;">
+                    🖼️ Välj från galleri
+                </div>
+                <div class="image-menu-item" data-action="file" style="padding: 12px 16px; cursor: pointer;">
+                    📁 Välj fil
+                </div>
+            `;
+
+            document.body.appendChild(menu);
+
+            // Handle menu item clicks
+            menu.querySelectorAll('.image-menu-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const action = item.dataset.action;
+                    if (action === 'camera') {
+                        document.getElementById('hiddenCameraInput').click();
+                    } else if (action === 'gallery') {
+                        document.getElementById('hiddenGalleryInput').click();
+                    } else if (action === 'file') {
+                        document.getElementById('hiddenGalleryInput').click();
+                    }
+                    document.body.removeChild(menu);
+                });
+
+                // Add hover effect
+                item.addEventListener('mouseenter', function() {
+                    this.style.background = '#f0f0f0';
+                });
+                item.addEventListener('mouseleave', function() {
+                    this.style.background = 'white';
+                });
+            });
+
+            // Close menu when clicking outside
+            setTimeout(() => {
+                const closeHandler = (e) => {
+                    if (!menu.contains(e.target)) {
+                        if (document.body.contains(menu)) {
+                            document.body.removeChild(menu);
+                        }
+                        document.removeEventListener('click', closeHandler);
+                        document.removeEventListener('touchstart', closeHandler);
+                    }
+                };
+                document.addEventListener('click', closeHandler);
+                document.addEventListener('touchstart', closeHandler);
+            }, 100);
         }
 
         // Process uploaded images
@@ -3334,11 +3413,13 @@
         function pinCard(node) {
             node.addClass('pinned');
             node.data('pinned', true);
+            node.ungrabify(); // Prevent dragging
         }
-        
+
         function unpinCard(node) {
             node.removeClass('pinned');
             node.data('pinned', false);
+            node.grabify(); // Allow dragging again
         }
         
         // Context Menu System
@@ -6499,8 +6580,12 @@ Tredje anteckningen...
                     // Restore pinned state
                     if (cardData.pinned) {
                         newNode.addClass('pinned');
+                        newNode.data('pinned', true);
+                        newNode.ungrabify(); // Prevent dragging pinned cards
+                    } else {
+                        newNode.grabify(); // Make sure non-pinned cards are draggable
                     }
-                    
+
                     // Restore annotation shape class and text label
                     if (cardData.isAnnotation && cardData.annotationType === 'shape') {
                         newNode.addClass('annotation-shape');
@@ -6981,8 +7066,12 @@ Tredje anteckningen...
                             // Restore pinned state
                             if (cardData.pinned) {
                                 newNode.addClass('pinned');
+                                newNode.data('pinned', true);
+                                newNode.ungrabify(); // Prevent dragging pinned cards
+                            } else {
+                                newNode.grabify(); // Make sure non-pinned cards are draggable
                             }
-                            
+
                             // Restore annotation shape class and text label
                             if (cardData.isAnnotation && cardData.annotationType === 'shape') {
                                 newNode.addClass('annotation-shape');
@@ -10736,6 +10825,10 @@ Kan ha #taggar överallt.
                 const isPinned = node.data('isPinned');
                 if (isPinned) {
                     node.addClass('pinned');
+                    node.data('pinned', true);
+                    node.ungrabify(); // Prevent dragging pinned cards
+                } else {
+                    node.grabify(); // Make sure non-pinned cards are draggable
                 }
                 
                 // Update text content and height with delay to ensure DOM is ready
@@ -10998,9 +11091,13 @@ Kan ha #taggar överallt.
                                 const colorValue = getCardColorValue(cardColor, getCurrentTheme());
                                 node.style('background-color', colorValue);
                             }
-                            
+
                             if (node.data('isPinned')) {
                                 node.addClass('pinned');
+                                node.data('pinned', true);
+                                node.ungrabify(); // Prevent dragging pinned cards
+                            } else {
+                                node.grabify(); // Make sure non-pinned cards are draggable
                             }
                         });
                     });
@@ -11285,65 +11382,13 @@ Kan ha #taggar överallt.
 
                 newCardBtn.addEventListener('touchstart', function(e) {
                     isLongPress = false;
-                    longPressTimer = setTimeout(async () => {
+                    longPressTimer = setTimeout(() => {
                         isLongPress = true;
-                        // Long press detected - try to paste from clipboard
-                        try {
-                            const clipboardItems = await navigator.clipboard.read();
-                            for (let item of clipboardItems) {
-                                // Check for image first
-                                for (let type of item.types) {
-                                    if (type.startsWith('image/')) {
-                                        const blob = await item.getAsType(type);
-                                        processImage(blob).then(imageData => {
-                                            // Create at center of viewport
-                                            const centerPos = {
-                                                x: cy.extent().x1 + (cy.extent().x2 - cy.extent().x1) / 2,
-                                                y: cy.extent().y1 + (cy.extent().y2 - cy.extent().y1) / 2
-                                            };
-                                            createImageNodeAtPosition(imageData, 'pasted-' + Date.now() + '.jpg', centerPos);
-
-                                            // Visual feedback
-                                            const searchInfo = document.getElementById('searchInfo');
-                                            if (searchInfo) {
-                                                searchInfo.textContent = '📷 Bild inklistrad från clipboard!';
-                                                searchInfo.classList.add('visible');
-                                                setTimeout(() => searchInfo.classList.remove('visible'), 3000);
-                                            }
-                                        }).catch(err => {
-                                            console.error('Image paste processing failed:', err);
-                                        });
-                                        return;
-                                    }
-                                }
-                            }
-
-                            // If no image, try text
-                            const text = await navigator.clipboard.readText();
-                            if (text && text.trim()) {
-                                const centerPos = {
-                                    x: cy.extent().x1 + (cy.extent().x2 - cy.extent().x1) / 2,
-                                    y: cy.extent().y1 + (cy.extent().y2 - cy.extent().y1) / 2
-                                };
-                                createTextNodeAtPosition(text.trim(), centerPos);
-
-                                // Visual feedback
-                                const searchInfo = document.getElementById('searchInfo');
-                                if (searchInfo) {
-                                    searchInfo.textContent = '📝 Text inklistrad från clipboard!';
-                                    searchInfo.classList.add('visible');
-                                    setTimeout(() => searchInfo.classList.remove('visible'), 3000);
-                                }
-                            }
-                        } catch (err) {
-                            console.error('Clipboard paste failed:', err);
-                            // Show error message
-                            const searchInfo = document.getElementById('searchInfo');
-                            if (searchInfo) {
-                                searchInfo.textContent = '❌ Kunde inte läsa clipboard. Kontrollera behörigheter.';
-                                searchInfo.classList.add('visible');
-                                setTimeout(() => searchInfo.classList.remove('visible'), 3000);
-                            }
+                        // Long press detected - show image source menu
+                        // This works better on iPad than clipboard API (which has strict permission requirements)
+                        const touch = e.touches[0];
+                        if (touch) {
+                            showImageSourceMenu(touch.clientX, touch.clientY);
                         }
                     }, 800); // 800ms for long press
                 });
@@ -12604,15 +12649,30 @@ Kan ha #taggar överallt.
                 </div>
                 
                 <!-- Tags Section -->
-                <div style="padding: 12px 16px;">
+                <div style="padding: 12px 16px; border-bottom: 1px solid #eee;">
                     <div style="font-weight: bold; margin-bottom: 8px; color: #333;">Taggar</div>
                     <div class="mobile-menu-item" data-action="add-tag" style="padding: 8px 12px; cursor: pointer; border-radius: 8px; margin-bottom: 4px;">➕ Lägg till tagg</div>
                     <div class="mobile-menu-item" data-action="remove-tag" style="padding: 8px 12px; cursor: pointer; border-radius: 8px;">➖ Ta bort tagg</div>
                 </div>
+
+                <!-- Pin Section -->
+                <div style="padding: 12px 16px;">
+                    <div style="font-weight: bold; margin-bottom: 8px; color: #333;">Pinning</div>
+                    <div class="mobile-menu-item" data-action="toggle-pin" id="mobilePinToggle" style="padding: 8px 12px; cursor: pointer; border-radius: 8px;">📌 Pinna kort</div>
+                </div>
             `;
             
             document.body.appendChild(menu);
-            
+
+            // Update pin button text based on current state
+            const pinToggleBtn = menu.querySelector('#mobilePinToggle');
+            const anyPinned = targetNodes.some(node => node.hasClass('pinned'));
+            if (anyPinned) {
+                pinToggleBtn.innerHTML = '📌 Ta bort pinning';
+            } else {
+                pinToggleBtn.innerHTML = '📌 Pinna kort';
+            }
+
             // Create color dots dynamically with real colors
             const colorGrid = menu.querySelector('#mobileColorGrid');
             const currentTheme = getCurrentTheme();
@@ -12688,7 +12748,7 @@ Kan ha #taggar överallt.
                 document.body.removeChild(menu);
             });
             
-            // Tag action handlers
+            // Tag and Pin action handlers
             menu.querySelectorAll('.mobile-menu-item').forEach(item => {
                 item.addEventListener('click', () => {
                     const action = item.dataset.action;
@@ -12699,6 +12759,34 @@ Kan ha #taggar överallt.
                     } else if (action === 'remove-tag') {
                         console.log('DEBUG calling removeTagFromSelected from mobile menu');
                         removeTagFromSelected();
+                    } else if (action === 'toggle-pin') {
+                        console.log('DEBUG toggling pin for selected cards');
+                        const anyPinned = targetNodes.some(node => node.hasClass('pinned'));
+                        targetNodes.forEach(node => {
+                            if (anyPinned) {
+                                unpinCard(node);
+                                node.grabify(); // Make draggable again
+                            } else {
+                                pinCard(node);
+                                node.ungrabify(); // Make undraggable
+                            }
+                        });
+
+                        // Update column view if active
+                        if (isColumnView) {
+                            renderColumnViewDebounced();
+                        }
+
+                        // Show feedback
+                        const statusDiv = document.getElementById('selectionInfo');
+                        if (statusDiv) {
+                            const action = anyPinned ? 'Tog bort pinning från' : 'Pinnade';
+                            statusDiv.textContent = `${action} ${targetNodes.length} kort`;
+                            statusDiv.classList.add('visible');
+                            setTimeout(() => statusDiv.classList.remove('visible'), 2000);
+                        }
+
+                        saveBoard();
                     }
                     document.body.removeChild(menu);
                 });
