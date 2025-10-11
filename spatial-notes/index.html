@@ -1329,6 +1329,9 @@
         <button class="toolbar-btn" id="aiAssistantBtn" onclick="showAIAssistant()" title="Fråga AI om dina anteckningar" style="padding: 8px 16px;">
             🤖 AI-assistent
         </button>
+        <button class="toolbar-btn" id="showAllBtn" onclick="showAllCards()" title="Visa alla kort och zooma ut" style="padding: 8px 16px;">
+            👁️ Visa alla
+        </button>
         <button class="toolbar-btn" id="viewToggleBtn" onclick="toggleView()" title="Växla mellan brädvy och kolumnvy" style="padding: 8px 16px;">
             📋 Kolumnvy
         </button>
@@ -4949,9 +4952,9 @@ Svara på svenska och var koncis men hjälpsam. Om du refererar till specifika a
             // Show status message
             const statusDiv = document.getElementById('selectionInfo');
             if (statusDiv) {
-                statusDiv.textContent = `AI visar ${card_ids.length} kort: ${reason}`;
+                statusDiv.textContent = `AI visar ${card_ids.length} kort: ${reason}. (Rensa sökfältet för att visa alla kort igen)`;
                 statusDiv.classList.add('visible');
-                setTimeout(() => statusDiv.classList.remove('visible'), 4000);
+                setTimeout(() => statusDiv.classList.remove('visible'), 8000);
             }
         }
 
@@ -5194,18 +5197,34 @@ Svara på svenska och var koncis men hjälpsam. Om du refererar till specifika a
         }
 
 
+        // Show all cards (reset AI filter and zoom)
+        function showAllCards() {
+            cy.nodes().style('display', 'element');
+            cy.fit(null, 50);
+
+            const statusDiv = document.getElementById('selectionInfo');
+            if (statusDiv) {
+                statusDiv.textContent = 'Alla kort visas nu';
+                statusDiv.classList.add('visible');
+                setTimeout(() => statusDiv.classList.remove('visible'), 2000);
+            }
+        }
+
         // Clear search
         function clearSearch() {
             searchActive = false;
-            
+
             cy.nodes().removeClass('search-match');
             cy.nodes().removeClass('search-non-match'); // Remove blur from non-matches
             cy.nodes().data('searchMatch', false);
             cy.nodes().unselect(); // Avmarkera alla kort när sökning rensas
-            
+
+            // Show all cards (reset display from AI filter)
+            cy.nodes().style('display', 'element');
+
             const searchInfo = document.getElementById('searchInfo');
             searchInfo.classList.remove('visible');
-            
+
             // Hide mobile select button
             const selectBtn = document.getElementById('searchSelectBtn');
             selectBtn.style.display = 'none';
