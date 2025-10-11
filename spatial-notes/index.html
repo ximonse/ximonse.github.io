@@ -2162,6 +2162,10 @@
                     node.data('label', newText);
                     console.log('✅ Updated annotation text to:', newText);
                 }
+
+                // Save immediately to prevent data loss from autosave/Drive sync
+                saveBoard();
+
                 document.body.removeChild(overlay);
             });
             
@@ -3479,6 +3483,10 @@
                     const selectedNodes = cy.$('node:selected');
                     const nodesToProcess = node.selected() && selectedNodes.length > 1 ? selectedNodes : [node];
                     nodesToProcess.forEach(n => removeCardColor(n));
+
+                    // Save immediately to prevent data loss from autosave/Drive sync
+                    saveBoard();
+
                     hideContextMenu();
                 };
                 menu.appendChild(removeColorOption);
@@ -4056,6 +4064,10 @@
                         console.log(`Color value:`, colorValue);
                         node.style('background-color', colorValue);
                     });
+
+                    // Save immediately to prevent data loss from autosave/Drive sync
+                    saveBoard();
+
                     hideColorPicker();
                     console.log(`Applied color ${i} to ${nodes.length} cards`);
                 };
@@ -9560,11 +9572,15 @@ Kan ha #taggar överallt.
                 
                 // Apply auto-gray coloring for #done tags
                 applyAutoDoneColoring(node);
-                
+
                 // Force refresh of node styling
                 cy.style().update();
-                
+
                 refreshSearchAndFilter();
+
+                // Save immediately to prevent data loss from autosave/Drive sync
+                saveBoard();
+
                 cleanup();
             };
             
@@ -9680,13 +9696,16 @@ Kan ha #taggar överallt.
                 if (searchInput.value.trim()) {
                     performSearch(searchInput.value);
                 }
-                
+
                 // Re-run tag filter if active
                 const tagFilterInput = document.getElementById('tagFilterInput');
                 if (tagFilterInput.value.trim()) {
                     performTagFilter(tagFilterInput.value);
                 }
-                
+
+                // Save immediately to prevent data loss from autosave/Drive sync
+                saveBoard();
+
                 cleanup();
             };
             
@@ -9790,11 +9809,15 @@ Kan ha #taggar överallt.
                 node.data('title', newTitle);
                 node.data('text', newText);
                 node.data('tags', newTags);
-                
+
                 // Apply auto-gray coloring for #done tags
                 applyAutoDoneColoring(node);
-                
+
                 refreshSearchAndFilter();
+
+                // Save immediately to prevent data loss from autosave/Drive sync
+                saveBoard();
+
                 cleanup();
             };
             
@@ -11805,14 +11828,17 @@ Kan ha #taggar överallt.
                         const colorNumber = parseInt(e.key);
                         const colorId = `card-color-${colorNumber}`;
                         console.log(`Direct color shortcut ${colorNumber}, applying to ${selectedNodes.length} cards`);
-                        
+
                         // Apply color to all selected nodes
                         selectedNodes.forEach(node => {
                             node.data('cardColor', colorId);
                             const colorValue = getCardColorValue(colorId, getCurrentTheme());
                             node.style('background-color', colorValue);
                         });
-                        
+
+                        // Save immediately to prevent data loss from autosave/Drive sync
+                        saveBoard();
+
                         console.log(`Applied color ${colorNumber} to ${selectedNodes.length} cards via shortcut`);
                     }
                 }
@@ -11823,12 +11849,15 @@ Kan ha #taggar överallt.
                     if (selectedNodes.length > 0) {
                         e.preventDefault();
                         console.log(`Remove color shortcut, removing from ${selectedNodes.length} cards`);
-                        
+
                         // Remove color from all selected nodes
                         selectedNodes.forEach(node => {
                             removeCardColor(node);
                         });
-                        
+
+                        // Save immediately to prevent data loss from autosave/Drive sync
+                        saveBoard();
+
                         console.log(`Removed color from ${selectedNodes.length} cards via shortcut`);
                     }
                 }
@@ -12715,7 +12744,7 @@ Kan ha #taggar överallt.
                     if (isColumnView) {
                         renderColumnViewDebounced();
                     }
-                    
+
                     // Show feedback
                     const statusDiv = document.getElementById('selectionInfo');
                     if (statusDiv) {
@@ -12723,7 +12752,10 @@ Kan ha #taggar överallt.
                         statusDiv.classList.add('visible');
                         setTimeout(() => statusDiv.classList.remove('visible'), 2000);
                     }
-                    
+
+                    // Save immediately to prevent data loss from autosave/Drive sync
+                    saveBoard();
+
                     document.body.removeChild(menu);
                 });
             });
@@ -12733,18 +12765,21 @@ Kan ha #taggar överallt.
                 targetNodes.forEach(node => {
                     removeCardColor(node);
                 });
-                
+
                 if (isColumnView) {
                     renderColumnViewDebounced();
                 }
-                
+
                 const statusDiv = document.getElementById('selectionInfo');
                 if (statusDiv) {
                     statusDiv.textContent = `Tog bort färg från ${targetNodes.length} kort`;
                     statusDiv.classList.add('visible');
                     setTimeout(() => statusDiv.classList.remove('visible'), 2000);
                 }
-                
+
+                // Save immediately to prevent data loss from autosave/Drive sync
+                saveBoard();
+
                 document.body.removeChild(menu);
             });
             
