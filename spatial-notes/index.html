@@ -5085,10 +5085,12 @@ Tredje anteckningen...
             cy.nodes().forEach(node => {
                 const title = node.data('title') || '';
                 const text = node.data('text') || '';
-                const fullContent = title + ' ' + text;
-                
+                const tags = node.data('tags') || [];
+                const tagsString = tags.join(' ');
+                const fullContent = title + ' ' + text + ' ' + tagsString;
+
                 console.log(`Checking card "${title}": "${fullContent}"`);
-                
+
                 // Parse dates and check for todo/done
                 const datePatterns = parseDateFromContent(fullContent);
                 const hasTodo = hasTodoTag(node);
@@ -5232,8 +5234,10 @@ Tredje anteckningen...
         function getEarliestDateFromContent(node) {
             const title = node.data('title') || '';
             const text = node.data('text') || '';
-            const fullContent = title + ' ' + text;
-            
+            const tags = node.data('tags') || [];
+            const tagsString = tags.join(' ');
+            const fullContent = title + ' ' + text + ' ' + tagsString;
+
             const datePatterns = parseDateFromContent(fullContent);
             
             if (!datePatterns || datePatterns.length === 0) {
