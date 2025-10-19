@@ -1499,14 +1499,14 @@
         .eink-theme .tag-filter-input,
         .eink-theme .search-input {
             background: #ffffff;
-            border: 2px solid #000000;
+            border: 1px solid #666666;
             color: #000000;
             box-shadow: none;
         }
 
         .eink-theme .tag-filter-input:focus,
         .eink-theme .search-input:focus {
-            border: 3px solid #000000;
+            border: 2px solid #000000;
             background: #ffffff;
             box-shadow: none;
         }
@@ -1515,7 +1515,7 @@
         .eink-theme .toolbar-btn {
             background: #ffffff;
             color: #000000;
-            border: 2px solid #000000;
+            border: 1px solid #666666;
             box-shadow: none;
         }
 
@@ -1528,7 +1528,7 @@
         .eink-theme .dropdown-content {
             background: #ffffff;
             color: #000000;
-            border: 2px solid #000000;
+            border: 1px solid #666666;
             box-shadow: none;
         }
 
@@ -1565,18 +1565,18 @@
         /* E-ink canvas - simple checkerboard without gradients */
         body.eink-theme #cy {
             background-image:
-                linear-gradient(45deg, #f0f0f0 25%, transparent 25%),
-                linear-gradient(-45deg, #f0f0f0 25%, transparent 25%),
-                linear-gradient(45deg, transparent 75%, #f0f0f0 75%),
-                linear-gradient(-45deg, transparent 75%, #f0f0f0 75%);
+                linear-gradient(45deg, #e8e8e8 25%, transparent 25%),
+                linear-gradient(-45deg, #e8e8e8 25%, transparent 25%),
+                linear-gradient(45deg, transparent 75%, #e8e8e8 75%),
+                linear-gradient(-45deg, transparent 75%, #e8e8e8 75%);
             background-size: 20px 20px;
             background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
-            background-color: #ffffff;
+            background-color: #f5f5f5;
         }
 
         .eink-theme .context-menu {
             background: #ffffff;
-            border: 2px solid #000000;
+            border: 1px solid #666666;
             box-shadow: none;
         }
 
@@ -1593,7 +1593,7 @@
         .eink-theme .annotation-toolbar.active {
             background: #ffffff;
             color: #000000;
-            border: 2px solid #000000;
+            border: 1px solid #666666;
         }
 
         .eink-theme .annotation-tool {
@@ -1631,17 +1631,17 @@
 
         .eink-theme .column-card {
             background: #ffffff;
-            border: 2px solid #000000;
+            border: 1px solid #666666;
             color: #000000;
             box-shadow: none;
         }
 
         .eink-theme .column-card:hover {
-            border: 3px solid #000000;
+            border: 2px solid #000000;
         }
 
         .eink-theme .column-card.search-match {
-            border: 3px solid #000000;
+            border: 2px solid #000000;
             background: #f0f0f0;
         }
 
@@ -1652,29 +1652,29 @@
 
         .eink-theme .color-picker-popup {
             background: #ffffff;
-            border: 2px solid #000000;
+            border: 1px solid #666666;
             color: #000000;
             box-shadow: none;
         }
 
         .eink-theme .color-picker-dot {
-            border: 2px solid #000000;
+            border: 1px solid #666666;
         }
 
         .eink-theme .color-picker-cancel {
             background: #ffffff;
-            border: 2px solid #000000;
+            border: 1px solid #666666;
             color: #000000;
         }
 
         .eink-theme .ai-panel {
             background: #ffffff;
-            border: 2px solid #000000;
+            border: 1px solid #666666;
         }
 
         .eink-theme .ai-panel-header {
             background: #f0f0f0;
-            border-bottom: 2px solid #000000;
+            border-bottom: 1px solid #666666;
         }
 
         .eink-theme .ai-panel-title {
@@ -1684,18 +1684,18 @@
         .eink-theme .ai-message.assistant {
             background: #f0f0f0;
             color: #000000;
-            border: 1px solid #000000;
+            border: 1px solid #666666;
         }
 
         .eink-theme .ai-panel-input-area {
             background: #ffffff;
-            border-top: 2px solid #000000;
+            border-top: 1px solid #666666;
         }
 
         .eink-theme .ai-panel-input {
             background: #ffffff;
             color: #000000;
-            border: 2px solid #000000;
+            border: 1px solid #666666;
         }
     </style>
 </head>
@@ -1768,18 +1768,18 @@
                 <span>▼</span>
             </button>
             <div class="dropdown-content">
-                <button onclick="saveBoard()">💾 Spara (LocalStorage)</button>
-                <button onclick="saveWithTimestamp()">💾 Spara fil</button>
-                <button onclick="saveAs()">💾 Spara som...</button>
-                <button onclick="loadBoard()">📂 Ladda fil</button>
-                <button onclick="exportToJSON()">📋 Exportera JSON</button>
-                <button onclick="importFromJSON()">📁 Importera JSON</button>
-                <button onclick="importFromExtractor()">📥 Från PDF-Extractor</button>
-                <button onclick="toggleGoogleDriveAuth()" id="googleDriveBtn">🔗 Google Drive</button>
-                <button onclick="toggleMetadataView()" id="metadataBtn">🔍 Metadata</button>
-                <button onclick="debugDumpPositions()">🐛 Debug Positioner</button>
-                <button onclick="toggleDarkTheme()" id="themeBtn">🌙 Mörkt Tema</button>
-                <button onclick="clearBoard()">🗑️ Rensa</button>
+                <button onclick="closeMenuDropdowns(); saveBoard()">💾 Spara (LocalStorage)</button>
+                <button onclick="closeMenuDropdowns(); saveWithTimestamp()">💾 Spara fil</button>
+                <button onclick="closeMenuDropdowns(); saveAs()">💾 Spara som...</button>
+                <button onclick="closeMenuDropdowns(); loadBoard()">📂 Ladda fil</button>
+                <button onclick="closeMenuDropdowns(); exportToJSON()">📋 Exportera JSON</button>
+                <button onclick="closeMenuDropdowns(); importFromJSON()">📁 Importera JSON</button>
+                <button onclick="closeMenuDropdowns(); importFromExtractor()">📥 Från PDF-Extractor</button>
+                <button onclick="closeMenuDropdowns(); toggleGoogleDriveAuth()" id="googleDriveBtn">🔗 Google Drive</button>
+                <button onclick="closeMenuDropdowns(); toggleMetadataView()" id="metadataBtn">🔍 Metadata</button>
+                <button onclick="closeMenuDropdowns(); debugDumpPositions()">🐛 Debug Positioner</button>
+                <button onclick="closeMenuDropdowns(); toggleDarkTheme()" id="themeBtn">🌙 Mörkt Tema</button>
+                <button onclick="closeMenuDropdowns(); clearBoard()">🗑️ Rensa</button>
             </div>
         </div>
         
@@ -1790,23 +1790,23 @@
                 <span>▼</span>
             </button>
             <div class="dropdown-content">
-                <button onclick="executeCommand('H')">H</button>
-                <button onclick="executeCommand('V')">V</button>
-                <button onclick="executeCommand('G+V')">G+V</button>
-                <button onclick="executeCommand('G+H')">G+H</button>
-                <button onclick="executeCommand('G+T')">G+T</button>
-                <button onclick="executeCommand('QQ')">QQ</button>
-                <button onclick="executeCommand('Q')">Q</button>
-                <button onclick="executeCommand('C')">C</button>
-                <button onclick="executeCommand('T')">🎨 T</button>
-                <button onclick="showSortMenu(event)">📊 Sortera</button>
-                <button onclick="executeCommand('Pin')">📌 Pin</button>
-                <button onclick="executeCommand('Unpin')">🔓 Unpin</button>
-                <button onclick="executeCommand('Delete')">🗑️ Delete</button>
-                <button onclick="executeCommand('Ctrl+Z')">Ctrl+Z</button>
-                <button onclick="executeCommand('Ctrl+Y')">Ctrl+Y</button>
-                <button onclick="executeCommand('Ctrl+A')">Ctrl+A</button>
-                <button onclick="executeCommand('Ctrl+S')">Ctrl+S</button>
+                <button onclick="closeMenuDropdowns(); executeCommand('H')">H</button>
+                <button onclick="closeMenuDropdowns(); executeCommand('V')">V</button>
+                <button onclick="closeMenuDropdowns(); executeCommand('G+V')">G+V</button>
+                <button onclick="closeMenuDropdowns(); executeCommand('G+H')">G+H</button>
+                <button onclick="closeMenuDropdowns(); executeCommand('G+T')">G+T</button>
+                <button onclick="closeMenuDropdowns(); executeCommand('QQ')">QQ</button>
+                <button onclick="closeMenuDropdowns(); executeCommand('Q')">Q</button>
+                <button onclick="closeMenuDropdowns(); executeCommand('C')">C</button>
+                <button onclick="closeMenuDropdowns(); executeCommand('T')">🎨 T</button>
+                <button onclick="closeMenuDropdowns(); showSortMenu(event)">📊 Sortera</button>
+                <button onclick="closeMenuDropdowns(); executeCommand('Pin')">📌 Pin</button>
+                <button onclick="closeMenuDropdowns(); executeCommand('Unpin')">🔓 Unpin</button>
+                <button onclick="closeMenuDropdowns(); executeCommand('Delete')">🗑️ Delete</button>
+                <button onclick="closeMenuDropdowns(); executeCommand('Ctrl+Z')">Ctrl+Z</button>
+                <button onclick="closeMenuDropdowns(); executeCommand('Ctrl+Y')">Ctrl+Y</button>
+                <button onclick="closeMenuDropdowns(); executeCommand('Ctrl+A')">Ctrl+A</button>
+                <button onclick="closeMenuDropdowns(); executeCommand('Ctrl+S')">Ctrl+S</button>
             </div>
         </div>
     </div>
@@ -11773,13 +11773,21 @@ Kan ha #taggar överallt.
         function closeProjectDropdownOnClickOutside(event) {
             const dropdown = document.getElementById('projectDropdown');
             const button = document.getElementById('projectButton');
-            
+
             if (!dropdown.contains(event.target) && !button.contains(event.target)) {
                 dropdown.classList.remove('show');
                 document.removeEventListener('click', closeProjectDropdownOnClickOutside);
             }
         }
-        
+
+        // Close menu dropdowns
+        function closeMenuDropdowns() {
+            const menuDropdowns = document.querySelectorAll('.menu-dropdown');
+            menuDropdowns.forEach(dropdown => {
+                dropdown.classList.remove('active');
+            });
+        }
+
         // Rename current project
         function renameProject() {
             const dropdown = document.getElementById('projectDropdown');
