@@ -9489,18 +9489,27 @@ Svara på svenska och var koncis men hjälpsam. Om du refererar till specifika a
             searchBtn.style.cssText = 'padding: 8px 12px;';
             searchBtn.onclick = showSmartSearchDialog;
             
-            // Sort button 
+            // Sort button
             const sortBtn = document.createElement('button');
             sortBtn.innerHTML = '📊';
             sortBtn.className = 'toolbar-btn';
             sortBtn.title = 'Sortera kort';
             sortBtn.style.cssText = 'padding: 8px 12px;';
             sortBtn.onclick = (event) => showSortMenu(event);
-            
+
+            // Toggle to full toolbar button
+            const expandBtn = document.createElement('button');
+            expandBtn.innerHTML = '⚙️ Meny';
+            expandBtn.className = 'toolbar-btn';
+            expandBtn.title = 'Visa hela menyn (Shift+T)';
+            expandBtn.style.cssText = 'padding: 8px 12px; margin-left: auto;';  // Push to right
+            expandBtn.onclick = toggleSimplifiedToolbar;
+
             simplifiedDiv.appendChild(importBtn);
             simplifiedDiv.appendChild(searchBtn);
             simplifiedDiv.appendChild(sortBtn);
-            
+            simplifiedDiv.appendChild(expandBtn);
+
             toolbar.appendChild(simplifiedDiv);
         }
         
