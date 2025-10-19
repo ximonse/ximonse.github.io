@@ -12306,7 +12306,16 @@ Kan ha #taggar överallt.
                                 source_file: card.source_file || '',
                                 matched_terms: card.matched_terms || '',
                                 isManualCard: card.isManualCard || false,
-                                isPinned: card.isPinned || false
+                                isPinned: card.isPinned || false,
+                                // IMAGE SUPPORT - Essential for preserving pasted images!
+                                type: card.type || 'text',
+                                imageData: card.imageData || null,
+                                imageWidth: card.imageWidth || null,
+                                imageHeight: card.imageHeight || null,
+                                calculatedHeight: card.calculatedHeight || null,
+                                annotation: card.annotation || null,
+                                searchableText: card.searchableText || null,
+                                originalFileName: card.originalFileName || null
                             };
                             
                             const node = cy.add({
@@ -12316,7 +12325,17 @@ Kan ha #taggar överallt.
                             
                             // Apply auto-gray coloring for #done tags
                             applyAutoDoneColoring(node);
-                            
+
+                            // Apply image styling if this is an image node
+                            if (card.type === 'image' && card.imageData) {
+                                console.log('🖼️ Restoring image from Drive:', card.originalFileName);
+                                node.style({
+                                    'background-image': card.imageData,
+                                    'background-fit': 'cover',
+                                    'width': '300px'
+                                });
+                            }
+
                             // Apply colors and pinning immediately, skip height for now
                             const cardColor = node.data('cardColor');
                             if (cardColor) {
