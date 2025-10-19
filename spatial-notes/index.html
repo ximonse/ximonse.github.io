@@ -1547,8 +1547,6 @@
         <!-- Mobile controls (hidden on desktop) -->
         <div class="mobile-controls">
             <button class="mobile-btn zoom-out-btn" onclick="zoomOutToCenter()" title="Zooma ut centralt">🔍−</button>
-            <button class="mobile-btn gallery-btn" onclick="openGalleryPicker()" title="Välj bild från galleri/Pickings">🖼️</button>
-            <button class="mobile-btn clipboard-btn" onclick="pasteFromClipboard()" title="Klistra in från clipboard">📋</button>
             <button class="mobile-btn new-card-btn" onclick="addNewCard()" title="Tap: Nytt kort | Långtryck: Kamera/Bilder">➕</button>
         </div>
         <div class="menu-dropdown">
@@ -1700,36 +1698,6 @@ Exempel: Visa alla kort om projektet, Sortera todos i veckogrid" rows="2"></text
         // Direct image upload - use the three-choice function directly
         function triggerImageUpload() {
             document.getElementById('hiddenGalleryInput').click();
-        }
-
-        // Open gallery picker (for toolbar button)
-        function openGalleryPicker() {
-            document.getElementById('hiddenGalleryInput').click();
-        }
-
-        // Paste from clipboard (for toolbar button)
-        async function pasteFromClipboard() {
-            // Get viewport center position
-            const container = document.getElementById('cy');
-            const rect = container.getBoundingClientRect();
-            const clientX = rect.left + rect.width / 2;
-            const clientY = rect.top + rect.height / 2;
-
-            try {
-                await pasteClipboardContent(clientX, clientY);
-            } catch (err) {
-                console.error('Clipboard paste failed:', err);
-                // Show user-friendly message
-                const searchInfo = document.getElementById('searchInfo');
-                if (searchInfo) {
-                    searchInfo.textContent = '❌ Kunde inte klistra in. Kontrollera behörigheter.';
-                    searchInfo.style.color = '#ef4444';
-                    setTimeout(() => {
-                        searchInfo.textContent = '';
-                        searchInfo.style.color = '';
-                    }, 3000);
-                }
-            }
         }
 
         // Show image source menu at specific position (for iPad/mobile)
