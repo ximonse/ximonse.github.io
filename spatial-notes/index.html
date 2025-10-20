@@ -12569,6 +12569,7 @@ Kan ha #taggar överallt.
                         title: node.data('title') || '',
                         text: node.data('text') || '',
                         tags: node.data('tags') || [],
+                        hidden_tags: node.data('hidden_tags') || [],
                         x: node.position('x'),
                         y: node.position('y'),
                         cardColor: node.data('cardColor') || '',
@@ -12576,7 +12577,24 @@ Kan ha #taggar överallt.
                         source_file: node.data('source_file') || '',
                         matched_terms: node.data('matched_terms') || '',
                         isManualCard: node.data('isManualCard') || false,
-                        isPinned: node.data('isPinned') || false
+                        isPinned: node.data('isPinned') || false,
+                        pinned: node.hasClass('pinned') || false,
+                        // Image data - CRITICAL for image persistence
+                        type: node.data('type') || 'text',
+                        isImageCard: node.data('isImageCard') || false,
+                        imageData: node.data('imageData') || null,
+                        imageWidth: node.data('imageWidth') || null,
+                        imageHeight: node.data('imageHeight') || null,
+                        calculatedHeight: node.data('calculatedHeight') || null,
+                        originalFileName: node.data('originalFileName') || null,
+                        imageNotes: node.data('imageNotes') || '',
+                        annotation: node.data('annotation') || null,
+                        searchableText: node.data('searchableText') || null,
+                        // Other metadata
+                        export_timestamp: node.data('export_timestamp') || null,
+                        export_session: node.data('export_session') || null,
+                        page_number: node.data('page_number') || null,
+                        card_index: node.data('card_index') || null
                     })),
                     timestamp: new Date().toISOString(),
                     version: '2.0'
@@ -12725,6 +12743,7 @@ Kan ha #taggar överallt.
                                 title: card.title || '',
                                 text: card.text || '',
                                 tags: card.tags || [],
+                                hidden_tags: card.hidden_tags || [],
                                 cardColor: card.cardColor || '',
                                 export_source: card.export_source || '',
                                 source_file: card.source_file || '',
@@ -12733,13 +12752,20 @@ Kan ha #taggar överallt.
                                 isPinned: card.isPinned || false,
                                 // IMAGE SUPPORT - Essential for preserving pasted images!
                                 type: card.type || 'text',
+                                isImageCard: card.isImageCard || false,
                                 imageData: card.imageData || null,
                                 imageWidth: card.imageWidth || null,
                                 imageHeight: card.imageHeight || null,
                                 calculatedHeight: card.calculatedHeight || null,
                                 annotation: card.annotation || null,
                                 searchableText: card.searchableText || null,
-                                originalFileName: card.originalFileName || null
+                                originalFileName: card.originalFileName || null,
+                                imageNotes: card.imageNotes || '',
+                                // Other metadata
+                                export_timestamp: card.export_timestamp || null,
+                                export_session: card.export_session || null,
+                                page_number: card.page_number || null,
+                                card_index: card.card_index || null
                             };
                             
                             const node = cy.add({
@@ -12751,12 +12777,14 @@ Kan ha #taggar överallt.
                             applyAutoDoneColoring(node);
 
                             // Apply image styling if this is an image node
-                            if (card.type === 'image' && card.imageData) {
-                                console.log('🖼️ Restoring image from Drive:', card.originalFileName);
+                            if ((card.type === 'image' || card.isImageCard) && card.imageData) {
+                                console.log('🖼️ Restoring image from Drive:', card.originalFileName || 'unknown');
                                 node.style({
                                     'background-image': card.imageData,
                                     'background-fit': 'cover',
-                                    'width': '300px'
+                                    'background-position': 'center',
+                                    'width': card.imageWidth ? card.imageWidth + 'px' : '300px',
+                                    'height': card.calculatedHeight ? card.calculatedHeight + 'px' : 'auto'
                                 });
                             }
 
@@ -12767,7 +12795,8 @@ Kan ha #taggar överallt.
                                 node.style('background-color', colorValue);
                             }
 
-                            if (node.data('isPinned')) {
+                            // Handle both isPinned and pinned (for backwards compatibility)
+                            if (node.data('isPinned') || card.pinned) {
                                 node.addClass('pinned');
                                 node.data('pinned', true);
                                 node.ungrabify(); // Prevent dragging pinned cards
