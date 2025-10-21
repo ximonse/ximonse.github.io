@@ -12098,7 +12098,16 @@ Kan ha #taggar överallt.
                     })),
                     edges: cy.edges().map(edge => ({
                         source: edge.source().id(),
-                        target: edge.target().id()
+                        target: edge.target().id(),
+                        // Save edge styling
+                        lineColor: edge.style('line-color'),
+                        targetArrowColor: edge.style('target-arrow-color'),
+                        targetArrowShape: edge.style('target-arrow-shape'),
+                        width: edge.style('width'),
+                        // Save edge metadata
+                        isAnnotation: edge.data('isAnnotation') || false,
+                        annotationType: edge.data('annotationType') || null,
+                        connectionType: edge.data('connectionType') || null
                     })),
                     metadata: {
                         total_cards: cy.nodes().length,
@@ -12754,7 +12763,16 @@ Kan ha #taggar överallt.
                     })),
                     edges: cy.edges().map(edge => ({
                         source: edge.source().id(),
-                        target: edge.target().id()
+                        target: edge.target().id(),
+                        // Save edge styling
+                        lineColor: edge.style('line-color'),
+                        targetArrowColor: edge.style('target-arrow-color'),
+                        targetArrowShape: edge.style('target-arrow-shape'),
+                        width: edge.style('width'),
+                        // Save edge metadata
+                        isAnnotation: edge.data('isAnnotation') || false,
+                        annotationType: edge.data('annotationType') || null,
+                        connectionType: edge.data('connectionType') || null
                     })),
                     timestamp: new Date().toISOString(),
                     version: '2.0'
@@ -12978,16 +12996,30 @@ Kan ha #taggar överallt.
                         // Load edges (connections between nodes)
                         if (boardData.edges && boardData.edges.length > 0) {
                             console.log(`Loading ${boardData.edges.length} edges...`);
-                            boardData.edges.forEach(edge => {
-                                cy.add({
+                            boardData.edges.forEach(edgeData => {
+                                const newEdge = cy.add({
                                     group: 'edges',
                                     data: {
-                                        source: edge.source,
-                                        target: edge.target
+                                        source: edgeData.source,
+                                        target: edgeData.target,
+                                        isAnnotation: edgeData.isAnnotation || false,
+                                        annotationType: edgeData.annotationType || null,
+                                        connectionType: edgeData.connectionType || null
                                     }
                                 });
+
+                                // Restore edge styling if available
+                                if (edgeData.lineColor || edgeData.targetArrowColor) {
+                                    newEdge.style({
+                                        'line-color': edgeData.lineColor || '#999',
+                                        'target-arrow-color': edgeData.targetArrowColor || '#999',
+                                        'target-arrow-shape': edgeData.targetArrowShape || 'triangle',
+                                        'width': edgeData.width || 2
+                                    });
+                                    console.log(`🎨 Restored edge styling: ${edgeData.lineColor}`);
+                                }
                             });
-                            console.log('✅ All edges loaded');
+                            console.log('✅ All edges loaded with styling');
                         }
                     });
 
