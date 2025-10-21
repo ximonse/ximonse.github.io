@@ -2116,11 +2116,13 @@ Exempel: Visa alla kort om projektet, Sortera todos i veckogrid" rows="2"></text
         function createImageNode(imageData, filename) {
             const position = getArrangementPosition();
             const nodeId = generateCardId();
-            
+
             // Calculate proper aspect ratio height
+            const displayWidth = 300;
             const ratio = imageData.height / imageData.width;
-            const calculatedHeight = Math.round(300 * ratio);
-            
+            const displayHeight = Math.round(displayWidth * ratio);
+            const calculatedHeight = displayHeight; // Keep for backwards compatibility
+
             cy.add({
                 group: 'nodes',
                 data: {
@@ -2129,6 +2131,8 @@ Exempel: Visa alla kort om projektet, Sortera todos i veckogrid" rows="2"></text
                     imageData: imageData.data,
                     imageWidth: imageData.width,  // Store original dimensions
                     imageHeight: imageData.height, // Store original dimensions
+                    displayWidth: displayWidth,    // Display width (can be changed by user)
+                    displayHeight: displayHeight,  // Display height (maintains aspect ratio)
                     calculatedHeight: calculatedHeight, // Pre-calculated height for arrangement
                     annotation: '',
                     searchableText: '',
@@ -2141,7 +2145,7 @@ Exempel: Visa alla kort om projektet, Sortera todos i veckogrid" rows="2"></text
                 position: position
             });
 
-            console.log(`📷 Created image node: ${filename} (${Math.round(imageData.data.length/1024)} KB) - ${imageData.width}x${imageData.height} → 300x${calculatedHeight}`);
+            console.log(`📷 Created image node: ${filename} (${Math.round(imageData.data.length/1024)} KB) - ${imageData.width}x${imageData.height} → ${displayWidth}x${displayHeight}`);
         }
 
         // Handle paste events (Ctrl+V) for images
@@ -2243,9 +2247,12 @@ Exempel: Visa alla kort om projektet, Sortera todos i veckogrid" rows="2"></text
         
         // Create image node at specific position
         function createImageNodeAtPosition(imageData, filename, position) {
-            const calculatedHeight = Math.round((imageData.height / imageData.width) * 300);
+            const displayWidth = 300;
+            const ratio = imageData.height / imageData.width;
+            const displayHeight = Math.round(displayWidth * ratio);
+            const calculatedHeight = displayHeight; // Keep for backwards compatibility
             const cardId = generateCardId();
-            
+
             cy.add({
                 group: 'nodes',
                 data: {
@@ -2255,6 +2262,8 @@ Exempel: Visa alla kort om projektet, Sortera todos i veckogrid" rows="2"></text
                     imageData: imageData.data,
                     imageWidth: imageData.width,
                     imageHeight: imageData.height,
+                    displayWidth: displayWidth,
+                    displayHeight: displayHeight,
                     calculatedHeight: calculatedHeight,
                     annotation: '',
                     searchableText: '',
@@ -3947,7 +3956,19 @@ Exempel: Visa alla kort om projektet, Sortera todos i veckogrid" rows="2"></text
                 };
                 menu.appendChild(removeColorOption);
             }
-            
+
+            // Resize option for image nodes
+            if (node.data('type') === 'image' || node.data('isImageCard')) {
+                const resizeOption = document.createElement('div');
+                resizeOption.className = 'context-menu-item';
+                resizeOption.innerHTML = '↗️ Ändra storlek';
+                resizeOption.onclick = () => {
+                    hideContextMenu();
+                    showImageResizeDialog(node);
+                };
+                menu.appendChild(resizeOption);
+            }
+
             // Resize option for annotation/geometric shapes
             if (node.data('isAnnotation') && node.data('annotationType') !== 'connection') {
                 const resizeOption = document.createElement('div');
@@ -4140,7 +4161,133 @@ Exempel: Visa alla kort om projektet, Sortera todos i veckogrid" rows="2"></text
             };
             document.addEventListener('keydown', handleEnter);
         }
-        
+
+        // Show resize dialog for image nodes (maintains aspect ratio)
+        function showImageResizeDialog(node) {
+            // Get current and original dimensions
+            const currentWidth = node.data('displayWidth') || 300;
+            const imageWidth = node.data('imageWidth');
+            const imageHeight = node.data('imageHeight');
+            const aspectRatio = imageHeight / imageWidth;
+            const currentHeight = Math.round(currentWidth * aspectRatio);
+
+            // Create overlay
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.5);
+                z-index: 10000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
+
+            const dialog = document.createElement('div');
+            dialog.style.cssText = `
+                background: white;
+                padding: 30px;
+                border-radius: 15px;
+                max-width: 400px;
+                width: 90%;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            `;
+
+            dialog.innerHTML = `
+                <h3 style="margin-top: 0; text-align: center;">📏 Ändra bildstorlek</h3>
+                <p style="color: #666; font-size: 13px; margin-bottom: 15px;">Original: ${imageWidth}×${imageHeight}px</p>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold;">Bredd (px):</label>
+                    <input type="range" id="imageWidthSlider" min="100" max="800" value="${currentWidth}" step="10"
+                           style="width: 100%; margin-bottom: 5px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <input type="number" id="imageWidthInput" value="${currentWidth}" min="100" max="800"
+                               style="width: 80px; padding: 5px; border: 1px solid #ddd; border-radius: 4px;">
+                        <span id="imageDimensions" style="color: #666; font-size: 13px;">${currentWidth}×${currentHeight}px</span>
+                    </div>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <p style="color: #888; font-size: 12px; margin: 0;">
+                        ℹ️ Proportionerna bevaras automatiskt
+                    </p>
+                </div>
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button id="cancelImageResize" style="padding: 10px 20px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">Avbryt</button>
+                    <button id="applyImageResize" style="padding: 10px 20px; border: none; background: #007acc; color: white; border-radius: 4px; cursor: pointer;">Tillämpa</button>
+                </div>
+            `;
+
+            overlay.appendChild(dialog);
+            document.body.appendChild(overlay);
+
+            // Get elements
+            const widthSlider = document.getElementById('imageWidthSlider');
+            const widthInput = document.getElementById('imageWidthInput');
+            const dimensionsDisplay = document.getElementById('imageDimensions');
+
+            // Update display when slider or input changes
+            const updateDimensions = () => {
+                const width = parseInt(widthSlider.value);
+                const height = Math.round(width * aspectRatio);
+                widthInput.value = width;
+                dimensionsDisplay.textContent = `${width}×${height}px`;
+            };
+
+            widthSlider.addEventListener('input', updateDimensions);
+            widthInput.addEventListener('input', () => {
+                widthSlider.value = widthInput.value;
+                updateDimensions();
+            });
+
+            // Handle buttons
+            document.getElementById('cancelImageResize').onclick = () => {
+                document.body.removeChild(overlay);
+            };
+
+            document.getElementById('applyImageResize').onclick = () => {
+                const newWidth = parseInt(widthSlider.value);
+                const newHeight = Math.round(newWidth * aspectRatio);
+
+                // Update node data and styling
+                node.data('displayWidth', newWidth);
+                node.data('displayHeight', newHeight);
+                node.style({
+                    'width': newWidth + 'px',
+                    'height': newHeight + 'px'
+                });
+
+                console.log(`📏 Resized image to ${newWidth}×${newHeight}px`);
+                saveBoard(); // Save changes
+
+                document.body.removeChild(overlay);
+            };
+
+            // ESC to close
+            const handleEscape = (e) => {
+                if (e.key === 'Escape' && document.body.contains(overlay)) {
+                    document.body.removeChild(overlay);
+                    document.removeEventListener('keydown', handleEscape);
+                }
+            };
+            document.addEventListener('keydown', handleEscape);
+
+            // Enter to apply
+            const handleEnter = (e) => {
+                if (e.key === 'Enter' && document.body.contains(overlay)) {
+                    document.getElementById('applyImageResize').click();
+                    document.removeEventListener('keydown', handleEnter);
+                }
+            };
+            document.addEventListener('keydown', handleEnter);
+
+            // Focus input
+            widthInput.focus();
+            widthInput.select();
+        }
+
         // Apply resize and layer change to annotation node
         function resizeAnnotationNode(node, newWidth, newHeight, newZIndex = null) {
             console.log('🔧 Resizing annotation node:', node.id(), 'to', newWidth, 'x', newHeight, 'z-index:', newZIndex);
@@ -11935,6 +12082,8 @@ Kan ha #taggar överallt.
                         imageData: node.data('imageData') || null,
                         imageWidth: node.data('imageWidth') || null,
                         imageHeight: node.data('imageHeight') || null,
+                        displayWidth: node.data('displayWidth') || null,
+                        displayHeight: node.data('displayHeight') || null,
                         calculatedHeight: node.data('calculatedHeight') || null,
                         originalFileName: node.data('originalFileName') || null,
                         imageNotes: node.data('imageNotes') || '',
@@ -11947,8 +12096,13 @@ Kan ha #taggar överallt.
                         matched_terms: node.data('matched_terms') || null,
                         card_index: node.data('card_index') || null
                     })),
+                    edges: cy.edges().map(edge => ({
+                        source: edge.source().id(),
+                        target: edge.target().id()
+                    })),
                     metadata: {
                         total_cards: cy.nodes().length,
+                        total_edges: cy.edges().length,
                         version: '2.1',
                         saved_from: 'spatial-notes-smart-save'
                     }
@@ -12585,6 +12739,8 @@ Kan ha #taggar överallt.
                         imageData: node.data('imageData') || null,
                         imageWidth: node.data('imageWidth') || null,
                         imageHeight: node.data('imageHeight') || null,
+                        displayWidth: node.data('displayWidth') || null,
+                        displayHeight: node.data('displayHeight') || null,
                         calculatedHeight: node.data('calculatedHeight') || null,
                         originalFileName: node.data('originalFileName') || null,
                         imageNotes: node.data('imageNotes') || '',
@@ -12595,6 +12751,10 @@ Kan ha #taggar överallt.
                         export_session: node.data('export_session') || null,
                         page_number: node.data('page_number') || null,
                         card_index: node.data('card_index') || null
+                    })),
+                    edges: cy.edges().map(edge => ({
+                        source: edge.source().id(),
+                        target: edge.target().id()
                     })),
                     timestamp: new Date().toISOString(),
                     version: '2.0'
@@ -12779,13 +12939,23 @@ Kan ha #taggar överallt.
                             // Apply image styling if this is an image node
                             if ((card.type === 'image' || card.isImageCard) && card.imageData) {
                                 console.log('🖼️ Restoring image from Drive:', card.originalFileName || 'unknown');
+
+                                // Use saved display width, or default to 300px
+                                const displayWidth = card.displayWidth || 300;
+                                const ratio = card.imageHeight / card.imageWidth;
+                                const displayHeight = Math.round(displayWidth * ratio);
+
                                 node.style({
                                     'background-image': card.imageData,
                                     'background-fit': 'cover',
                                     'background-position': 'center',
-                                    'width': card.imageWidth ? card.imageWidth + 'px' : '300px',
-                                    'height': card.calculatedHeight ? card.calculatedHeight + 'px' : 'auto'
+                                    'width': displayWidth + 'px',
+                                    'height': displayHeight + 'px'
                                 });
+
+                                // Store display dimensions in data for future saves
+                                node.data('displayWidth', displayWidth);
+                                node.data('displayHeight', displayHeight);
                             }
 
                             // Apply colors and pinning immediately, skip height for now
@@ -12804,9 +12974,24 @@ Kan ha #taggar överallt.
                                 node.grabify(); // Make sure non-pinned cards are draggable
                             }
                         });
+
+                        // Load edges (connections between nodes)
+                        if (boardData.edges && boardData.edges.length > 0) {
+                            console.log(`Loading ${boardData.edges.length} edges...`);
+                            boardData.edges.forEach(edge => {
+                                cy.add({
+                                    group: 'edges',
+                                    data: {
+                                        source: edge.source,
+                                        target: edge.target
+                                    }
+                                });
+                            });
+                            console.log('✅ All edges loaded');
+                        }
                     });
-                    
-                    console.log('All cards loaded successfully');
+
+                    console.log('All cards and edges loaded successfully');
                     updateSyncStatus(`✅ Loaded ${boardData.cards.length} cards from "${currentProject}"`, 'success');
                     
                     // Skip height updates if cards were already loaded from localStorage 
