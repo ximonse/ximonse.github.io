@@ -9074,7 +9074,9 @@ Svara på svenska och var koncis men hjälpsam. Om du refererar till specifika a
                         };
 
                         // Create card with full metadata
-                        const cardId = generateCardId();
+                        // Generate unique ID with index to avoid duplicates in batch import
+                        const baseId = generateCardId();
+                        const cardId = `${baseId}-z${index}`;
                         const nodeData = {
                             id: cardId,
                             title: '',
