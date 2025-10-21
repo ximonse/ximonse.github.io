@@ -1775,6 +1775,7 @@
                 <button onclick="closeMenuDropdowns(); exportToJSON()">📋 Exportera JSON</button>
                 <button onclick="closeMenuDropdowns(); importFromJSON()">📁 Importera JSON</button>
                 <button onclick="closeMenuDropdowns(); importFromExtractor()">📥 Från PDF-Extractor</button>
+                <button onclick="closeMenuDropdowns(); document.getElementById('zoteroHtmlInput').click()">📚 Från Zotero</button>
                 <button onclick="closeMenuDropdowns(); toggleGoogleDriveAuth()" id="googleDriveBtn">🔗 Google Drive</button>
                 <button onclick="closeMenuDropdowns(); toggleMetadataView()" id="metadataBtn">🔍 Metadata</button>
                 <button onclick="closeMenuDropdowns(); debugDumpPositions()">🐛 Debug Positioner</button>
@@ -1863,6 +1864,9 @@
     <!-- Hidden file inputs for image upload -->
     <input type="file" id="hiddenCameraInput" accept="image/*" multiple capture="camera" style="display: none;">
     <input type="file" id="hiddenGalleryInput" accept="image/*" multiple style="display: none;">
+
+    <!-- Hidden file input for Zotero HTML import -->
+    <input type="file" id="zoteroHtmlInput" accept=".html" style="display: none;">
 
     <!-- AI Chat Panel -->
     <div class="ai-panel" id="aiPanel">
@@ -3545,7 +3549,16 @@ Exempel: Visa alla kort om projektet, Sortera todos i veckogrid" rows="2"></text
                     e.target.value = '';
                 }
             });
-            
+
+            // Zotero HTML import file input handler
+            document.getElementById('zoteroHtmlInput').addEventListener('change', function(e) {
+                if (e.target.files.length > 0) {
+                    importFromZoteroHTML(e.target.files[0]);
+                    // Reset input to allow same file again
+                    e.target.value = '';
+                }
+            });
+
             // Paste event listener for Ctrl+V images
             document.addEventListener('paste', handlePasteImage);
             
@@ -8980,7 +8993,148 @@ Svara på svenska och var koncis men hjälpsam. Om du refererar till specifika a
                 alert('Fel vid import från PDF-Extractor: ' + error.message);
             }
         }
-        
+
+        // Map Zotero highlight colors to spatial-notes card colors
+        function mapZoteroColorToCard(bgColorStyle) {
+            // Extract hex color from style like "background-color: #ffd40080"
+            const match = bgColorStyle.match(/#([0-9a-fA-F]{6})/);
+            if (!match) return null;
+
+            const hexColor = match[1].toLowerCase();
+
+            // Map Zotero colors to spatial-notes card-color-X
+            const colorMap = {
+                'ffd400': 'card-color-4', // Gul
+                'ff6666': 'card-color-3', // Röd
+                '5fb236': 'card-color-1', // Grön
+                '2ea8e5': 'card-color-6', // Blå/Cyan
+                'a28ae5': 'card-color-5', // Lila
+                'e56eee': 'card-color-5', // Magenta → Lila
+                'f19837': 'card-color-2', // Orange
+                'aaaaaa': 'card-color-7'  // Grå
+            };
+
+            return colorMap[hexColor] || null;
+        }
+
+        // Import notes from Zotero HTML export
+        function importFromZoteroHTML(file) {
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                try {
+                    const htmlContent = e.target.result;
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(htmlContent, 'text/html');
+
+                    // Find all highlight paragraphs
+                    const highlightParagraphs = doc.querySelectorAll('p');
+
+                    let importedCount = 0;
+                    const timestamp = Date.now();
+                    const session = `zotero_${timestamp}`;
+
+                    highlightParagraphs.forEach((p, index) => {
+                        // Find the highlight span with background color
+                        const highlightSpan = p.querySelector('span.highlight span[style*="background-color"]');
+                        if (!highlightSpan) return;
+
+                        // Extract the quote text
+                        const quoteText = highlightSpan.textContent.trim();
+                        if (!quoteText) return;
+
+                        // Extract color
+                        const bgStyle = highlightSpan.getAttribute('style');
+                        const cardColor = mapZoteroColorToCard(bgStyle);
+
+                        // Extract citation if available
+                        const citationSpan = p.querySelector('span.citation');
+                        let citation = '';
+                        if (citationSpan) {
+                            citation = citationSpan.textContent.trim();
+                        }
+
+                        // Create hidden tags for tracking
+                        const hidden_tags = [
+                            `zotero_import_${timestamp}`,
+                            `source_${file.name.replace('.html', '')}`
+                        ];
+
+                        if (citation) {
+                            hidden_tags.push(`citation_${citation.replace(/[^a-zA-Z0-9]/g, '_')}`);
+                        }
+
+                        // Grid positioning
+                        const cols = Math.ceil(Math.sqrt(highlightParagraphs.length));
+                        const col = index % cols;
+                        const row = Math.floor(index / cols);
+                        const position = {
+                            x: 200 + col * 320,
+                            y: 200 + row * 200
+                        };
+
+                        // Create card with full metadata
+                        const cardId = generateCardId();
+                        const nodeData = {
+                            id: cardId,
+                            title: '',
+                            text: quoteText,
+                            tags: [],
+                            hidden_tags: hidden_tags,
+                            searchMatch: false,
+                            // Import metadata (osynlig)
+                            export_timestamp: new Date().toISOString(),
+                            export_session: session,
+                            export_source: 'zotero',
+                            source_file: file.name,
+                            page_number: null,
+                            matched_terms: citation || null,
+                            card_index: index,
+                            // Kort-status
+                            isManualCard: false,
+                            cardColor: cardColor,
+                            // Kopia-tracking (ej tillämpligt vid import)
+                            copyOf: null,
+                            isCopy: false,
+                            copyTimestamp: null
+                        };
+
+                        const newNode = cy.add({
+                            group: 'nodes',
+                            data: nodeData,
+                            position: position
+                        });
+
+                        // Apply color styling if we have a color
+                        if (cardColor) {
+                            newNode.style('background-color', getCardColorValue(cardColor, getCurrentTheme()));
+                        }
+
+                        newNode.grabify();
+                        importedCount++;
+                    });
+
+                    // Show success message
+                    const searchInfo = document.getElementById('searchInfo');
+                    if (searchInfo) {
+                        searchInfo.textContent = `📚 Zotero import: ${importedCount} kort importerade från ${file.name}`;
+                        searchInfo.classList.add('visible');
+                        setTimeout(() => {
+                            searchInfo.classList.remove('visible');
+                        }, 4000);
+                    }
+
+                    console.log(`Zotero import completed: ${importedCount} cards imported from ${file.name}`);
+
+                } catch (error) {
+                    console.error('Error importing from Zotero:', error);
+                    alert('Fel vid import från Zotero HTML: ' + error.message);
+                }
+            };
+
+            reader.readAsText(file);
+        }
+
         // Clear board completely
         function clusterSelectedCards() {
             // If we have copied cards, create and arrange them. Otherwise, arrange selected nodes.
@@ -13529,7 +13683,13 @@ Kan ha #taggar överallt.
                     e.preventDefault();
                     loadBoard();
                 }
-                
+
+                // Z för Zotero HTML import
+                if (e.key === 'z' && !e.ctrlKey && !e.altKey) {
+                    e.preventDefault();
+                    document.getElementById('zoteroHtmlInput').click();
+                }
+
                 // F för fokusera sökrutan
                 if (e.key === 'f' && !e.ctrlKey && !e.altKey) {
                     e.preventDefault();
