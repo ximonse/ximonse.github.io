@@ -9077,10 +9077,17 @@ Svara på svenska och var koncis men hjälpsam. Om du refererar till specifika a
                         // Generate unique ID with index to avoid duplicates in batch import
                         const baseId = generateCardId();
                         const cardId = `${baseId}-z${index}`;
+
+                        // Combine quote with citation for display
+                        let cardText = quoteText;
+                        if (citation) {
+                            cardText = `${quoteText}\n\n${citation}`;
+                        }
+
                         const nodeData = {
                             id: cardId,
                             title: '',
-                            text: quoteText,
+                            text: cardText,
                             tags: [],
                             hidden_tags: hidden_tags,
                             searchMatch: false,
