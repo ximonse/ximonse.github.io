@@ -2568,7 +2568,8 @@ Exempel: Visa alla kort om projektet, Sortera todos i veckogrid" rows="2"></text
                 'target-arrow-color': annotationColor,
                 'target-arrow-shape': isArrow ? 'triangle' : 'none',
                 'curve-style': 'bezier',
-                'width': 3
+                'width': 5,
+                'arrow-scale': 1.8
             });
             
             console.log(`🔗 Created ${type} connection between`, sourceNode.id(), 'and', targetNode.id());
@@ -3300,9 +3301,10 @@ Exempel: Visa alla kort om projektet, Sortera todos i veckogrid" rows="2"></text
                     {
                         selector: 'edge.annotation-connection',
                         style: {
-                            'width': 6,
+                            'width': 5,
                             'line-color': '#ff6b6b',
                             'target-arrow-color': '#ff6b6b',
+                            'arrow-scale': 1.8,
                             'curve-style': 'bezier',
                             'control-point-step-size': 40
                         }
@@ -8272,6 +8274,10 @@ Svara på svenska och var koncis men hjälpsam. Om du refererar till specifika a
                         // Restore all visual styling
                         if (edgeData.style) {
                             newEdge.style(edgeData.style);
+                            // Ensure arrow-scale is applied (for older saved edges)
+                            if (!edgeData.style['arrow-scale']) {
+                                newEdge.style('arrow-scale', 1.8);
+                            }
                             console.log('✅ Restored edge styling for', edgeData.id, 'arrow shape:', edgeData.style['target-arrow-shape']);
                         }
                     });
@@ -12104,6 +12110,7 @@ Kan ha #taggar överallt.
                         targetArrowColor: edge.style('target-arrow-color'),
                         targetArrowShape: edge.style('target-arrow-shape'),
                         width: edge.style('width'),
+                        arrowScale: edge.style('arrow-scale'),
                         // Save edge metadata
                         isAnnotation: edge.data('isAnnotation') || false,
                         annotationType: edge.data('annotationType') || null,
@@ -12769,6 +12776,7 @@ Kan ha #taggar överallt.
                         targetArrowColor: edge.style('target-arrow-color'),
                         targetArrowShape: edge.style('target-arrow-shape'),
                         width: edge.style('width'),
+                        arrowScale: edge.style('arrow-scale'),
                         // Save edge metadata
                         isAnnotation: edge.data('isAnnotation') || false,
                         annotationType: edge.data('annotationType') || null,
@@ -13014,7 +13022,8 @@ Kan ha #taggar överallt.
                                         'line-color': edgeData.lineColor || '#999',
                                         'target-arrow-color': edgeData.targetArrowColor || '#999',
                                         'target-arrow-shape': edgeData.targetArrowShape || 'triangle',
-                                        'width': edgeData.width || 2
+                                        'width': edgeData.width || 5,
+                                        'arrow-scale': edgeData.arrowScale || 1.8
                                     });
                                     console.log(`🎨 Restored edge styling: ${edgeData.lineColor}`);
                                 }
