@@ -8278,6 +8278,10 @@ Svara på svenska och var koncis men hjälpsam. Om du refererar till specifika a
                             if (!edgeData.style['arrow-scale']) {
                                 newEdge.style('arrow-scale', 1.8);
                             }
+                            // Ensure curve-style is applied (for older saved edges)
+                            if (!edgeData.style['curve-style']) {
+                                newEdge.style('curve-style', 'bezier');
+                            }
                             console.log('✅ Restored edge styling for', edgeData.id, 'arrow shape:', edgeData.style['target-arrow-shape']);
                         }
                     });
@@ -12111,6 +12115,7 @@ Kan ha #taggar överallt.
                         targetArrowShape: edge.style('target-arrow-shape'),
                         width: edge.style('width'),
                         arrowScale: edge.style('arrow-scale'),
+                        curveStyle: edge.style('curve-style'),
                         // Save edge metadata
                         isAnnotation: edge.data('isAnnotation') || false,
                         annotationType: edge.data('annotationType') || null,
@@ -12777,6 +12782,7 @@ Kan ha #taggar överallt.
                         targetArrowShape: edge.style('target-arrow-shape'),
                         width: edge.style('width'),
                         arrowScale: edge.style('arrow-scale'),
+                        curveStyle: edge.style('curve-style'),
                         // Save edge metadata
                         isAnnotation: edge.data('isAnnotation') || false,
                         annotationType: edge.data('annotationType') || null,
@@ -13023,7 +13029,8 @@ Kan ha #taggar överallt.
                                         'target-arrow-color': edgeData.targetArrowColor || '#999',
                                         'target-arrow-shape': edgeData.targetArrowShape || 'triangle',
                                         'width': edgeData.width || 5,
-                                        'arrow-scale': edgeData.arrowScale || 1.8
+                                        'arrow-scale': edgeData.arrowScale || 1.8,
+                                        'curve-style': edgeData.curveStyle || 'bezier'
                                     });
                                     console.log(`🎨 Restored edge styling: ${edgeData.lineColor}`);
                                 }
