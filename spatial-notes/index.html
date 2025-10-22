@@ -5439,14 +5439,14 @@ VAGA FRÅGOR (användaren är osäker eller ber om förslag):
 - Exempel: "vad kan du göra?", "hjälp mig organisera", "hur ska jag strukturera detta?"
 
 VERKTYG du kan använda:
-- arrange_clusters: För att dela kort i separata högar/kategorier med etiketter
-- create_arrows: För att rita pilar mellan kort (perfekt för mindmaps och flödesscheman)
-- arrange_grid: För att arrangera kort i rutnät
-- arrange_circle: För att arrangera kort i cirkel (bra för att visa relationer)
-- create_annotation: För att skapa stora textetiketter
+- arrange_clusters: Dela kort i separata högar/kategorier med färgade etiketter. Systemet beräknar automatiskt positioner så högar INTE överlappar. Du behöver bara ange gruppnamn och vilka kort som hör till varje grupp.
+- create_arrows: Rita pilar mellan kort (perfekt för mindmaps och flödesscheman)
+- arrange_grid: Arrangera kort i rutnät
+- arrange_circle: Arrangera kort i cirkel (bra för att visa relationer)
+- create_annotation: Skapa stora textetiketter
 
 EXEMPEL PÅ VAD DU KAN ERBJUDA:
-- Dela kort i ämnesområden (använd arrange_clusters)
+- Dela kort i ämnesområden (använd arrange_clusters - positioner hanteras automatiskt)
 - Skapa mindmap med central idé och pilar (använd create_arrows)
 - Skapa flödesschema med sekventiella pilar (använd arrange_grid + create_arrows)
 - Hitta samband mellan kort och visa med pilar
@@ -5586,7 +5586,7 @@ Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kort
                 },
                 {
                     name: "arrange_clusters",
-                    description: "Organize cards into separate visual clusters/piles with labels. Perfect for categorizing cards into distinct groups with clear separation.",
+                    description: "Organize cards into separate visual clusters/piles with labels. System automatically calculates positions to prevent overlap. Perfect for categorizing cards into distinct groups.",
                     input_schema: {
                         type: "object",
                         properties: {
@@ -5603,24 +5603,11 @@ Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kort
                                             type: "array",
                                             items: { type: "string" },
                                             description: "Card IDs in this cluster"
-                                        },
-                                        x: {
-                                            type: "number",
-                                            description: "X position for cluster center"
-                                        },
-                                        y: {
-                                            type: "number",
-                                            description: "Y position for cluster center"
-                                        },
-                                        color: {
-                                            type: "string",
-                                            enum: ["red", "blue", "green", "yellow", "purple", "orange"],
-                                            description: "Color for cluster label"
                                         }
                                     },
-                                    required: ["name", "card_ids", "x", "y", "color"]
+                                    required: ["name", "card_ids"]
                                 },
-                                description: "Array of groups/clusters to create"
+                                description: "Array of groups/clusters to create. System will auto-position them with proper spacing."
                             }
                         },
                         required: ["groups"]
@@ -6012,25 +5999,39 @@ Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kort
             saveBoard();
         }
 
-        // AI Tool: Arrange cards in clusters with labels
+        // AI Tool: Arrange cards in clusters with labels (auto-calculated positions)
         async function aiArrangeClusters(input) {
             const { groups } = input;
 
-            console.log(`📦 Creating ${groups.length} clusters`);
+            console.log(`📦 Creating ${groups.length} clusters with auto-spacing`);
 
-            const colorMap = {
-                'red': '#ff4444',
-                'blue': '#4444ff',
-                'green': '#44ff44',
-                'yellow': '#ffff44',
-                'purple': '#ff44ff',
-                'orange': '#ffaa44'
-            };
+            // Rotate through colors automatically
+            const colors = ['#ff4444', '#4444ff', '#44ff44', '#ffff44', '#ff44ff', '#ffaa44'];
 
-            groups.forEach(group => {
-                const { name, card_ids, x, y, color } = group;
+            // Card and spacing constants
+            const CARD_SPACING_X = 180;  // Horizontal space between cards
+            const CARD_SPACING_Y = 150;  // Vertical space between cards
+            const CLUSTER_MARGIN = 400;  // Space between clusters
+            const START_Y = 200;         // Starting Y position
 
-                // Create cluster label
+            let currentX = 200;  // Starting X position for first cluster
+
+            groups.forEach((group, groupIndex) => {
+                const { name, card_ids } = group;
+                const color = colors[groupIndex % colors.length];
+
+                // Calculate cluster grid dimensions
+                const cols = Math.ceil(Math.sqrt(card_ids.length));
+                const rows = Math.ceil(card_ids.length / cols);
+
+                // Calculate cluster dimensions (total width/height needed)
+                const clusterWidth = cols * CARD_SPACING_X;
+                const clusterHeight = rows * CARD_SPACING_Y;
+
+                // Cluster center for label placement
+                const clusterCenterX = currentX + (clusterWidth / 2);
+
+                // Create cluster label above cluster
                 const labelId = 'cluster-label-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
                 const labelNode = cy.add({
                     group: 'nodes',
@@ -6041,16 +6042,17 @@ Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kort
                         annotationType: 'shape'
                     },
                     position: {
-                        x: x,
-                        y: y - 100
+                        x: clusterCenterX,
+                        y: START_Y - 100
                     }
                 });
 
+                // Style label
                 labelNode.addClass('annotation-shape');
                 labelNode.style({
                     'width': Math.max(name.length * 30, 400),
                     'height': 80,
-                    'background-color': colorMap[color] || '#ff4444',
+                    'background-color': color,
                     'label': name,
                     'text-valign': 'center',
                     'text-halign': 'center',
@@ -6064,24 +6066,22 @@ Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kort
                     'border-color': '#000000'
                 });
 
-                // Arrange cards in cluster (compact grid around position)
-                const cols = Math.ceil(Math.sqrt(card_ids.length));
-                const spacing = 180;
-
+                // Arrange cards in grid starting from currentX (left edge, not center)
                 card_ids.forEach((cardId, index) => {
                     const node = cy.getElementById(cardId);
                     if (node.length > 0) {
                         const col = index % cols;
                         const row = Math.floor(index / cols);
-                        const offsetX = (col - (cols - 1) / 2) * spacing;
-                        const offsetY = row * 150 + 50;
 
                         node.position({
-                            x: x + offsetX,
-                            y: y + offsetY
+                            x: currentX + (col * CARD_SPACING_X),
+                            y: START_Y + (row * CARD_SPACING_Y)
                         });
                     }
                 });
+
+                // Move currentX for next cluster (current cluster width + margin)
+                currentX += clusterWidth + CLUSTER_MARGIN;
             });
 
             // Fit view to all clusters
