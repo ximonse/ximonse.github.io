@@ -5359,7 +5359,7 @@ Tredje anteckningen...
             }
 
             const totalCards = cy.nodes().length;
-            const MAX_CARDS = 50; // Token limit for efficiency
+            const MAX_CARDS = 100; // Analyze up to 100 most relevant cards
 
             // Smart filtering: only send relevant cards if we have many
             let cardsToSend;
@@ -5403,12 +5403,18 @@ Tredje anteckningen...
                 const title = node.data('title') || '';
                 const text = node.data('text') || '';
                 const tags = (node.data('tags') || []).join(', ');
+                const hidden_tags = (node.data('hidden_tags') || []).join(', ');
+                const cardColor = node.data('cardColor') || '';
+                const export_source = node.data('export_source') || '';
                 const id = node.id();
 
                 let noteText = '';
                 if (title) noteText += `Titel: ${title}\n`;
                 if (text) noteText += `Text: ${text}\n`;
                 if (tags) noteText += `Taggar: ${tags}\n`;
+                if (cardColor) noteText += `Färg: ${cardColor}\n`;
+                if (export_source) noteText += `Källa: ${export_source}\n`;
+                if (hidden_tags) noteText += `Metadata: ${hidden_tags}\n`;
                 noteText += `ID: ${id}`;
 
                 return noteText;
@@ -5417,7 +5423,33 @@ Tredje anteckningen...
             const notesContext = selectedNotes.join('\n\n---\n\n');
 
             // Create prompt
-            let prompt = `Du är en hjälpsam AI-assistent som hjälper användaren att söka och analysera deras anteckningar.
+            let prompt = `Du är en VISUELL organisationsexpert för anteckningar.
+
+VIKTIGT - Anpassa ditt svar efter situationen:
+
+KONKRET UPPDRAG (användaren ber dig göra något specifikt):
+- Använd verktyg direkt utan att prata mycket
+- Kortfattat svar (max 2 meningar)
+- Exempel: "organisera i högar", "skapa mindmap", "visa som flöde"
+
+VAGA FRÅGOR (användaren är osäker eller ber om förslag):
+- Ge konkreta förslag på vad du kan göra
+- Förklara alternativ (kluster vs mindmap vs flöde)
+- Fråga om förtydligande om nödvändigt
+- Exempel: "vad kan du göra?", "hjälp mig organisera", "hur ska jag strukturera detta?"
+
+VERKTYG du kan använda:
+- arrange_clusters: För att dela kort i separata högar/kategorier med etiketter
+- create_arrows: För att rita pilar mellan kort (perfekt för mindmaps och flödesscheman)
+- arrange_grid: För att arrangera kort i rutnät
+- arrange_circle: För att arrangera kort i cirkel (bra för att visa relationer)
+- create_annotation: För att skapa stora textetiketter
+
+EXEMPEL PÅ VAD DU KAN ERBJUDA:
+- Dela kort i ämnesområden (använd arrange_clusters)
+- Skapa mindmap med central idé och pilar (använd create_arrows)
+- Skapa flödesschema med sekventiella pilar (använd arrange_grid + create_arrows)
+- Hitta samband mellan kort och visa med pilar
 
 `;
 
@@ -5433,7 +5465,7 @@ ${notesContext}
 
 Användarens fråga: ${query}
 
-Svara på svenska och var koncis men hjälpsam. Om du refererar till specifika anteckningar, nämn deras ID.`;
+Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kortfattad. Om uppdraget är vagt: ge förslag och fråga om förtydligande.`;
 
             // Define tools that AI can use to manipulate cards
             const tools = [
@@ -5551,6 +5583,81 @@ Svara på svenska och var koncis men hjälpsam. Om du refererar till specifika a
                         },
                         required: ["card_ids"]
                     }
+                },
+                {
+                    name: "arrange_clusters",
+                    description: "Organize cards into separate visual clusters/piles with labels. Perfect for categorizing cards into distinct groups with clear separation.",
+                    input_schema: {
+                        type: "object",
+                        properties: {
+                            groups: {
+                                type: "array",
+                                items: {
+                                    type: "object",
+                                    properties: {
+                                        name: {
+                                            type: "string",
+                                            description: "Name/label for this cluster"
+                                        },
+                                        card_ids: {
+                                            type: "array",
+                                            items: { type: "string" },
+                                            description: "Card IDs in this cluster"
+                                        },
+                                        x: {
+                                            type: "number",
+                                            description: "X position for cluster center"
+                                        },
+                                        y: {
+                                            type: "number",
+                                            description: "Y position for cluster center"
+                                        },
+                                        color: {
+                                            type: "string",
+                                            enum: ["red", "blue", "green", "yellow", "purple", "orange"],
+                                            description: "Color for cluster label"
+                                        }
+                                    },
+                                    required: ["name", "card_ids", "x", "y", "color"]
+                                },
+                                description: "Array of groups/clusters to create"
+                            }
+                        },
+                        required: ["groups"]
+                    }
+                },
+                {
+                    name: "create_arrows",
+                    description: "Create arrows between cards to show relationships, flow, or hierarchy. Perfect for mindmaps and flowcharts.",
+                    input_schema: {
+                        type: "object",
+                        properties: {
+                            connections: {
+                                type: "array",
+                                items: {
+                                    type: "object",
+                                    properties: {
+                                        from: {
+                                            type: "string",
+                                            description: "Source card ID"
+                                        },
+                                        to: {
+                                            type: "string",
+                                            description: "Target card ID"
+                                        },
+                                        color: {
+                                            type: "string",
+                                            enum: ["red", "blue", "green", "yellow", "purple", "orange", "black"],
+                                            description: "Arrow color (default red)"
+                                        }
+                                    },
+                                    required: ["from", "to"]
+                                },
+                                description: "Array of arrow connections to create"
+                            }
+                        },
+                        required: ["connections"]
+                    }
                 }
             ];
 
@@ -5565,7 +5672,7 @@ Svara på svenska och var koncis men hjälpsam. Om du refererar till specifika a
                 },
                 body: JSON.stringify({
                     model: 'claude-3-5-sonnet-20241022',
-                    max_tokens: 2048,
+                    max_tokens: 4096,
                     tools: tools,
                     messages: [{
                         role: 'user',
@@ -5625,6 +5732,12 @@ Svara på svenska och var koncis men hjälpsam. Om du refererar till specifika a
                     break;
                 case 'arrange_timeline':
                     await aiArrangeTimeline(input);
+                    break;
+                case 'arrange_clusters':
+                    await aiArrangeClusters(input);
+                    break;
+                case 'create_arrows':
+                    await aiCreateArrows(input);
                     break;
                 default:
                     console.warn(`Unknown tool: ${toolName}`);
@@ -5892,6 +6005,156 @@ Svara på svenska och var koncis men hjälpsam. Om du refererar till specifika a
             const statusDiv = document.getElementById('selectionInfo');
             if (statusDiv) {
                 statusDiv.textContent = `AI skapade vecko-timeline med ${card_ids.length} kort`;
+                statusDiv.classList.add('visible');
+                setTimeout(() => statusDiv.classList.remove('visible'), 3000);
+            }
+
+            saveBoard();
+        }
+
+        // AI Tool: Arrange cards in clusters with labels
+        async function aiArrangeClusters(input) {
+            const { groups } = input;
+
+            console.log(`📦 Creating ${groups.length} clusters`);
+
+            const colorMap = {
+                'red': '#ff4444',
+                'blue': '#4444ff',
+                'green': '#44ff44',
+                'yellow': '#ffff44',
+                'purple': '#ff44ff',
+                'orange': '#ffaa44'
+            };
+
+            groups.forEach(group => {
+                const { name, card_ids, x, y, color } = group;
+
+                // Create cluster label
+                const labelId = 'cluster-label-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
+                const labelNode = cy.add({
+                    group: 'nodes',
+                    data: {
+                        id: labelId,
+                        label: name,
+                        isAnnotation: true,
+                        annotationType: 'shape'
+                    },
+                    position: {
+                        x: x,
+                        y: y - 100
+                    }
+                });
+
+                labelNode.addClass('annotation-shape');
+                labelNode.style({
+                    'width': Math.max(name.length * 30, 400),
+                    'height': 80,
+                    'background-color': colorMap[color] || '#ff4444',
+                    'label': name,
+                    'text-valign': 'center',
+                    'text-halign': 'center',
+                    'font-size': '32px',
+                    'font-weight': 'bold',
+                    'color': '#ffffff',
+                    'text-outline-width': 2,
+                    'text-outline-color': '#000000',
+                    'shape': 'rectangle',
+                    'border-width': 3,
+                    'border-color': '#000000'
+                });
+
+                // Arrange cards in cluster (compact grid around position)
+                const cols = Math.ceil(Math.sqrt(card_ids.length));
+                const spacing = 180;
+
+                card_ids.forEach((cardId, index) => {
+                    const node = cy.getElementById(cardId);
+                    if (node.length > 0) {
+                        const col = index % cols;
+                        const row = Math.floor(index / cols);
+                        const offsetX = (col - (cols - 1) / 2) * spacing;
+                        const offsetY = row * 150 + 50;
+
+                        node.position({
+                            x: x + offsetX,
+                            y: y + offsetY
+                        });
+                    }
+                });
+            });
+
+            // Fit view to all clusters
+            cy.fit(null, 100);
+
+            // Show status
+            const statusDiv = document.getElementById('selectionInfo');
+            if (statusDiv) {
+                const totalCards = groups.reduce((sum, g) => sum + g.card_ids.length, 0);
+                statusDiv.textContent = `AI skapade ${groups.length} kluster med ${totalCards} kort`;
+                statusDiv.classList.add('visible');
+                setTimeout(() => statusDiv.classList.remove('visible'), 4000);
+            }
+
+            saveBoard();
+        }
+
+        // AI Tool: Create arrows between cards
+        async function aiCreateArrows(input) {
+            const { connections } = input;
+
+            console.log(`🔗 Creating ${connections.length} arrows`);
+
+            const colorMap = {
+                'red': '#ff4444',
+                'blue': '#4444ff',
+                'green': '#44ff44',
+                'yellow': '#ffff44',
+                'purple': '#ff44ff',
+                'orange': '#ffaa44',
+                'black': '#000000'
+            };
+
+            connections.forEach(conn => {
+                const { from, to, color = 'red' } = conn;
+
+                const sourceNode = cy.getElementById(from);
+                const targetNode = cy.getElementById(to);
+
+                if (sourceNode.length > 0 && targetNode.length > 0) {
+                    const edgeId = generateCardId();
+                    const arrowColor = colorMap[color] || colorMap['red'];
+
+                    cy.add({
+                        data: {
+                            id: edgeId,
+                            source: from,
+                            target: to,
+                            isAnnotation: true,
+                            annotationType: 'connection',
+                            connectionType: 'arrow'
+                        },
+                        classes: 'annotation-connection'
+                    });
+
+                    const edge = cy.getElementById(edgeId);
+                    edge.style({
+                        'line-color': arrowColor,
+                        'target-arrow-color': arrowColor,
+                        'target-arrow-shape': 'triangle',
+                        'curve-style': 'bezier',
+                        'width': 5,
+                        'arrow-scale': 1.8
+                    });
+
+                    console.log(`🔗 Created arrow: ${from} → ${to} (${color})`);
+                }
+            });
+
+            // Show status
+            const statusDiv = document.getElementById('selectionInfo');
+            if (statusDiv) {
+                statusDiv.textContent = `AI skapade ${connections.length} pilar`;
                 statusDiv.classList.add('visible');
                 setTimeout(() => statusDiv.classList.remove('visible'), 3000);
             }
