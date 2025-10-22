@@ -13466,13 +13466,6 @@ Kan ha #taggar överallt.
                                 node.data('displayHeight', displayHeight);
                             }
 
-                            // Apply colors and pinning immediately, skip height for now
-                            const cardColor = node.data('cardColor');
-                            if (cardColor) {
-                                const colorValue = getCardColorValue(cardColor, getCurrentTheme());
-                                node.style('background-color', colorValue);
-                            }
-
                             // Restore annotation styling if this is an annotation
                             if (card.isAnnotation && card.annotationType === 'shape') {
                                 console.log('🔷 Restoring shape annotation:', card.id, card.shape);
@@ -13484,19 +13477,13 @@ Kan ha #taggar överallt.
                                 if (card.customWidth) node.data('customWidth', card.customWidth);
                                 if (card.customHeight) node.data('customHeight', card.customHeight);
 
-                                // Restore styling
-                                if (card.backgroundColor) {
-                                    node.style('background-color', card.backgroundColor);
-                                    console.log(`  Restored color: ${card.backgroundColor}`);
-                                }
-                                if (card.width) {
-                                    node.style('width', card.width);
-                                    console.log(`  Restored width: ${card.width}`);
-                                }
-                                if (card.height) {
-                                    node.style('height', card.height);
-                                    console.log(`  Restored height: ${card.height}`);
-                                }
+                                // Restore ALL styling in one call (like edges)
+                                node.style({
+                                    'background-color': card.backgroundColor || '#ff0000',
+                                    'width': card.width || '200px',
+                                    'height': card.height || '200px'
+                                });
+                                console.log(`  Restored shape: color=${card.backgroundColor}, size=${card.width}x${card.height}`);
                             } else if (card.isAnnotation && card.annotationType === 'text') {
                                 console.log('📝 Restoring text annotation:', card.id);
                                 node.addClass('annotation-text');
@@ -13507,18 +13494,20 @@ Kan ha #taggar överallt.
                                 if (card.customWidth) node.data('customWidth', card.customWidth);
                                 if (card.customHeight) node.data('customHeight', card.customHeight);
 
-                                // Restore styling
-                                if (card.backgroundColor) {
-                                    node.style('background-color', card.backgroundColor);
-                                }
-                                if (card.fontSize) {
-                                    node.style('font-size', card.fontSize);
-                                }
-                                if (card.width) {
-                                    node.style('width', card.width);
-                                }
-                                if (card.height) {
-                                    node.style('height', card.height);
+                                // Restore ALL styling in one call (like edges)
+                                node.style({
+                                    'background-color': card.backgroundColor || '#ff0000',
+                                    'font-size': card.fontSize || '32px',
+                                    'width': card.width || '200px',
+                                    'height': card.height || '100px'
+                                });
+                                console.log(`  Restored text: color=${card.backgroundColor}, size=${card.width}x${card.height}`);
+                            } else {
+                                // Only apply cardColor styling for NON-annotations
+                                const cardColor = node.data('cardColor');
+                                if (cardColor) {
+                                    const colorValue = getCardColorValue(cardColor, getCurrentTheme());
+                                    node.style('background-color', colorValue);
                                 }
                             }
 
@@ -13786,12 +13775,12 @@ Kan ha #taggar överallt.
         function startAutoSync() {
             if (!isSignedIn || !accessToken) return;
             
-            // Auto-save to Drive every 30 seconds when signed in
+            // Auto-save to Drive every 20 minutes when signed in
             autoSyncInterval = setInterval(async () => {
                 if (isSignedIn && accessToken) {
                     await saveToGoogleDrive();
                 }
-            }, 30000);
+            }, 20 * 60 * 1000);
         }
         
         function stopAutoSync() {
