@@ -12523,6 +12523,14 @@ Kan ha #taggar överallt.
                         calculatedHeight: node.data('calculatedHeight') || null,
                         originalFileName: node.data('originalFileName') || null,
                         imageNotes: node.data('imageNotes') || '',
+                        // Annotation data - CRITICAL for shapes/text annotations
+                        isAnnotation: node.data('isAnnotation') || false,
+                        annotationType: node.data('annotationType') || null,
+                        shape: node.data('shape') || null,
+                        textSize: node.data('textSize') || null,
+                        label: node.data('label') || null,
+                        backgroundColor: node.style('background-color'),
+                        fontSize: node.style('font-size'),
                         // All other metadata
                         export_timestamp: node.data('export_timestamp') || null,
                         export_session: node.data('export_session') || null,
@@ -13193,6 +13201,14 @@ Kan ha #taggar överallt.
                         imageNotes: node.data('imageNotes') || '',
                         annotation: node.data('annotation') || null,
                         searchableText: node.data('searchableText') || null,
+                        // Annotation data - CRITICAL for shapes/text annotations
+                        isAnnotation: node.data('isAnnotation') || false,
+                        annotationType: node.data('annotationType') || null,
+                        shape: node.data('shape') || null,
+                        textSize: node.data('textSize') || null,
+                        label: node.data('label') || null,
+                        backgroundColor: node.style('background-color'),
+                        fontSize: node.style('font-size'),
                         // Other metadata
                         export_timestamp: node.data('export_timestamp') || null,
                         export_session: node.data('export_session') || null,
@@ -13379,6 +13395,12 @@ Kan ha #taggar överallt.
                                 searchableText: card.searchableText || null,
                                 originalFileName: card.originalFileName || null,
                                 imageNotes: card.imageNotes || '',
+                                // ANNOTATION SUPPORT - Essential for preserving shapes/text annotations
+                                isAnnotation: card.isAnnotation || false,
+                                annotationType: card.annotationType || null,
+                                shape: card.shape || null,
+                                textSize: card.textSize || null,
+                                label: card.label || null,
                                 // Other metadata
                                 export_timestamp: card.export_timestamp || null,
                                 export_session: card.export_session || null,
@@ -13421,6 +13443,37 @@ Kan ha #taggar överallt.
                             if (cardColor) {
                                 const colorValue = getCardColorValue(cardColor, getCurrentTheme());
                                 node.style('background-color', colorValue);
+                            }
+
+                            // Restore annotation styling if this is an annotation
+                            if (card.isAnnotation && card.annotationType === 'shape') {
+                                console.log('🔷 Restoring shape annotation:', card.id, card.shape);
+                                node.addClass('annotation-shape');
+
+                                // Restore shape data
+                                if (card.shape) node.data('shape', card.shape);
+                                if (card.label) node.data('label', card.label);
+
+                                // Restore background color styling
+                                if (card.backgroundColor) {
+                                    node.style('background-color', card.backgroundColor);
+                                    console.log(`  Restored color: ${card.backgroundColor}`);
+                                }
+                            } else if (card.isAnnotation && card.annotationType === 'text') {
+                                console.log('📝 Restoring text annotation:', card.id);
+                                node.addClass('annotation-text');
+
+                                // Restore text annotation data
+                                if (card.textSize) node.data('textSize', card.textSize);
+                                if (card.label) node.data('label', card.label);
+
+                                // Restore styling
+                                if (card.backgroundColor) {
+                                    node.style('background-color', card.backgroundColor);
+                                }
+                                if (card.fontSize) {
+                                    node.style('font-size', card.fontSize);
+                                }
                             }
 
                             // Handle both isPinned and pinned (for backwards compatibility)
