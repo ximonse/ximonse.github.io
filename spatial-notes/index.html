@@ -5648,6 +5648,27 @@ Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kort
                 }
             ];
 
+            // Build messages array with conversation history
+            // Include last 4 messages (2 exchanges) for context
+            const messages = [];
+            const recentHistory = aiChatHistory.slice(-4); // Last 4 messages max
+
+            // Add history messages
+            recentHistory.forEach(msg => {
+                messages.push({
+                    role: msg.role,
+                    content: msg.text
+                });
+            });
+
+            // Add current user message
+            messages.push({
+                role: 'user',
+                content: prompt
+            });
+
+            console.log(`📝 Sending ${messages.length} messages to API (${recentHistory.length} from history + 1 new)`);
+
             // Call Claude API with tools
             const response = await fetch('https://api.anthropic.com/v1/messages', {
                 method: 'POST',
@@ -5661,10 +5682,7 @@ Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kort
                     model: 'claude-3-5-sonnet-20241022',
                     max_tokens: 4096,
                     tools: tools,
-                    messages: [{
-                        role: 'user',
-                        content: prompt
-                    }]
+                    messages: messages
                 })
             });
 
@@ -6009,9 +6027,9 @@ Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kort
             const colors = ['#ff4444', '#4444ff', '#44ff44', '#ffff44', '#ff44ff', '#ffaa44'];
 
             // Card and spacing constants
-            const CARD_SPACING_X = 180;  // Horizontal space between cards
-            const CARD_SPACING_Y = 150;  // Vertical space between cards
-            const CLUSTER_MARGIN = 400;  // Space between clusters
+            const CARD_SPACING_X = 220;  // Horizontal space between cards (increased from 180)
+            const CARD_SPACING_Y = 180;  // Vertical space between cards (increased from 150)
+            const CLUSTER_MARGIN = 600;  // Space between clusters (increased from 400)
             const START_Y = 200;         // Starting Y position
 
             let currentX = 200;  // Starting X position for first cluster
@@ -12529,8 +12547,12 @@ Kan ha #taggar överallt.
                         shape: node.data('shape') || null,
                         textSize: node.data('textSize') || null,
                         label: node.data('label') || null,
+                        customWidth: node.data('customWidth') || null,
+                        customHeight: node.data('customHeight') || null,
                         backgroundColor: node.style('background-color'),
                         fontSize: node.style('font-size'),
+                        width: node.style('width'),
+                        height: node.style('height'),
                         // All other metadata
                         export_timestamp: node.data('export_timestamp') || null,
                         export_session: node.data('export_session') || null,
@@ -13207,8 +13229,12 @@ Kan ha #taggar överallt.
                         shape: node.data('shape') || null,
                         textSize: node.data('textSize') || null,
                         label: node.data('label') || null,
+                        customWidth: node.data('customWidth') || null,
+                        customHeight: node.data('customHeight') || null,
                         backgroundColor: node.style('background-color'),
                         fontSize: node.style('font-size'),
+                        width: node.style('width'),
+                        height: node.style('height'),
                         // Other metadata
                         export_timestamp: node.data('export_timestamp') || null,
                         export_session: node.data('export_session') || null,
@@ -13401,6 +13427,8 @@ Kan ha #taggar överallt.
                                 shape: card.shape || null,
                                 textSize: card.textSize || null,
                                 label: card.label || null,
+                                customWidth: card.customWidth || null,
+                                customHeight: card.customHeight || null,
                                 // Other metadata
                                 export_timestamp: card.export_timestamp || null,
                                 export_session: card.export_session || null,
@@ -13453,11 +13481,21 @@ Kan ha #taggar överallt.
                                 // Restore shape data
                                 if (card.shape) node.data('shape', card.shape);
                                 if (card.label) node.data('label', card.label);
+                                if (card.customWidth) node.data('customWidth', card.customWidth);
+                                if (card.customHeight) node.data('customHeight', card.customHeight);
 
-                                // Restore background color styling
+                                // Restore styling
                                 if (card.backgroundColor) {
                                     node.style('background-color', card.backgroundColor);
                                     console.log(`  Restored color: ${card.backgroundColor}`);
+                                }
+                                if (card.width) {
+                                    node.style('width', card.width);
+                                    console.log(`  Restored width: ${card.width}`);
+                                }
+                                if (card.height) {
+                                    node.style('height', card.height);
+                                    console.log(`  Restored height: ${card.height}`);
                                 }
                             } else if (card.isAnnotation && card.annotationType === 'text') {
                                 console.log('📝 Restoring text annotation:', card.id);
@@ -13466,6 +13504,8 @@ Kan ha #taggar överallt.
                                 // Restore text annotation data
                                 if (card.textSize) node.data('textSize', card.textSize);
                                 if (card.label) node.data('label', card.label);
+                                if (card.customWidth) node.data('customWidth', card.customWidth);
+                                if (card.customHeight) node.data('customHeight', card.customHeight);
 
                                 // Restore styling
                                 if (card.backgroundColor) {
@@ -13473,6 +13513,12 @@ Kan ha #taggar överallt.
                                 }
                                 if (card.fontSize) {
                                     node.style('font-size', card.fontSize);
+                                }
+                                if (card.width) {
+                                    node.style('width', card.width);
+                                }
+                                if (card.height) {
+                                    node.style('height', card.height);
                                 }
                             }
 
