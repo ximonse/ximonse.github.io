@@ -3129,6 +3129,13 @@
                             citation = citationSpan.textContent.trim();
                         }
 
+                        // Extract link/URL if available
+                        const linkElement = p.querySelector('a');
+                        let zoteroLink = '';
+                        if (linkElement && linkElement.href) {
+                            zoteroLink = linkElement.href;
+                        }
+
                         // Create hidden tags for tracking
                         const hidden_tags = [
                             `zotero_import_${timestamp}`,
@@ -3137,6 +3144,11 @@
 
                         if (citation) {
                             hidden_tags.push(`citation_${citation.replace(/[^a-zA-Z0-9]/g, '_')}`);
+                        }
+
+                        // Add link as metadata (if exists)
+                        if (zoteroLink) {
+                            hidden_tags.push(`url_${zoteroLink}`);
                         }
 
                         // Grid positioning
@@ -3173,6 +3185,7 @@
                             source_file: file.name,
                             page_number: null,
                             matched_terms: citation || null,
+                            zotero_url: zoteroLink || null,  // Store Zotero link as metadata
                             card_index: index,
                             // Kort-status
                             isManualCard: false,
@@ -3701,6 +3714,7 @@
                         source_file: node.data('source_file'),
                         page_number: node.data('page_number'),
                         matched_terms: node.data('matched_terms'),
+                        zotero_url: node.data('zotero_url'),
                         card_index: node.data('card_index')
                     };
                     console.log(`${node.id()}:`, metadata);
@@ -3745,24 +3759,41 @@
             const sessions = new Set();
             const sources = new Set();
             let pdfCards = 0;
+            let zoteroCards = 0;
+            let zoteroCardsWithLinks = 0;
             let manualCards = 0;
-            
+
             nodes.forEach(node => {
                 const session = node.data('export_session');
                 const source = node.data('export_source');
-                
+                const zoteroUrl = node.data('zotero_url');
+
                 if (session) sessions.add(session);
                 if (source) sources.add(source);
-                
-                if (source === 'pdf_extractor') pdfCards++;
-                else manualCards++;
+
+                if (source === 'pdf_extractor') {
+                    pdfCards++;
+                } else if (source === 'zotero') {
+                    zoteroCards++;
+                    if (zoteroUrl) zoteroCardsWithLinks++;
+                } else {
+                    manualCards++;
+                }
             });
-            
-            return `Totalt: ${nodes.length} kort\n` +
-                   `PDF-kort: ${pdfCards}\n` +
-                   `Manuella kort: ${manualCards}\n` +
-                   `Export-sessioner: ${sessions.size}\n` +
-                   `Källor: ${sources.size}`;
+
+            let stats = `Totalt: ${nodes.length} kort\n` +
+                       `PDF-kort: ${pdfCards}\n` +
+                       `Zotero-kort: ${zoteroCards}`;
+
+            if (zoteroCards > 0) {
+                stats += ` (${zoteroCardsWithLinks} med länk)`;
+            }
+
+            stats += `\nManuella kort: ${manualCards}\n` +
+                    `Export-sessioner: ${sessions.size}\n` +
+                    `Källor: ${sources.size}`;
+
+            return stats;
         }
         
         // ====================================================================================================
