@@ -9341,21 +9341,43 @@ Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kort
                         }
 
                         // Extract link/URL if available
-                        // Prefer highlight links (with #fragment) over article links
+                        // Priority: PDF annotation links > PDF links > highlight links > article links
                         const allLinks = p.querySelectorAll('a');
                         let zoteroLink = '';
 
                         if (allLinks.length > 0) {
-                            // First, look for a link with a hash fragment (direct highlight link)
-                            const highlightLink = Array.from(allLinks).find(a => a.href && a.href.includes('#'));
+                            // Priority 1: PDF annotation link (open-pdf with annotation parameter)
+                            const pdfAnnotationLink = Array.from(allLinks).find(a =>
+                                a.href && a.href.includes('open-pdf') && a.href.includes('annotation=')
+                            );
 
-                            if (highlightLink) {
-                                zoteroLink = highlightLink.href;
-                                console.log('📍 Found direct highlight link:', zoteroLink);
+                            if (pdfAnnotationLink) {
+                                zoteroLink = pdfAnnotationLink.href;
+                                console.log('📍 Found PDF annotation link:', zoteroLink);
                             } else {
-                                // Fall back to first available link
-                                zoteroLink = allLinks[0].href;
-                                console.log('🔗 Using article link:', zoteroLink);
+                                // Priority 2: PDF link (open-pdf without annotation)
+                                const pdfLink = Array.from(allLinks).find(a =>
+                                    a.href && a.href.includes('open-pdf')
+                                );
+
+                                if (pdfLink) {
+                                    zoteroLink = pdfLink.href;
+                                    console.log('📄 Found PDF link:', zoteroLink);
+                                } else {
+                                    // Priority 3: Highlight link (with #fragment)
+                                    const highlightLink = Array.from(allLinks).find(a =>
+                                        a.href && a.href.includes('#')
+                                    );
+
+                                    if (highlightLink) {
+                                        zoteroLink = highlightLink.href;
+                                        console.log('🔗 Found highlight link:', zoteroLink);
+                                    } else {
+                                        // Priority 4: Fall back to first available link
+                                        zoteroLink = allLinks[0].href;
+                                        console.log('🔗 Using article link:', zoteroLink);
+                                    }
+                                }
                             }
                         }
 
@@ -16043,13 +16065,13 @@ Kan ha #taggar överallt.
                 const width = node.renderedWidth();
                 const height = node.renderedHeight();
 
-                // Scale badge size proportionally to card size (15% of width, min 20px, max 50px)
-                const badgeSize = Math.max(20, Math.min(50, width * 0.15));
-                const fontSize = Math.max(12, badgeSize * 0.53);
-                const borderWidth = Math.max(1, badgeSize * 0.067);
+                // Scale badge size proportionally to card size (8% of width, min 15px, max 30px)
+                const badgeSize = Math.max(15, Math.min(30, width * 0.08));
+                const fontSize = Math.max(10, badgeSize * 0.6);
 
-                const leftPos = pos.x + width/2 - badgeSize/2;
-                const topPos = pos.y - height/2 - badgeSize/4;
+                // Position inside top-right corner
+                const leftPos = pos.x + width/2 - badgeSize * 1.5;
+                const topPos = pos.y - height/2 + badgeSize * 0.5;
 
                 badge.style.cssText = `
                     position: absolute;
@@ -16057,8 +16079,7 @@ Kan ha #taggar överallt.
                     top: ${topPos}px;
                     width: ${badgeSize}px;
                     height: ${badgeSize}px;
-                    background: rgba(255, 255, 255, 0.95);
-                    border: ${borderWidth}px solid #007acc;
+                    background: transparent;
                     border-radius: 50%;
                     display: flex;
                     align-items: center;
@@ -16066,19 +16087,16 @@ Kan ha #taggar överallt.
                     font-size: ${fontSize}px;
                     cursor: pointer;
                     pointer-events: auto;
-                    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
                     transition: transform 0.1s ease;
                     user-select: none;
                 `;
 
                 // Hover effect
                 badge.addEventListener('mouseenter', () => {
-                    badge.style.transform = 'scale(1.15)';
-                    badge.style.boxShadow = '0 4px 12px rgba(0,122,204,0.4)';
+                    badge.style.transform = 'scale(1.3)';
                 });
                 badge.addEventListener('mouseleave', () => {
                     badge.style.transform = 'scale(1)';
-                    badge.style.boxShadow = '0 2px 6px rgba(0,0,0,0.2)';
                 });
 
                 // Click handler - open link in new tab
