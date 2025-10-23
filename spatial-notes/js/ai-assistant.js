@@ -477,67 +477,59 @@
 
             const notesContext = selectedNotes.join('\n\n---\n\n');
 
-            // Create prompt
-            let prompt = `Du är en VISUELL organisationsexpert för anteckningar.
+            // Create prompt with context
+            let prompt = '';
 
-VIKTIGT - Anpassa ditt svar efter situationen:
-
-KONKRET UPPDRAG (användaren ber dig göra något specifikt):
-- Använd verktyg direkt utan att prata mycket
-- Kortfattat svar (max 2 meningar)
-- Exempel: "organisera i högar", "skapa mindmap", "visa som flöde"
-
-VAGA FRÅGOR (användaren är osäker eller ber om förslag):
-- Ge konkreta förslag på vad du kan göra
-- Förklara alternativ (kluster vs mindmap vs flöde)
-- Fråga om förtydligande om nödvändigt
-- Exempel: "vad kan du göra?", "hjälp mig organisera", "hur ska jag strukturera detta?"
-
-VERKTYG du kan använda:
-- arrange_clusters: Dela kort i separata högar/kategorier med färgade etiketter. Systemet beräknar automatiskt positioner så högar INTE överlappar. Du behöver bara ange gruppnamn och vilka kort som hör till varje grupp.
-- create_arrows: Rita pilar mellan kort (perfekt för mindmaps och flödesscheman)
-- arrange_grid: Arrangera kort i rutnät
-- arrange_circle: Arrangera kort i cirkel (bra för att visa relationer)
-- create_annotation: Skapa stora textetiketter
-
-EXEMPEL PÅ VAD DU KAN ERBJUDA:
-- Dela kort i ämnesområden (använd arrange_clusters - positioner hanteras automatiskt)
-- Skapa mindmap med central idé och pilar (använd create_arrows)
-- Skapa flödesschema med sekventiella pilar (använd arrange_grid + create_arrows)
-- Hitta samband mellan kort och visa med pilar
-
-`;
-
+            // Add filtering context if relevant
             if (totalCards > MAX_CARDS) {
-                prompt += `OBS: Användaren har totalt ${totalCards} kort, men du får bara se de ${cardsToSend.length} mest relevanta för denna fråga.
-
-`;
+                prompt += `Kontext: Användaren har totalt ${totalCards} kort. För att hålla nere kostnaderna visar jag dig de ${cardsToSend.length} mest relevanta baserat på nyckelord från frågan.\n\n`;
             }
 
-            prompt += `Här är ${selectedNotes.length} anteckningar:
+            prompt += `Här är användarnens ${selectedNotes.length} anteckningskort:\n\n${notesContext}\n\n`;
 
-${notesContext}
+            prompt += `=== TILLGÄNGLIGA VERKTYG ===\n\n`;
+            prompt += `För att organisera och visualisera kort har du dessa verktyg:\n\n`;
+            prompt += `• arrange_clusters - Dela kort i separata högar/kategorier med färgade etiketter\n`;
+            prompt += `  Exempel: Gruppera kort efter tema (arbete/privat/studier)\n`;
+            prompt += `  Systemet beräknar automatiskt positioner så högar inte överlappar\n\n`;
+            prompt += `• create_arrows - Rita pilar mellan kort\n`;
+            prompt += `  Exempel: Visa beroenden, skapa mindmaps, visa flöden\n\n`;
+            prompt += `• arrange_grid - Arrangera kort i rutnät\n`;
+            prompt += `  Exempel: Strukturerad översikt, checklista\n\n`;
+            prompt += `• arrange_circle - Arrangera kort i cirkel\n`;
+            prompt += `  Exempel: Visa relationer, brainstorming\n\n`;
+            prompt += `• arrange_timeline - Arrangera kort i veckoschema (Mån-Sön)\n`;
+            prompt += `  Exempel: Veckoplanering, deadlines\n\n`;
+            prompt += `• create_annotation - Skapa stora textetiketter\n`;
+            prompt += `  Exempel: Rubriker för sektioner, kategorinamn\n\n`;
+            prompt += `• filter_and_show - Visa endast specifika kort, dölj resten\n`;
+            prompt += `  Exempel: "Visa bara kort om projekt X"\n\n`;
 
-Användarens fråga: ${query}
+            prompt += `=== ANVÄNDARENS FRÅGA ===\n\n${query}\n\n`;
 
-Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kortfattad. Om uppdraget är vagt: ge förslag och fråga om förtydligande.`;
+            prompt += `Analysera frågan och anteckningarna. Tänk på:\n`;
+            prompt += `- Vad vill användaren uppnå?\n`;
+            prompt += `- Vilka mönster/teman ser du i korten?\n`;
+            prompt += `- Vilka verktyg (eller kombination) passar bäst?\n`;
+            prompt += `- Hur kan du göra korten lättare att förstå visuellt?\n\n`;
+            prompt += `Svara på svenska och var hjälpsam!`;
 
             // Define tools that AI can use to manipulate cards
             const tools = [
                 {
                     name: "filter_and_show",
-                    description: "Filter and show only specific cards, hiding all others. Use when user wants to see only certain cards.",
+                    description: "Focus on specific cards by hiding all others. Use when user asks to 'show only X' or 'find cards about Y'. After filtering, the view zooms to show only the selected cards. User can clear the filter anytime.",
                     input_schema: {
                         type: "object",
                         properties: {
                             card_ids: {
                                 type: "array",
                                 items: { type: "string" },
-                                description: "Array of card IDs to show"
+                                description: "Array of card IDs to show (hide everything else)"
                             },
                             reason: {
                                 type: "string",
-                                description: "Brief explanation of why these cards were selected"
+                                description: "Clear explanation of why these specific cards were selected (helps user understand the filtering)"
                             }
                         },
                         required: ["card_ids", "reason"]
@@ -545,26 +537,26 @@ Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kort
                 },
                 {
                     name: "create_annotation",
-                    description: "Create a large visual label/annotation box with text. Use for creating visual markers or category headers.",
+                    description: "Create large, colorful text labels to mark sections or categories. These are bigger and more prominent than regular cards. Use for visual organization, headers, or important markers. The label appears as a large colored box with text.",
                     input_schema: {
                         type: "object",
                         properties: {
                             text: {
                                 type: "string",
-                                description: "Text to display in the annotation"
+                                description: "Text to display (keep it short - 1-3 words work best for labels)"
                             },
                             color: {
                                 type: "string",
                                 enum: ["red", "blue", "green", "yellow", "purple", "orange"],
-                                description: "Color of the annotation box"
+                                description: "Box color - choose colors that make sense (e.g., red for urgent, green for completed, blue for work)"
                             },
                             x: {
                                 type: "number",
-                                description: "X position (default center if not specified)"
+                                description: "X position on canvas (optional - defaults to center)"
                             },
                             y: {
                                 type: "number",
-                                description: "Y position (default center if not specified)"
+                                description: "Y position on canvas (optional - defaults to center)"
                             }
                         },
                         required: ["text", "color"]
@@ -572,26 +564,26 @@ Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kort
                 },
                 {
                     name: "arrange_grid",
-                    description: "Arrange cards in a grid layout. Perfect for organizing cards by category.",
+                    description: "Arrange cards in a neat grid (rows and columns). Perfect for organized lists, comparing items, or when you need a clean, structured layout. Cards are evenly spaced in rows and columns.",
                     input_schema: {
                         type: "object",
                         properties: {
                             card_ids: {
                                 type: "array",
                                 items: { type: "string" },
-                                description: "Card IDs to arrange"
+                                description: "List of card IDs to arrange in the grid"
                             },
                             columns: {
                                 type: "number",
-                                description: "Number of columns in grid (default 5)"
+                                description: "How many columns (default: 5). Fewer columns = taller grid, more columns = wider grid"
                             },
                             start_x: {
                                 type: "number",
-                                description: "Starting X position (default 100)"
+                                description: "Starting X position (optional, default: 100)"
                             },
                             start_y: {
                                 type: "number",
-                                description: "Starting Y position (default 100)"
+                                description: "Starting Y position (optional, default: 100)"
                             }
                         },
                         required: ["card_ids"]
@@ -599,26 +591,26 @@ Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kort
                 },
                 {
                     name: "arrange_circle",
-                    description: "Arrange cards in a circle around a center point. Great for showing relationships.",
+                    description: "Arrange cards in a circle around a center point. Great for showing equal relationships, brainstorming sessions, or when items don't have a hierarchy. All cards are evenly spaced around the circle perimeter.",
                     input_schema: {
                         type: "object",
                         properties: {
                             card_ids: {
                                 type: "array",
                                 items: { type: "string" },
-                                description: "Card IDs to arrange in circle"
+                                description: "Cards to arrange in circle formation"
                             },
                             center_x: {
                                 type: "number",
-                                description: "Center X position"
+                                description: "X coordinate of circle center"
                             },
                             center_y: {
                                 type: "number",
-                                description: "Center Y position"
+                                description: "Y coordinate of circle center"
                             },
                             radius: {
                                 type: "number",
-                                description: "Circle radius in pixels (default 400)"
+                                description: "Circle radius in pixels (default: 400). Larger radius = bigger circle = more space between cards"
                             }
                         },
                         required: ["card_ids", "center_x", "center_y"]
@@ -626,14 +618,14 @@ Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kort
                 },
                 {
                     name: "arrange_timeline",
-                    description: "Arrange cards in a week grid (Monday-Sunday columns) based on their dates. Perfect for todos and tasks.",
+                    description: "Arrange cards in a weekly calendar grid with columns for each day (Monday through Sunday). The tool automatically parses dates from card content and places cards in the correct day column. Perfect for todo lists, weekly planning, or deadline tracking.",
                     input_schema: {
                         type: "object",
                         properties: {
                             card_ids: {
                                 type: "array",
                                 items: { type: "string" },
-                                description: "Card IDs to arrange in timeline"
+                                description: "Cards to arrange in the week timeline (system will parse dates from card content)"
                             }
                         },
                         required: ["card_ids"]
@@ -641,7 +633,7 @@ Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kort
                 },
                 {
                     name: "arrange_clusters",
-                    description: "Organize cards into separate visual clusters/piles with labels. System automatically calculates positions to prevent overlap. Perfect for categorizing cards into distinct groups.",
+                    description: "THE BEST TOOL for categorization! Organize cards into distinct groups/piles with colored labels above each group. The system automatically calculates spacing so groups don't overlap - you just specify group names and which cards go in each group. Perfect for organizing by topic, status, priority, or any other category. Each cluster gets a colored label and cards are neatly arranged below it.",
                     input_schema: {
                         type: "object",
                         properties: {
@@ -652,17 +644,17 @@ Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kort
                                     properties: {
                                         name: {
                                             type: "string",
-                                            description: "Name/label for this cluster"
+                                            description: "Name for this group/cluster (will appear as a large colored label above the cards)"
                                         },
                                         card_ids: {
                                             type: "array",
                                             items: { type: "string" },
-                                            description: "Card IDs in this cluster"
+                                            description: "Card IDs that belong to this cluster"
                                         }
                                     },
                                     required: ["name", "card_ids"]
                                 },
-                                description: "Array of groups/clusters to create. System will auto-position them with proper spacing."
+                                description: "List of groups to create. Each group gets its own space with automatic positioning and spacing."
                             }
                         },
                         required: ["groups"]
@@ -670,7 +662,7 @@ Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kort
                 },
                 {
                     name: "create_arrows",
-                    description: "Create arrows between cards to show relationships, flow, or hierarchy. Perfect for mindmaps and flowcharts.",
+                    description: "Draw arrows between cards to show connections, flow, dependencies, or relationships. Perfect for mind maps (central idea with branches), flowcharts (sequential steps), cause-effect diagrams, or showing how ideas relate. You can create multiple arrows at once and use different colors to show different types of relationships.",
                     input_schema: {
                         type: "object",
                         properties: {
@@ -681,21 +673,21 @@ Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kort
                                     properties: {
                                         from: {
                                             type: "string",
-                                            description: "Source card ID"
+                                            description: "Source card ID (where arrow starts)"
                                         },
                                         to: {
                                             type: "string",
-                                            description: "Target card ID"
+                                            description: "Target card ID (where arrow points)"
                                         },
                                         color: {
                                             type: "string",
                                             enum: ["red", "blue", "green", "yellow", "purple", "orange", "black"],
-                                            description: "Arrow color (default red)"
+                                            description: "Arrow color - use different colors for different relationship types (default: red)"
                                         }
                                     },
                                     required: ["from", "to"]
                                 },
-                                description: "Array of arrow connections to create"
+                                description: "List of arrows to create. Each arrow connects two cards."
                             }
                         },
                         required: ["connections"]
@@ -704,9 +696,9 @@ Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kort
             ];
 
             // Build messages array with conversation history
-            // Include last 4 messages (2 exchanges) for context
+            // Include last 10 messages (5 exchanges) for better context
             const messages = [];
-            const recentHistory = aiChatHistory.slice(-4); // Last 4 messages max
+            const recentHistory = aiChatHistory.slice(-10); // Last 10 messages max
 
             // Add history messages
             recentHistory.forEach(msg => {
@@ -724,6 +716,32 @@ Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kort
 
             console.log(`📝 Sending ${messages.length} messages to API (${recentHistory.length} from history + 1 new)`);
 
+            // Build system message with clear instructions
+            const systemMessage = `Du är en intelligent och hjälpsam visuell organisationsassistent för anteckningar. Du hjälper användaren att förstå, organisera och analysera deras anteckningar på ett smart och genomtänkt sätt.
+
+DIN PERSONLIGHET OCH STIL:
+- Tänk innan du agerar - analysera vad användaren verkligen vill ha
+- Var vänlig, professionell och hjälpsam
+- Förklara ditt resonemang när det är användbart
+- Ge konkreta förslag baserade på vad du ser i anteckningarna
+- Var pragmatisk - om något är oklart, fråga istället för att gissa
+
+HUR DU ARBETAR:
+1. Förstå användarens intention (vad vill de egentligen åstadkomma?)
+2. Analysera anteckningarna och identifiera mönster/teman
+3. Välj rätt verktyg eller kombination av verktyg
+4. Förklara vad du gör och varför (kort men tydligt)
+5. Utför åtgärden och bekräfta resultatet
+
+VIKTIGA PRINCIPER:
+- Anpassa komplexitet efter situationen: enkla frågor = enkla svar, komplexa uppgifter = mer förklaring
+- Använd verktyg smart - kombinera dem för bästa resultat
+- Om användaren är vag ("hjälp mig", "organisera detta") - ge konkreta förslag baserat på vad du ser
+- Om användaren är specifik ("skapa mindmap", "dela i kategorier") - gör det direkt
+- Tänk visuellt - hur kan korten arrangeras för att bli lättare att förstå?
+
+Du har tillgång till verktyg för att skapa visuella strukturer. Använd dem kreativt och smart!`;
+
             // Call Claude API with tools
             const response = await fetch('https://api.anthropic.com/v1/messages', {
                 method: 'POST',
@@ -735,7 +753,8 @@ Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kort
                 },
                 body: JSON.stringify({
                     model: 'claude-3-5-sonnet-20241022',
-                    max_tokens: 4096,
+                    max_tokens: 8192,
+                    system: systemMessage,
                     tools: tools,
                     messages: messages
                 })
@@ -769,8 +788,33 @@ Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kort
                 }
             }
 
-            // Return text response with filter info
-            return `💡 ${filterInfo}\n\n${textResponse || 'AI utförde visuella åtgärder.'}`;
+            // Build response message
+            let finalResponse = '';
+
+            if (filterInfo) {
+                finalResponse += `💡 ${filterInfo}\n\n`;
+            }
+
+            if (textResponse) {
+                finalResponse += textResponse;
+            } else if (toolCalls.length > 0) {
+                // If tools were used but no text explanation, provide basic feedback
+                const toolNames = toolCalls.map(t => {
+                    const nameMap = {
+                        'arrange_clusters': 'organiserade kort i kluster',
+                        'create_arrows': 'skapade pilar',
+                        'arrange_grid': 'arrangerade kort i grid',
+                        'arrange_circle': 'arrangerade kort i cirkel',
+                        'arrange_timeline': 'skapade vecko-timeline',
+                        'create_annotation': 'skapade etikett',
+                        'filter_and_show': 'filtrerade kort'
+                    };
+                    return nameMap[t.name] || t.name;
+                });
+                finalResponse += `✨ Jag har ${toolNames.join(' och ')}.`;
+            }
+
+            return finalResponse;
         }
 
         // Execute AI tool based on name
