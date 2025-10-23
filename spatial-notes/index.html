@@ -9341,10 +9341,22 @@ Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kort
                         }
 
                         // Extract link/URL if available
-                        const linkElement = p.querySelector('a');
+                        // Prefer highlight links (with #fragment) over article links
+                        const allLinks = p.querySelectorAll('a');
                         let zoteroLink = '';
-                        if (linkElement && linkElement.href) {
-                            zoteroLink = linkElement.href;
+
+                        if (allLinks.length > 0) {
+                            // First, look for a link with a hash fragment (direct highlight link)
+                            const highlightLink = Array.from(allLinks).find(a => a.href && a.href.includes('#'));
+
+                            if (highlightLink) {
+                                zoteroLink = highlightLink.href;
+                                console.log('📍 Found direct highlight link:', zoteroLink);
+                            } else {
+                                // Fall back to first available link
+                                zoteroLink = allLinks[0].href;
+                                console.log('🔗 Using article link:', zoteroLink);
+                            }
                         }
 
                         // Create hidden tags for tracking
