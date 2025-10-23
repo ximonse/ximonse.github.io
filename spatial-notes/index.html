@@ -16027,22 +16027,27 @@ Kan ha #taggar överallt.
                 const width = node.renderedWidth();
                 const height = node.renderedHeight();
 
-                const leftPos = pos.x + width/2 - 15;
-                const topPos = pos.y - height/2 - 5;
+                // Scale badge size proportionally to card size (15% of width, min 20px, max 50px)
+                const badgeSize = Math.max(20, Math.min(50, width * 0.15));
+                const fontSize = Math.max(12, badgeSize * 0.53);
+                const borderWidth = Math.max(1, badgeSize * 0.067);
+
+                const leftPos = pos.x + width/2 - badgeSize/2;
+                const topPos = pos.y - height/2 - badgeSize/4;
 
                 badge.style.cssText = `
                     position: absolute;
                     left: ${leftPos}px;
                     top: ${topPos}px;
-                    width: 30px;
-                    height: 30px;
+                    width: ${badgeSize}px;
+                    height: ${badgeSize}px;
                     background: rgba(255, 255, 255, 0.95);
-                    border: 2px solid #007acc;
+                    border: ${borderWidth}px solid #007acc;
                     border-radius: 50%;
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    font-size: 16px;
+                    font-size: ${fontSize}px;
                     cursor: pointer;
                     pointer-events: auto;
                     box-shadow: 0 2px 6px rgba(0,0,0,0.2);
