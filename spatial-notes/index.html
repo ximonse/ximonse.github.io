@@ -8308,7 +8308,9 @@ Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kort
                     imageData: node.data('imageData') || null, // Base64 image data
                     annotation: node.data('annotation') || null, // Image annotation text
                     searchableText: node.data('searchableText') || null, // Lowercased searchable text
-                    originalFileName: node.data('originalFileName') || null // Original filename
+                    originalFileName: node.data('originalFileName') || null, // Original filename
+                    // ZOTERO LINK - Save link from Zotero imports
+                    zotero_url: node.data('zotero_url') || null
                 })),
                 edges: cy.edges().map(edge => ({
                     id: edge.id(),
@@ -8462,7 +8464,9 @@ Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kort
                             imageData: cardData.imageData || null, // Base64 image data
                             annotation: cardData.annotation || null, // Image annotation text
                             searchableText: cardData.searchableText || null, // Lowercased searchable text
-                            originalFileName: cardData.originalFileName || null // Original filename
+                            originalFileName: cardData.originalFileName || null, // Original filename
+                            // ZOTERO LINK - Restore link from saved data
+                            zotero_url: cardData.zotero_url || null
                         },
                         position: cardData.position
                     });
