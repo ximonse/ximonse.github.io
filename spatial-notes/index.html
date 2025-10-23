@@ -5649,9 +5649,9 @@ Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kort
             ];
 
             // Build messages array with conversation history
-            // Include last 4 messages (2 exchanges) for context
+            // Include last 10 messages (5 exchanges) for better context
             const messages = [];
-            const recentHistory = aiChatHistory.slice(-4); // Last 4 messages max
+            const recentHistory = aiChatHistory.slice(-10); // Last 10 messages max
 
             // Add history messages
             recentHistory.forEach(msg => {
@@ -5680,7 +5680,8 @@ Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kort
                 },
                 body: JSON.stringify({
                     model: 'claude-3-5-sonnet-20241022',
-                    max_tokens: 4096,
+                    max_tokens: 8192,
+                    system: "Du är en intelligent och hjälpsam visuell organisationsassistent. Analysera användarens behov innan du agerar. Var vänlig, professionell och förklara ditt resonemang när det är användbart. Om något är oklart, fråga istället för att gissa.",
                     tools: tools,
                     messages: messages
                 })
@@ -9335,6 +9336,13 @@ Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kort
                             citation = citationSpan.textContent.trim();
                         }
 
+                        // Extract link/URL if available
+                        const linkElement = p.querySelector('a');
+                        let zoteroLink = '';
+                        if (linkElement && linkElement.href) {
+                            zoteroLink = linkElement.href;
+                        }
+
                         // Create hidden tags for tracking
                         const hidden_tags = [
                             `zotero_import_${timestamp}`,
@@ -9343,6 +9351,11 @@ Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kort
 
                         if (citation) {
                             hidden_tags.push(`citation_${citation.replace(/[^a-zA-Z0-9]/g, '_')}`);
+                        }
+
+                        // Add link as metadata (if exists)
+                        if (zoteroLink) {
+                            hidden_tags.push(`url_${zoteroLink}`);
                         }
 
                         // Grid positioning
@@ -9379,6 +9392,7 @@ Svara på svenska. Om uppdraget är tydligt: använd verktyg direkt och var kort
                             source_file: file.name,
                             page_number: null,
                             matched_terms: citation || null,
+                            zotero_url: zoteroLink || null,  // Store Zotero link as metadata
                             card_index: index,
                             // Kort-status
                             isManualCard: false,
@@ -15954,6 +15968,153 @@ Kan ha #taggar överallt.
             const menu = document.getElementById('columnContextMenu');
             if (menu) document.body.removeChild(menu);
         }
+
+        // ====================================================================================================
+        // 🔗 ZOTERO LINK BADGE SYSTEM
+        // ====================================================================================================
+
+        let linkBadgesContainer = null;
+
+        function setupLinkBadges() {
+            // Create container for link badges
+            linkBadgesContainer = document.createElement('div');
+            linkBadgesContainer.id = 'linkBadgesContainer';
+            linkBadgesContainer.style.cssText = `
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                pointer-events: none;
+                z-index: 100;
+            `;
+            document.getElementById('cy').appendChild(linkBadgesContainer);
+
+            // Update badges whenever the view changes
+            cy.on('pan zoom drag position', updateLinkBadges);
+            cy.on('add remove', updateLinkBadges);
+
+            // Initial render
+            updateLinkBadges();
+            console.log('🔗 Link badge system initialized');
+        }
+
+        function updateLinkBadges() {
+            if (!linkBadgesContainer) return;
+
+            // Clear existing badges
+            linkBadgesContainer.innerHTML = '';
+
+            // Get all nodes with zotero_url
+            let badgeCount = 0;
+            cy.nodes().forEach(node => {
+                const zoteroUrl = node.data('zotero_url');
+                if (!zoteroUrl) return;
+
+                // Skip if node is not visible
+                if (node.style('display') === 'none') return;
+
+                badgeCount++;
+
+                // Create badge
+                const badge = document.createElement('div');
+                badge.className = 'zotero-link-badge';
+                badge.innerHTML = '🔗';
+                badge.title = 'Öppna länk: ' + zoteroUrl;
+
+                // Position badge at top-right corner of node
+                const pos = node.renderedPosition();
+                const width = node.renderedWidth();
+                const height = node.renderedHeight();
+
+                const leftPos = pos.x + width/2 - 15;
+                const topPos = pos.y - height/2 - 5;
+
+                badge.style.cssText = `
+                    position: absolute;
+                    left: ${leftPos}px;
+                    top: ${topPos}px;
+                    width: 30px;
+                    height: 30px;
+                    background: rgba(255, 255, 255, 0.95);
+                    border: 2px solid #007acc;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 16px;
+                    cursor: pointer;
+                    pointer-events: auto;
+                    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+                    transition: transform 0.1s ease;
+                    user-select: none;
+                `;
+
+                // Hover effect
+                badge.addEventListener('mouseenter', () => {
+                    badge.style.transform = 'scale(1.15)';
+                    badge.style.boxShadow = '0 4px 12px rgba(0,122,204,0.4)';
+                });
+                badge.addEventListener('mouseleave', () => {
+                    badge.style.transform = 'scale(1)';
+                    badge.style.boxShadow = '0 2px 6px rgba(0,0,0,0.2)';
+                });
+
+                // Click handler - open link in new tab
+                badge.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    window.open(zoteroUrl, '_blank');
+                    console.log('🔗 Opening Zotero link:', zoteroUrl);
+                });
+
+                // Touch support for mobile
+                badge.addEventListener('touchend', (e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    window.open(zoteroUrl, '_blank');
+                    console.log('🔗 Opening Zotero link (touch):', zoteroUrl);
+                });
+
+                linkBadgesContainer.appendChild(badge);
+            });
+
+            if (badgeCount > 0) {
+                console.log(`✅ Updated ${badgeCount} link badge(s)`);
+            }
+        }
+
+        // TEST FUNCTION - Create a test card with a Zotero link
+        // Run in console: testZoteroLinkBadge()
+        window.testZoteroLinkBadge = function() {
+            const testCard = cy.add({
+                group: 'nodes',
+                data: {
+                    id: 'test-zotero-link-' + Date.now(),
+                    text: 'Test kort med Zotero-länk!\n\nKlicka på 🔗-ikonen för att öppna länken.',
+                    tags: ['test'],
+                    zotero_url: 'https://www.anthropic.com',
+                    export_source: 'zotero'
+                },
+                position: { x: 400, y: 400 }
+            });
+            testCard.grabify();
+            updateLinkBadges();
+            console.log('✅ Test kort skapat! Leta efter 🔗-ikonen i övre högra hörnet.');
+            return testCard;
+        };
+
+        // Initialize badge system after Cytoscape is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            // Wait a bit for Cytoscape to fully initialize
+            setTimeout(() => {
+                if (typeof cy !== 'undefined' && cy) {
+                    setupLinkBadges();
+                } else {
+                    console.warn('⚠️ Cytoscape not initialized, badges will not work');
+                }
+            }, 500);
+        });
     </script>
 
 </body>
