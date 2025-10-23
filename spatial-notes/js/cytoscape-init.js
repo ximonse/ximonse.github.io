@@ -702,15 +702,13 @@
             console.log('🔄 Setting up simple resize functionality...');
             setupFallbackResize();
 
-            // Setup Zotero link badges
-            console.log('🔗 Setting up Zotero link badges...');
-            setupLinkBadges();
+            // Note: Zotero link badges are initialized from main.js after initCytoscape()
 
         }
         
 
         // ====================================================================================================
-        // 🔗 ZOTERO LINK BADGE SYSTEM
+        // 🔗 ZOTERO LINK BADGE SYSTEM (GLOBAL SCOPE)
         // ====================================================================================================
 
         let linkBadgesContainer = null;
@@ -845,4 +843,3 @@
             console.log('✅ Test kort skapat! Leta efter 🔗-ikonen i övre högra hörnet.');
             return testCard;
         };
-

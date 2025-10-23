@@ -1,6 +1,7 @@
         // Event listeners
         document.addEventListener('DOMContentLoaded', function() {
             initCytoscape();
+            setupLinkBadges(); // Setup clickable link badges for Zotero cards
             loadSavedTheme(); // Load theme before anything else
             
             // Check for potential conflicts on startup
