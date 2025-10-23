@@ -697,11 +697,118 @@
             // ====================================================================================================
             // 🎯 SIMPLE RESIZE SYSTEM
             // ====================================================================================================
-            
+
             // Setup simple resize functionality using mouse events
             console.log('🔄 Setting up simple resize functionality...');
             setupFallbackResize();
-            
-            
+
+            // Setup Zotero link badges
+            console.log('🔗 Setting up Zotero link badges...');
+            setupLinkBadges();
+
         }
         
+
+        // ====================================================================================================
+        // 🔗 ZOTERO LINK BADGE SYSTEM
+        // ====================================================================================================
+
+        let linkBadgesContainer = null;
+
+        function setupLinkBadges() {
+            // Create container for link badges
+            linkBadgesContainer = document.createElement('div');
+            linkBadgesContainer.id = 'linkBadgesContainer';
+            linkBadgesContainer.style.cssText = `
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                pointer-events: none;
+                z-index: 100;
+            `;
+            document.getElementById('cy').appendChild(linkBadgesContainer);
+
+            // Update badges whenever the view changes
+            cy.on('pan zoom drag position', updateLinkBadges);
+            cy.on('add remove', updateLinkBadges);
+
+            // Initial render
+            updateLinkBadges();
+        }
+
+        function updateLinkBadges() {
+            if (!linkBadgesContainer) return;
+
+            // Clear existing badges
+            linkBadgesContainer.innerHTML = '';
+
+            // Get all nodes with zotero_url
+            cy.nodes().forEach(node => {
+                const zoteroUrl = node.data('zotero_url');
+                if (!zoteroUrl) return;
+
+                // Skip if node is not visible
+                if (node.style('display') === 'none') return;
+
+                // Create badge
+                const badge = document.createElement('div');
+                badge.className = 'zotero-link-badge';
+                badge.innerHTML = '🔗';
+                badge.title = 'Öppna länk: ' + zoteroUrl;
+
+                // Position badge at top-right corner of node
+                const pos = node.renderedPosition();
+                const width = node.renderedWidth();
+                const height = node.renderedHeight();
+
+                badge.style.cssText = `
+                    position: absolute;
+                    left: ${pos.x + width/2 - 15}px;
+                    top: ${pos.y - height/2 - 5}px;
+                    width: 30px;
+                    height: 30px;
+                    background: rgba(255, 255, 255, 0.95);
+                    border: 2px solid #007acc;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 16px;
+                    cursor: pointer;
+                    pointer-events: auto;
+                    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+                    transition: transform 0.1s ease;
+                    user-select: none;
+                `;
+
+                // Hover effect
+                badge.addEventListener('mouseenter', () => {
+                    badge.style.transform = 'scale(1.15)';
+                    badge.style.boxShadow = '0 4px 12px rgba(0,122,204,0.4)';
+                });
+                badge.addEventListener('mouseleave', () => {
+                    badge.style.transform = 'scale(1)';
+                    badge.style.boxShadow = '0 2px 6px rgba(0,0,0,0.2)';
+                });
+
+                // Click handler - open link in new tab
+                badge.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    window.open(zoteroUrl, '_blank');
+                    console.log('🔗 Opening Zotero link:', zoteroUrl);
+                });
+
+                // Touch support for mobile
+                badge.addEventListener('touchend', (e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    window.open(zoteroUrl, '_blank');
+                    console.log('🔗 Opening Zotero link (touch):', zoteroUrl);
+                });
+
+                linkBadgesContainer.appendChild(badge);
+            });
+        }
