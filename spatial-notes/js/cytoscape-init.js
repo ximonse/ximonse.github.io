@@ -739,15 +739,22 @@
         }
 
         function updateLinkBadges() {
-            if (!linkBadgesContainer) return;
+            if (!linkBadgesContainer) {
+                console.warn('⚠️ linkBadgesContainer not initialized');
+                return;
+            }
 
             // Clear existing badges
             linkBadgesContainer.innerHTML = '';
 
             // Get all nodes with zotero_url
+            let badgeCount = 0;
             cy.nodes().forEach(node => {
                 const zoteroUrl = node.data('zotero_url');
                 if (!zoteroUrl) return;
+
+                badgeCount++;
+                console.log('🔗 Creating badge for node:', node.id(), 'URL:', zoteroUrl);
 
                 // Skip if node is not visible
                 if (node.style('display') === 'none') return;
@@ -811,4 +818,31 @@
 
                 linkBadgesContainer.appendChild(badge);
             });
+
+            if (badgeCount > 0) {
+                console.log(`✅ Created ${badgeCount} link badge(s)`);
+            } else {
+                console.log('ℹ️ No cards with zotero_url found');
+            }
         }
+
+        // TEST FUNCTION - Create a test card with a Zotero link
+        // Run in console: testZoteroLinkBadge()
+        window.testZoteroLinkBadge = function() {
+            const testCard = cy.add({
+                group: 'nodes',
+                data: {
+                    id: 'test-zotero-link-' + Date.now(),
+                    text: 'Test kort med Zotero-länk!\n\nKlicka på 🔗-ikonen för att öppna länken.',
+                    tags: ['test'],
+                    zotero_url: 'https://www.anthropic.com',
+                    export_source: 'zotero'
+                },
+                position: { x: 400, y: 400 }
+            });
+            testCard.grabify();
+            updateLinkBadges();
+            console.log('✅ Test kort skapat! Leta efter 🔗-ikonen i övre högra hörnet.');
+            return testCard;
+        };
+
