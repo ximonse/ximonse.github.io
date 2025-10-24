@@ -5910,23 +5910,29 @@ Tredje anteckningen...
             const arrangePos = getArrangementPosition();
             const baseX = arrangePos.x;
             const baseY = arrangePos.y;
-            const columnSpacing = 360;
-            const verticalGap = 80;
+
+            // Calculate grid layout for piles (högar)
+            const numGroups = preparedGroups.length;
+            const maxCols = Math.min(6, Math.ceil(Math.sqrt(numGroups)));
+            const pileSpacing = 500; // Large spacing to avoid overlap
 
             cy.batch(() => {
                 preparedGroups.forEach((group, groupIndex) => {
-                    const groupX = baseX + groupIndex * columnSpacing;
-                    let currentY = baseY;
+                    const col = groupIndex % maxCols;
+                    const row = Math.floor(groupIndex / maxCols);
+
+                    // Calculate pile position (all cards in pile get same position)
+                    const pileX = baseX + col * pileSpacing;
+                    const pileY = baseY + row * pileSpacing;
                     const color = aiColorCycle[groupIndex % aiColorCycle.length];
 
+                    // Stack all cards at the SAME position (creates a visual pile)
                     group.nodes.forEach(node => {
-                        const nodeHeight = getMeasuredTextHeight(node);
-                        node.position({ x: groupX, y: currentY });
+                        node.position({ x: pileX, y: pileY }); // Same position for all cards in pile!
                         if (color) {
                             node.data('cardColor', color);
                         }
                         applyAutoDoneColoring(node);
-                        currentY += nodeHeight + verticalGap;
                     });
                 });
             });
