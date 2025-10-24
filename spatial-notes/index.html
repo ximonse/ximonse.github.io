@@ -5871,7 +5871,7 @@ Tredje anteckningen...
             }
         }
 
-        function applyAiGrouping(groups) {
+        function applyAiGrouping(groups, layout = 'stack') {
             if (!Array.isArray(groups) || groups.length === 0) {
                 throw new Error('AI-svaret innehöll inga grupper att sortera.');
             }
@@ -5911,31 +5911,61 @@ Tredje anteckningen...
             const baseX = arrangePos.x;
             const baseY = arrangePos.y;
 
-            // Calculate grid layout for piles (högar)
-            const numGroups = preparedGroups.length;
-            const maxCols = Math.min(6, Math.ceil(Math.sqrt(numGroups)));
-            const pileSpacing = 500; // Large spacing to avoid overlap
+            if (layout === 'grid') {
+                // GRID LAYOUT - varje grupp i egen kolumn (g+v style)
+                const numGroups = preparedGroups.length;
+                const maxCols = Math.min(6, numGroups);
+                const columnSpacing = 400; // Large spacing between columns
+                const verticalGap = 80; // Gap between cards in column
 
-            cy.batch(() => {
-                preparedGroups.forEach((group, groupIndex) => {
-                    const col = groupIndex % maxCols;
-                    const row = Math.floor(groupIndex / maxCols);
+                cy.batch(() => {
+                    preparedGroups.forEach((group, groupIndex) => {
+                        const col = groupIndex % maxCols;
+                        const row = Math.floor(groupIndex / maxCols);
 
-                    // Calculate pile position (all cards in pile get same position)
-                    const pileX = baseX + col * pileSpacing;
-                    const pileY = baseY + row * pileSpacing;
-                    const color = aiColorCycle[groupIndex % aiColorCycle.length];
+                        const groupX = baseX + col * columnSpacing;
+                        let currentY = baseY + row * 800; // Large row spacing
+                        const color = aiColorCycle[groupIndex % aiColorCycle.length];
 
-                    // Stack all cards at the SAME position (creates a visual pile)
-                    group.nodes.forEach(node => {
-                        node.position({ x: pileX, y: pileY }); // Same position for all cards in pile!
-                        if (color) {
-                            node.data('cardColor', color);
-                        }
-                        applyAutoDoneColoring(node);
+                        // Place cards in COLUMN (different Y positions)
+                        group.nodes.forEach(node => {
+                            const nodeHeight = getMeasuredTextHeight(node);
+                            node.position({ x: groupX, y: currentY });
+                            if (color) {
+                                node.data('cardColor', color);
+                            }
+                            applyAutoDoneColoring(node);
+                            currentY += nodeHeight + verticalGap; // Move down for next card
+                        });
                     });
                 });
-            });
+            } else {
+                // STACK LAYOUT - alla kort i gruppen på EXAKT SAMMA position (q style)
+                const numGroups = preparedGroups.length;
+                const maxCols = Math.min(6, Math.ceil(Math.sqrt(numGroups)));
+                const pileSpacing = 500; // Large spacing to avoid overlap
+
+                cy.batch(() => {
+                    preparedGroups.forEach((group, groupIndex) => {
+                        const col = groupIndex % maxCols;
+                        const row = Math.floor(groupIndex / maxCols);
+
+                        // Calculate pile position (all cards in pile get same position)
+                        const pileX = baseX + col * pileSpacing;
+                        const pileY = baseY + row * pileSpacing;
+                        const color = aiColorCycle[groupIndex % aiColorCycle.length];
+
+                        // Stack all cards at the SAME position (creates a visual pile)
+                        group.nodes.forEach(node => {
+                            node.position({ x: pileX, y: pileY }); // Same position for all cards in pile!
+                            if (color) {
+                                node.data('cardColor', color);
+                            }
+                            applyAutoDoneColoring(node);
+                        });
+                    });
+                });
+            }
 
             if (typeof isColumnView !== 'undefined' && isColumnView) {
                 renderColumnViewDebounced();
@@ -5992,13 +6022,17 @@ Tredje anteckningen...
                 return;
             }
 
+            const selectedNodes = cy.$(':selected').filter(node => !node.hasClass('annotation-shape'));
+            const selectedIds = selectedNodes.map(node => node.id());
+
             const cards = cy.nodes().filter(node => !node.hasClass('annotation-shape')).map(node => ({
                 id: node.id(),
                 title: node.data('title') || '',
                 text: node.data('text') || '',
                 tags: node.data('tags') || [],
                 type: node.data('type') || 'text',
-                cardColor: node.data('cardColor') || ''
+                cardColor: node.data('cardColor') || '',
+                selected: selectedIds.includes(node.id())
             }));
 
             if (!cards.length) {
@@ -6033,34 +6067,42 @@ Tredje anteckningen...
                             role: 'system',
                             content: `Du är en expert på VISUELL SPATIAL ORGANISATION av anteckningskort på en oändlig canvas.
 
-VIKTIGT - Förstå den spatiala aspekten:
-- Detta är INTE en lista eller databas - det är en VISUELL canvas där kort arrangeras SPATIALT
-- "Grupper" betyder HÖGAR/KLUSTER - kort som staplas på SAMMA POSITION för att visa att de hör ihop
-- Användaren vill ha VISUELLA HÖGAR som kan flyttas runt på canvasen
-- Varje hög/kluster ska innehålla relaterade kort staplade på varandra
+VIKTIGT - Två olika layouttyper:
+
+1. "KATEGORIER/OMRÅDEN" (när användaren säger: sortera, kategorisera, organisera, dela upp):
+   - Layout: "grid" - varje grupp får egen KOLUMN med kort under varandra
+   - Grupperna placeras BREDVID varandra med stort avstånd
+   - Perfekt för att visa kategorier visuellt separerade
+
+2. "HÖGAR/STAPLAR" (när användaren säger: hög, stapel, samla, kluster):
+   - Layout: "stack" - alla kort i gruppen staplas på EXAKT SAMMA position
+   - Skapar VERKLIGA HÖGAR av kort
+   - Perfekt för att samla relaterade kort i kompakta högar
 
 Din uppgift:
-1. Analysera korten baserat på användarens instruktion
-2. Skapa VISUELLA HÖGAR/KLUSTER av relaterade kort
-3. Ge varje hög ett tydligt namn som beskriver temat
+1. Analysera användarens instruktion och välj rätt layout
+2. Inkludera ALLA kort - varje kort måste placeras i någon grupp
+3. Skapa grupper baserat på innehåll/tags/färg
+4. Ge varje grupp ett tydligt namn
 
 Output-format (JSON):
 {
+  "layout": "grid" eller "stack",
   "groups": [
     {
-      "title": "Högnamn",
+      "title": "Gruppnamn",
       "card_ids": ["id1", "id2", ...]
     }
   ],
   "summary": "Kort förklaring på svenska"
 }
 
-Regler:
+KRITISKT:
+- ALLA kort MÅSTE inkluderas i någon grupp
+- Om kort inte passar någonstans: skapa "Övrigt"-grupp
+- Kort med "selected": true är markerade av användaren (viktigt!)
 - Använd ENBART kort-ID:n som finns i listan
-- Skapa 2-8 meningsfulla högar (inte för många, inte för få)
-- Varje hög ska ha minst 2 kort (undvik enstaka kort)
-- Svara alltid med giltig JSON
-- Sammanfattning på svenska`
+- Svara alltid med giltig JSON`
                         },
                         {
                             role: 'user',
@@ -6100,7 +6142,8 @@ Regler:
 
                 renderAiGroupingPreview(parsed?.groups || [], parsed?.summary || parsed?.note || '');
 
-                applyAiGrouping(parsed?.groups || []);
+                const layout = parsed?.layout || 'stack'; // Default to stack if not specified
+                applyAiGrouping(parsed?.groups || [], layout);
 
                 let successMessage = parsed?.summary ? parsed.summary : 'Klart! Korten sorterades enligt AI-förslaget.';
                 if (usingTemporaryKey) {
