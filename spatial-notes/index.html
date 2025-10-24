@@ -2063,13 +2063,10 @@
         <button class="toolbar-btn" id="multiImportBtn" onclick="showMultiCardPasteDialog()" title="Skapa flera kort samtidigt (M)" style="padding: 8px 16px;">
             📋 Multi-import
         </button>
-        <button class="toolbar-btn" id="aiAssistantToggleBtn" onclick="toggleAiPanel()" title="Analysera och sortera kort med ChatGPT" style="padding: 8px 16px;">
-            🤖 AI-sortering
+        <button class="toolbar-btn" id="aiAssistantToggleBtn" onclick="toggleAiPanel()" title="Gruppera kort i högar med ChatGPT" style="padding: 8px 16px;">
+            🤖 ChatGPT Högar
         </button>
-        <button class="toolbar-btn" id="aiAssistantActivateBtn" onclick="activateChatgptAi()" title="Starta ChatGPT-assistenten direkt" style="padding: 8px 16px;">
-            🚀 Starta AI
-        </button>
-        <button class="toolbar-btn" id="aiAssistantBtn" onclick="toggleAIPanel()" title="Öppna Claude AI-assistent" style="padding: 8px 16px;">
+        <button class="toolbar-btn" id="aiAssistantBtn" onclick="toggleAIPanel()" title="Analysera och organisera med Claude AI" style="padding: 8px 16px;">
             🤖 Claude AI
         </button>
         <button class="toolbar-btn" id="viewToggleBtn" onclick="toggleView()" title="Växla mellan brädvy och kolumnvy" style="padding: 8px 16px;">
@@ -2137,15 +2134,15 @@
     <div class="ai-assistant-panel hidden" id="aiAssistantPanel">
         <div class="ai-assistant-header">
             <div>
-                <h3>ChatGPT-sortering</h3>
-                <p>Beskriv hur korten ska grupperas så hjälper AI:n till.</p>
+                <h3>ChatGPT Högar</h3>
+                <p>Skapa visuella högar av relaterade kort - AI:n grupperar och staplar dem åt dig.</p>
             </div>
             <button class="ai-assistant-close" onclick="toggleAiPanel(true)" title="Stäng">✕</button>
         </div>
         <div class="ai-assistant-body">
-            <textarea class="ai-assistant-textarea" id="aiAssistantPrompt" placeholder="Exempel: Sortera efter projektfas och samla alla forskningskort högst upp."></textarea>
+            <textarea class="ai-assistant-textarea" id="aiAssistantPrompt" placeholder="Exempel: Skapa högar baserat på ämne. Eller: Gruppera efter projektstatus. Eller: Dela upp i kategorierna forskning, planering och genomförande."></textarea>
             <div class="ai-assistant-controls">
-                <button id="aiAssistantRunBtn" onclick="runAiSorting()">Analysera &amp; sortera</button>
+                <button id="aiAssistantRunBtn" onclick="runAiSorting()">Skapa högar</button>
                 <button id="aiAssistantVoiceBtn" class="ai-assistant-voice-btn" onclick="toggleAiVoiceInput()">🎤 Röst</button>
             </div>
             <div class="ai-api-key-row">
@@ -2153,9 +2150,9 @@
                 <button onclick="saveAiApiKey()">Spara nyckel</button>
             </div>
             <p class="ai-assistant-info" id="aiAssistantSecurityNotice">
-                <strong>Säkerhet:</strong> Nyckeln sparas bara i minnet när du kör AI-sortering och skickas direkt till OpenAI. Klicka på "Spara" endast på en privat enhet – lämna fältet tomt och tryck "Spara" för att ta bort en sparad nyckel.
+                <strong>Säkerhet:</strong> Nyckeln sparas bara i minnet och skickas direkt till OpenAI. Klicka på "Spara" endast på en privat enhet – lämna fältet tomt och tryck "Spara" för att ta bort en sparad nyckel.
             </p>
-            <div class="ai-assistant-status" id="aiAssistantStatus">Beskriv med text eller röst hur korten ska sorteras.</div>
+            <div class="ai-assistant-status" id="aiAssistantStatus">Beskriv hur du vill att korten ska grupperas i högar.</div>
             <div class="ai-assistant-groups" id="aiAssistantGroups"></div>
         </div>
     </div>
@@ -6028,7 +6025,36 @@ Tredje anteckningen...
                     messages: [
                         {
                             role: 'system',
-                            content: 'Du hjälper till att analysera och sortera digitala anteckningskort. Svara alltid med giltig JSON med fälten "groups" (lista) och valfritt "summary". Varje grupp ska ha "title" och "card_ids" (lista med kort-ID:n). Använd enbart ID:n som finns i listan. Skriv svar på svenska när du sammanfattar.'
+                            content: `Du är en expert på VISUELL SPATIAL ORGANISATION av anteckningskort på en oändlig canvas.
+
+VIKTIGT - Förstå den spatiala aspekten:
+- Detta är INTE en lista eller databas - det är en VISUELL canvas där kort arrangeras SPATIALT
+- "Grupper" betyder HÖGAR/KLUSTER - kort som staplas på SAMMA POSITION för att visa att de hör ihop
+- Användaren vill ha VISUELLA HÖGAR som kan flyttas runt på canvasen
+- Varje hög/kluster ska innehålla relaterade kort staplade på varandra
+
+Din uppgift:
+1. Analysera korten baserat på användarens instruktion
+2. Skapa VISUELLA HÖGAR/KLUSTER av relaterade kort
+3. Ge varje hög ett tydligt namn som beskriver temat
+
+Output-format (JSON):
+{
+  "groups": [
+    {
+      "title": "Högnamn",
+      "card_ids": ["id1", "id2", ...]
+    }
+  ],
+  "summary": "Kort förklaring på svenska"
+}
+
+Regler:
+- Använd ENBART kort-ID:n som finns i listan
+- Skapa 2-8 meningsfulla högar (inte för många, inte för få)
+- Varje hög ska ha minst 2 kort (undvik enstaka kort)
+- Svara alltid med giltig JSON
+- Sammanfattning på svenska`
                         },
                         {
                             role: 'user',
