@@ -1820,11 +1820,20 @@ function performSearch(query) {
         clearSearch();
         return;
     }
-    
+
     searchActive = true;
     let matchCount = 0;
-    
-    cy.nodes().forEach(node => {
+
+    // Check if we should search only in selected cards
+    const searchInSelectedOnly = document.getElementById('searchInSelectedOnly')?.checked;
+    const nodesToSearch = searchInSelectedOnly ? cy.$(':selected') : cy.nodes();
+
+    // Clear previous search matches if searching in all nodes
+    if (!searchInSelectedOnly) {
+        cy.nodes().removeClass('search-match search-non-match');
+    }
+
+    nodesToSearch.forEach(node => {
         const title = (node.data('title') || '').toLowerCase();
         const text = (node.data('text') || '').toLowerCase();
         const tags = (node.data('tags') || []).join(' ').toLowerCase();
@@ -5478,6 +5487,541 @@ function clearSearch() {
     // Hide mobile select button
     const selectBtn = document.getElementById('searchSelectBtn');
     selectBtn.style.display = 'none';
+}
+
+// ============================================================================
+// EXPORT FUNCTIONS - Export selected cards in various formats
+// ============================================================================
+
+// Generate Markdown from selected cards (EXACT text, NO AI processing)
+function generateMarkdownExport(nodes) {
+    let markdown = '';
+
+    nodes.forEach((node, index) => {
+        const title = node.data('title') || '';
+        const text = node.data('text') || '';
+        const tags = node.data('tags') || [];
+        const annotation = node.data('annotation') || ''; // For image nodes
+        const isImage = node.data('type') === 'image';
+
+        // Add card header
+        if (title) {
+            markdown += `# ${title}\n\n`;
+        } else {
+            markdown += `# Kort ${index + 1}\n\n`;
+        }
+
+        // Add text content (EXACT copy, NO modifications)
+        if (isImage && annotation) {
+            markdown += `*Bildanteckning:*\n${annotation}\n\n`;
+        } else if (text) {
+            markdown += `${text}\n\n`;
+        }
+
+        // Add tags
+        if (tags.length > 0) {
+            markdown += `*Tags:* ${tags.map(tag => `#${tag}`).join(' ')}\n\n`;
+        }
+
+        // Separator between cards
+        markdown += '---\n\n';
+    });
+
+    return markdown;
+}
+
+// Generate plain text from selected cards (EXACT text, NO AI processing)
+function generatePlainTextExport(nodes) {
+    let plainText = '';
+
+    nodes.forEach((node, index) => {
+        const title = node.data('title') || '';
+        const text = node.data('text') || '';
+        const tags = node.data('tags') || [];
+        const annotation = node.data('annotation') || ''; // For image nodes
+        const isImage = node.data('type') === 'image';
+
+        // Add card header
+        plainText += `=== ${title || `Kort ${index + 1}`} ===\n\n`;
+
+        // Add text content (EXACT copy, NO modifications)
+        if (isImage && annotation) {
+            plainText += `[Bildanteckning]\n${annotation}\n\n`;
+        } else if (text) {
+            plainText += `${text}\n\n`;
+        }
+
+        // Add tags
+        if (tags.length > 0) {
+            plainText += `Tags: ${tags.map(tag => `#${tag}`).join(' ')}\n\n`;
+        }
+
+        plainText += '\n';
+    });
+
+    return plainText;
+}
+
+// Generate JSON from selected cards (EXACT data, NO AI processing)
+// Uses same format as exportToJSON() for compatibility with importFromJSON()
+function generateJSONExport(nodes) {
+    const exportData = {
+        metadata: {
+            exportDate: new Date().toISOString(),
+            exportApp: 'Spatial Notes',
+            version: '2.0',
+            totalCards: nodes.length,
+            totalEdges: 0, // Selected nodes only, no edges
+            totalImages: nodes.filter(n => n.data('type') === 'image').length,
+            exportType: 'selected_cards' // Indicate this is a partial export
+        },
+        viewport: {
+            zoom: cy.zoom(),
+            pan: cy.pan()
+        },
+        cards: nodes.map(node => ({
+            id: node.id(),
+            title: node.data('title') || '',
+            text: node.data('text') || '',
+            tags: node.data('tags') || [],
+            hidden_tags: node.data('hidden_tags') || [],
+            position: {
+                x: Math.round(node.position().x),
+                y: Math.round(node.position().y)
+            },
+            pinned: node.hasClass('pinned') || false,
+            isManualCard: node.data('isManualCard') || false,
+            cardColor: node.data('cardColor') || null,
+            // Preserve all metadata
+            export_timestamp: node.data('export_timestamp') || null,
+            export_session: node.data('export_session') || null,
+            export_source: node.data('export_source') || null,
+            source_file: node.data('source_file') || null,
+            page_number: node.data('page_number') || null,
+            matched_terms: node.data('matched_terms') || null,
+            card_index: node.data('card_index') || null,
+            // Annotation-specific data
+            isAnnotation: node.data('isAnnotation') || false,
+            annotationType: node.data('annotationType') || null,
+            customWidth: node.data('customWidth') || null,
+            customHeight: node.data('customHeight') || null,
+            customZIndex: node.data('customZIndex') || null,
+            customFontSize: node.data('customFontSize') || null,
+            annotationColor: node.data('isAnnotation') ? node.style('background-color') : null,
+            shape: node.data('shape') || null,
+            // IMAGE DATA - Essential for image nodes
+            type: node.data('type') || null,
+            imageData: node.data('imageData') || null,
+            annotation: node.data('annotation') || null,
+            searchableText: node.data('searchableText') || null,
+            originalFileName: node.data('originalFileName') || null,
+            // ZOTERO LINK
+            zotero_url: node.data('zotero_url') || null
+        })),
+        edges: [], // No edges exported for selected cards
+        arrowsHidden: window.arrowsHidden || false
+    };
+
+    return JSON.stringify(exportData, null, 2);
+}
+
+// Download helper function
+function downloadFile(content, filename, mimeType) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// Export selected cards as Markdown file
+function exportAsMarkdown() {
+    const selected = cy.$(':selected');
+    if (selected.length === 0) {
+        alert('Markera kort först!');
+        return;
+    }
+
+    const markdown = generateMarkdownExport(selected);
+    const timestamp = new Date().toISOString().slice(0, 10);
+    downloadFile(markdown, `spatial-notes-${timestamp}.md`, 'text/markdown');
+
+    showStatusMessage(`📄 Exporterade ${selected.length} kort som Markdown`);
+}
+
+// Export selected cards as plain text file
+function exportAsPlainText() {
+    const selected = cy.$(':selected');
+    if (selected.length === 0) {
+        alert('Markera kort först!');
+        return;
+    }
+
+    const plainText = generatePlainTextExport(selected);
+    const timestamp = new Date().toISOString().slice(0, 10);
+    downloadFile(plainText, `spatial-notes-${timestamp}.txt`, 'text/plain');
+
+    showStatusMessage(`📝 Exporterade ${selected.length} kort som text`);
+}
+
+// Export selected cards as JSON file
+function exportAsJSON() {
+    const selected = cy.$(':selected');
+    if (selected.length === 0) {
+        alert('Markera kort först!');
+        return;
+    }
+
+    const json = generateJSONExport(selected);
+    const timestamp = new Date().toISOString().slice(0, 10);
+    downloadFile(json, `spatial-notes-${timestamp}.json`, 'application/json');
+
+    showStatusMessage(`📊 Exporterade ${selected.length} kort som JSON`);
+}
+
+// Generate HTML from selected cards with embedded images
+function generateHTMLExport(nodes) {
+    const timestamp = new Date().toLocaleString('sv-SE');
+    const imageCount = nodes.filter(n => n.data('type') === 'image').length;
+
+    let html = `<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spatial Notes Export - ${new Date().toISOString().slice(0, 10)}</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background: #f5f5f5;
+            line-height: 1.6;
+        }
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .header h1 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .header .meta {
+            color: #666;
+            font-size: 14px;
+        }
+        .card {
+            background: white;
+            padding: 25px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            break-inside: avoid;
+        }
+        .card.has-color {
+            border-left: 5px solid;
+        }
+        .card-title {
+            font-size: 20px;
+            font-weight: bold;
+            margin: 0 0 15px 0;
+            color: #333;
+        }
+        .card-text {
+            color: #444;
+            white-space: pre-wrap;
+            margin: 0 0 15px 0;
+        }
+        .card-image {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+            margin: 0 0 15px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .card-annotation {
+            font-style: italic;
+            color: #666;
+            margin: 0 0 15px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        .card-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 15px;
+        }
+        .tag {
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 13px;
+        }
+        .card-meta {
+            font-size: 12px;
+            color: #999;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+        }
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+            .card {
+                box-shadow: none;
+                border: 1px solid #ddd;
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📋 Spatial Notes Export</h1>
+        <div class="meta">
+            Exporterad: ${timestamp}<br>
+            Antal kort: ${nodes.length} (${imageCount} bilder)
+        </div>
+    </div>
+`;
+
+    // Add each card
+    nodes.forEach((node, index) => {
+        const title = node.data('title') || `Kort ${index + 1}`;
+        const text = node.data('text') || '';
+        const tags = node.data('tags') || [];
+        const cardColor = node.data('cardColor');
+        const isImage = node.data('type') === 'image';
+        const imageData = node.data('imageData');
+        const annotation = node.data('annotation') || '';
+        const zoteroUrl = node.data('zotero_url');
+
+        // Get color for border
+        let borderColor = '';
+        if (cardColor) {
+            const colorMap = {
+                'card-color-1': '#90EE90', // Grön
+                'card-color-2': '#FFB347', // Orange
+                'card-color-3': '#FF6B6B', // Röd
+                'card-color-4': '#FFD700', // Gul
+                'card-color-5': '#DDA0DD', // Gröngul/Lime
+                'card-color-6': '#87CEEB'  // Blå
+            };
+            borderColor = colorMap[cardColor] || '#ddd';
+        }
+
+        html += `    <div class="card${cardColor ? ' has-color' : ''}"${cardColor ? ` style="border-left-color: ${borderColor};"` : ''}>
+`;
+
+        // Title
+        if (title) {
+            html += `        <div class="card-title">${escapeHtml(title)}</div>\n`;
+        }
+
+        // Image
+        if (isImage && imageData) {
+            html += `        <img src="${imageData}" class="card-image" alt="Bild">\n`;
+
+            // Image annotation
+            if (annotation) {
+                html += `        <div class="card-annotation">📝 ${escapeHtml(annotation)}</div>\n`;
+            }
+        } else if (text) {
+            // Regular text
+            html += `        <div class="card-text">${escapeHtml(text)}</div>\n`;
+        }
+
+        // Tags
+        if (tags.length > 0) {
+            html += `        <div class="card-tags">\n`;
+            tags.forEach(tag => {
+                html += `            <span class="tag">#${escapeHtml(tag)}</span>\n`;
+            });
+            html += `        </div>\n`;
+        }
+
+        // Metadata (optional)
+        if (zoteroUrl) {
+            html += `        <div class="card-meta">🔗 <a href="${escapeHtml(zoteroUrl)}">Zotero-länk</a></div>\n`;
+        }
+
+        html += `    </div>\n`;
+    });
+
+    html += `</body>
+</html>`;
+
+    return html;
+}
+
+// Helper function to escape HTML special characters
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Export selected cards as HTML file
+function exportAsHTML() {
+    const selected = cy.$(':selected');
+    if (selected.length === 0) {
+        alert('Markera kort först!');
+        return;
+    }
+
+    const html = generateHTMLExport(selected);
+    const timestamp = new Date().toISOString().slice(0, 10);
+    downloadFile(html, `spatial-notes-${timestamp}.html`, 'text/html');
+
+    showStatusMessage(`🌐 Exporterade ${selected.length} kort som HTML`);
+}
+
+// Copy selected cards as Markdown to clipboard
+async function copySelectedAsMarkdown() {
+    const selected = cy.$(':selected');
+    if (selected.length === 0) {
+        alert('Markera kort först!');
+        return;
+    }
+
+    const markdown = generateMarkdownExport(selected);
+
+    try {
+        await navigator.clipboard.writeText(markdown);
+        showStatusMessage(`📋 Kopierade ${selected.length} kort som Markdown`);
+    } catch (err) {
+        console.error('Failed to copy:', err);
+        alert('Kunde inte kopiera till clipboard');
+    }
+}
+
+// Share selected cards using Web Share API (mobile/desktop)
+async function shareSelected() {
+    const selected = cy.$(':selected');
+    if (selected.length === 0) {
+        alert('Markera kort först!');
+        return;
+    }
+
+    if (!navigator.share) {
+        alert('Delning stöds inte i denna webbläsare. Använd "Kopiera" istället.');
+        return;
+    }
+
+    const markdown = generateMarkdownExport(selected);
+    const timestamp = new Date().toISOString().slice(0, 10);
+
+    try {
+        await navigator.share({
+            title: 'Spatial Notes Export',
+            text: markdown,
+            // Some browsers support file sharing
+            files: [new File([markdown], `spatial-notes-${timestamp}.md`, { type: 'text/markdown' })]
+        });
+        showStatusMessage(`📲 Delade ${selected.length} kort`);
+    } catch (err) {
+        // User cancelled or error occurred
+        if (err.name !== 'AbortError') {
+            console.error('Share failed:', err);
+            // Fallback to text-only share
+            try {
+                await navigator.share({
+                    title: 'Spatial Notes Export',
+                    text: markdown
+                });
+                showStatusMessage(`📲 Delade ${selected.length} kort (text only)`);
+            } catch (err2) {
+                console.error('Share fallback failed:', err2);
+            }
+        }
+    }
+}
+
+// Show export menu dialog
+function showExportMenu() {
+    const selected = cy.$(':selected');
+    if (selected.length === 0) {
+        alert('Markera kort först!\n\nKlicka på kort (Ctrl för flera) eller dra-markera.');
+        return;
+    }
+
+    const dialog = document.createElement('div');
+    dialog.id = 'exportDialog';
+    dialog.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        padding: 30px;
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        z-index: 10000;
+        min-width: 400px;
+    `;
+
+    dialog.innerHTML = `
+        <h2 style="margin: 0 0 20px 0; font-size: 24px;">📤 Exportera ${selected.length} kort</h2>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+            <button onclick="copySelectedAsMarkdown(); document.getElementById('exportDialog').remove();" style="padding: 12px 20px; font-size: 16px; cursor: pointer; border: 1px solid #ddd; border-radius: 6px; background: #f8f9fa;">
+                📋 Kopiera till Clipboard (Markdown)
+            </button>
+            <button onclick="exportAsMarkdown(); document.getElementById('exportDialog').remove();" style="padding: 12px 20px; font-size: 16px; cursor: pointer; border: 1px solid #ddd; border-radius: 6px; background: #f8f9fa;">
+                📄 Ladda ner Markdown (.md)
+            </button>
+            <button onclick="exportAsPlainText(); document.getElementById('exportDialog').remove();" style="padding: 12px 20px; font-size: 16px; cursor: pointer; border: 1px solid #ddd; border-radius: 6px; background: #f8f9fa;">
+                📝 Ladda ner Text (.txt)
+            </button>
+            <button onclick="exportAsJSON(); document.getElementById('exportDialog').remove();" style="padding: 12px 20px; font-size: 16px; cursor: pointer; border: 1px solid #ddd; border-radius: 6px; background: #f8f9fa;">
+                📊 Ladda ner JSON (.json)
+            </button>
+            <button onclick="exportAsHTML(); document.getElementById('exportDialog').remove();" style="padding: 12px 20px; font-size: 16px; cursor: pointer; border: 1px solid #ddd; border-radius: 6px; background: #fff3e0;">
+                🌐 Ladda ner HTML (med bilder)
+            </button>
+            ${navigator.share ? `
+            <button onclick="shareSelected(); document.getElementById('exportDialog').remove();" style="padding: 12px 20px; font-size: 16px; cursor: pointer; border: 1px solid #ddd; border-radius: 6px; background: #e3f2fd;">
+                📲 Dela... (välj app)
+            </button>
+            ` : ''}
+            <button onclick="document.getElementById('exportDialog').remove();" style="padding: 12px 20px; font-size: 16px; cursor: pointer; border: 1px solid #ddd; border-radius: 6px; background: #fff;">
+                Avbryt
+            </button>
+        </div>
+    `;
+
+    document.body.appendChild(dialog);
+
+    // Close on Escape key
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            dialog.remove();
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
+}
+
+// Helper function to show status messages
+function showStatusMessage(message) {
+    const statusDiv = document.getElementById('selectionInfo');
+    if (statusDiv) {
+        statusDiv.textContent = message;
+        statusDiv.classList.add('visible');
+        setTimeout(() => statusDiv.classList.remove('visible'), 3000);
+    }
 }
 
 // Tag filtering functions with Boolean logic
@@ -13511,7 +14055,25 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             cy.nodes().not('.pinned').select();
         }
-        
+
+        // Ctrl+E för att visa export-meny
+        if (e.ctrlKey && e.key === 'e') {
+            e.preventDefault();
+            showExportMenu();
+        }
+
+        // Ctrl+Q för att visa keyboard shortcuts
+        if (e.ctrlKey && e.key === 'q') {
+            e.preventDefault();
+            showKeyboardShortcutsDialog();
+        }
+
+        // Ctrl+Shift+C för att kopiera markerade kort som Markdown
+        if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+            e.preventDefault();
+            copySelectedAsMarkdown();
+        }
+
         // DEBUG: Ctrl+Shift+D för att dumpa alla kort-positioner
         if (e.ctrlKey && e.shiftKey && e.key === 'D') {
             e.preventDefault();

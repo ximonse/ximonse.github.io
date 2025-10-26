@@ -129,6 +129,16 @@ function showContextMenu(event, node) {
             showBulkTagDialog(selectedNodes);
         };
         menu.appendChild(bulkTagOption);
+
+        // Export option for multiple selected cards
+        const exportOption = document.createElement('div');
+        exportOption.className = 'context-menu-item';
+        exportOption.innerHTML = '📤 Exportera markerade kort';
+        exportOption.onclick = () => {
+            hideContextMenu();
+            showExportMenu();
+        };
+        menu.appendChild(exportOption);
     }
     
     document.body.appendChild(menu);
@@ -144,6 +154,193 @@ function hideContextMenu() {
     if (existingMenu) {
         existingMenu.remove();
     }
+}
+
+// Show keyboard shortcuts dialog (Ctrl+Q)
+function showKeyboardShortcutsDialog() {
+    // Remove any existing dialog
+    const existing = document.getElementById('keyboardShortcutsDialog');
+    if (existing) {
+        existing.remove();
+        return;
+    }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'keyboardShortcutsDialog';
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(4px);
+    `;
+
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        max-width: 700px;
+        width: 90%;
+        max-height: 80vh;
+        overflow-y: auto;
+        padding: 30px;
+    `;
+
+    dialog.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+            <h2 style="margin: 0; font-size: 28px;">⌨️ Kortkommandon</h2>
+            <button onclick="document.getElementById('keyboardShortcutsDialog').remove()" style="background: none; border: none; font-size: 28px; cursor: pointer; color: #666;">×</button>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 25px;">
+            <!-- Arrangement -->
+            <div class="shortcut-category">
+                <h3 style="font-size: 16px; color: #333; margin: 0 0 12px 0; font-weight: 600;">📐 Arrangement</h3>
+                <div class="shortcut-list">
+                    <div class="shortcut-item"><kbd>H</kbd><span>Horisontell rad</span></div>
+                    <div class="shortcut-item"><kbd>V</kbd><span>Vertikal kolumn</span></div>
+                    <div class="shortcut-item"><kbd>G+V</kbd><span>Grid vertikal</span></div>
+                    <div class="shortcut-item"><kbd>G+H</kbd><span>Grid horisontell</span></div>
+                    <div class="shortcut-item"><kbd>G+T</kbd><span>Grid tight (kompakt)</span></div>
+                    <div class="shortcut-item"><kbd>Q</kbd><span>Runt kluster</span></div>
+                    <div class="shortcut-item"><kbd>QQ</kbd><span>Tight kluster</span></div>
+                    <div class="shortcut-item"><kbd>S</kbd><span>Stack (hög)</span></div>
+                </div>
+            </div>
+
+            <!-- Färg -->
+            <div class="shortcut-category">
+                <h3 style="font-size: 16px; color: #333; margin: 0 0 12px 0; font-weight: 600;">🎨 Färg</h3>
+                <div class="shortcut-list">
+                    <div class="shortcut-item"><kbd>0</kbd><span>Ta bort färg</span></div>
+                    <div class="shortcut-item"><kbd>1</kbd><span>Grön</span></div>
+                    <div class="shortcut-item"><kbd>2</kbd><span>Orange</span></div>
+                    <div class="shortcut-item"><kbd>3</kbd><span>Röd</span></div>
+                    <div class="shortcut-item"><kbd>4</kbd><span>Gul</span></div>
+                    <div class="shortcut-item"><kbd>5</kbd><span>Lila</span></div>
+                    <div class="shortcut-item"><kbd>6</kbd><span>Blå</span></div>
+                    <div class="shortcut-item"><kbd>T</kbd><span>Färgväljare</span></div>
+                </div>
+            </div>
+
+            <!-- Kortredigering -->
+            <div class="shortcut-category">
+                <h3 style="font-size: 16px; color: #333; margin: 0 0 12px 0; font-weight: 600;">📌 Kortredigering</h3>
+                <div class="shortcut-list">
+                    <div class="shortcut-item"><kbd>C</kbd><span>Kopiera markerade</span></div>
+                    <div class="shortcut-item"><kbd>Pin</kbd><span>Pinna kort</span></div>
+                    <div class="shortcut-item"><kbd>Unpin</kbd><span>Ta bort pinning</span></div>
+                    <div class="shortcut-item"><kbd>Delete</kbd><span>Radera markerade</span></div>
+                </div>
+            </div>
+
+            <!-- Navigation & Sök -->
+            <div class="shortcut-category">
+                <h3 style="font-size: 16px; color: #333; margin: 0 0 12px 0; font-weight: 600;">🔍 Navigation & Sök</h3>
+                <div class="shortcut-list">
+                    <div class="shortcut-item"><kbd>Ctrl+A</kbd><span>Markera alla</span></div>
+                    <div class="shortcut-item"><kbd>Ctrl+F</kbd><span>Fokusera sökning</span></div>
+                    <div class="shortcut-item"><kbd>Escape</kbd><span>Avmarkera alla</span></div>
+                </div>
+            </div>
+
+            <!-- Spara & Export -->
+            <div class="shortcut-category">
+                <h3 style="font-size: 16px; color: #333; margin: 0 0 12px 0; font-weight: 600;">💾 Spara & Export</h3>
+                <div class="shortcut-list">
+                    <div class="shortcut-item"><kbd>Ctrl+S</kbd><span>Spara</span></div>
+                    <div class="shortcut-item"><kbd>Ctrl+E</kbd><span>Exportera markerade</span></div>
+                    <div class="shortcut-item"><kbd>Ctrl+Z</kbd><span>Ångra</span></div>
+                    <div class="shortcut-item"><kbd>Ctrl+Y</kbd><span>Gör om</span></div>
+                </div>
+            </div>
+
+            <!-- Tema -->
+            <div class="shortcut-category">
+                <h3 style="font-size: 16px; color: #333; margin: 0 0 12px 0; font-weight: 600;">🌙 Tema</h3>
+                <div class="shortcut-list">
+                    <div class="shortcut-item"><kbd>Shift+D</kbd><span>Mörkt tema</span></div>
+                    <div class="shortcut-item"><kbd>Shift+S</kbd><span>Sepia tema</span></div>
+                    <div class="shortcut-item"><kbd>Shift+E</kbd><span>E-ink tema</span></div>
+                </div>
+            </div>
+
+            <!-- Övrigt -->
+            <div class="shortcut-category">
+                <h3 style="font-size: 16px; color: #333; margin: 0 0 12px 0; font-weight: 600;">⚙️ Övrigt</h3>
+                <div class="shortcut-list">
+                    <div class="shortcut-item"><kbd>Shift+T</kbd><span>Toggle toolbar</span></div>
+                    <div class="shortcut-item"><kbd>M</kbd><span>Multi-import dialog</span></div>
+                    <div class="shortcut-item"><kbd>Ctrl+Q</kbd><span>Visa denna dialog</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #eee; text-align: center;">
+            <button onclick="document.getElementById('keyboardShortcutsDialog').remove()" style="padding: 10px 24px; background: #007acc; color: white; border: none; border-radius: 6px; font-size: 14px; cursor: pointer;">
+                Stäng (ESC)
+            </button>
+        </div>
+
+        <style>
+            .shortcut-item {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 8px 0;
+                font-size: 14px;
+            }
+            .shortcut-item kbd {
+                background: #f5f5f5;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-family: 'Courier New', monospace;
+                font-size: 12px;
+                font-weight: bold;
+                color: #333;
+                box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+                min-width: 50px;
+                text-align: center;
+            }
+            .shortcut-item span {
+                flex: 1;
+                margin-left: 12px;
+                color: #666;
+            }
+            .shortcut-list {
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+            }
+        </style>
+    `;
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    // Close on ESC key
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            overlay.remove();
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
+
+    // Close on click outside
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+            overlay.remove();
+        }
+    });
 }
 
 // Resize dialog for geometric shapes

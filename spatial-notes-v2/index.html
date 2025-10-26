@@ -58,6 +58,10 @@
         
         <div class="search-box">
             <input type="text" class="search-input" placeholder='Sök: "bias and social" OR "not psychology"' id="searchInput">
+            <label style="font-size: 12px; margin-left: 8px; white-space: nowrap;">
+                <input type="checkbox" id="searchInSelectedOnly" style="margin-right: 4px;">
+                Endast markerade
+            </label>
             <button class="search-select-btn toolbar-btn" id="searchSelectBtn" onclick="selectSearchResults()" style="display: none;">
                 📍 Markera funna
             </button>
@@ -65,23 +69,11 @@
         <div class="tag-filter-box">
             <input type="text" class="tag-filter-input" placeholder='Tags: tech AND psychology NOT done' id="tagFilterInput">
         </div>
-        <button class="toolbar-btn" id="annotationToggleBtn" onclick="toggleAnnotationToolbar()" title="Aktivera/inaktivera annotation-verktyg" style="padding: 8px 16px;">
-            ⬜→⭕
-        </button>
         <button class="toolbar-btn" id="imageUploadBtn" onclick="triggerImageUpload()" title="Tre bildval: Kamera, Galleri, Filväljare" style="padding: 8px 16px;">
             📷 Bilder
         </button>
         <button class="toolbar-btn" id="multiImportBtn" onclick="showMultiCardPasteDialog()" title="Skapa flera kort samtidigt (M)" style="padding: 8px 16px;">
             📋 Multi-import
-        </button>
-        <button class="toolbar-btn" id="aiAssistantToggleBtn" onclick="toggleAiPanel()" title="Gruppera kort i högar med ChatGPT" style="padding: 8px 16px;">
-            🤖 ChatGPT Högar
-        </button>
-        <button class="toolbar-btn" id="aiAssistantBtn" onclick="toggleAIPanel()" title="Analysera och organisera med Claude AI" style="padding: 8px 16px;">
-            🤖 Claude AI
-        </button>
-        <button class="toolbar-btn" id="viewToggleBtn" onclick="toggleView()" title="Växla mellan brädvy och kolumnvy" style="padding: 8px 16px;">
-            📋 Kolumnvy
         </button>
 
         <!-- Mobile controls (hidden on desktop) -->
@@ -95,46 +87,46 @@
                 <span>▼</span>
             </button>
             <div class="dropdown-content">
-                <button onclick="closeMenuDropdowns(); saveBoard()">💾 Spara (LocalStorage)</button>
+                <button onclick="closeMenuDropdowns(); saveBoard()">
+                    <span>💾 Spara (LocalStorage)</span>
+                    <span class="shortcut-hint">Ctrl+S</span>
+                </button>
                 <button onclick="closeMenuDropdowns(); saveWithTimestamp()">💾 Spara fil</button>
                 <button onclick="closeMenuDropdowns(); saveAs()">💾 Spara som...</button>
                 <button onclick="closeMenuDropdowns(); loadBoard()">📂 Ladda fil</button>
-                <button onclick="closeMenuDropdowns(); exportToJSON()">📋 Exportera JSON</button>
+
+                <div class="menu-separator">IMPORT/EXPORT</div>
+
+                <button onclick="closeMenuDropdowns(); exportToJSON()">📋 Exportera JSON (alla)</button>
+                <button onclick="closeMenuDropdowns(); showExportMenu()">
+                    <span>📤 Exportera markerade</span>
+                    <span class="shortcut-hint">Ctrl+E</span>
+                </button>
                 <button onclick="closeMenuDropdowns(); importFromJSON()">📁 Importera JSON</button>
                 <button onclick="closeMenuDropdowns(); importFromExtractor()">📥 Från PDF-Extractor</button>
                 <button onclick="closeMenuDropdowns(); document.getElementById('zoteroHtmlInput').click()">📚 Från Zotero</button>
+
+                <div class="menu-separator">AI & VERKTYG</div>
+
+                <button onclick="closeMenuDropdowns(); toggleAiPanel()">🤖 ChatGPT Högar</button>
+                <button onclick="closeMenuDropdowns(); toggleAIPanel()">🤖 Claude AI</button>
+                <button onclick="closeMenuDropdowns(); toggleAnnotationToolbar()">⬜→⭕ Annotation-verktyg</button>
+                <button onclick="closeMenuDropdowns(); toggleView()">📋 Kolumnvy</button>
+
+                <div class="menu-separator">INSTÄLLNINGAR</div>
+
+                <button onclick="closeMenuDropdowns(); showKeyboardShortcutsDialog()">
+                    <span>⌨️ Visa kortkommandon</span>
+                    <span class="shortcut-hint">Ctrl+Q</span>
+                </button>
                 <button onclick="closeMenuDropdowns(); toggleGoogleDriveAuth()" id="googleDriveBtn">🔗 Google Drive</button>
                 <button onclick="closeMenuDropdowns(); toggleMetadataView()" id="metadataBtn">🔍 Metadata</button>
+                <button onclick="closeMenuDropdowns(); toggleDarkTheme()" id="themeBtn">
+                    <span>🌙 Mörkt Tema</span>
+                    <span class="shortcut-hint">Shift+D</span>
+                </button>
                 <button onclick="closeMenuDropdowns(); debugDumpPositions()">🐛 Debug Positioner</button>
-                <button onclick="closeMenuDropdowns(); toggleDarkTheme()" id="themeBtn">🌙 Mörkt Tema</button>
                 <button onclick="closeMenuDropdowns(); clearBoard()">🗑️ Rensa</button>
-            </div>
-        </div>
-        
-        <!-- Keyboard commands dropdown -->
-        <div class="menu-dropdown">
-            <button class="menu-button toolbar-btn">
-                ⌨️
-                <span>▼</span>
-            </button>
-            <div class="dropdown-content">
-                <button onclick="closeMenuDropdowns(); executeCommand('H')">H</button>
-                <button onclick="closeMenuDropdowns(); executeCommand('V')">V</button>
-                <button onclick="closeMenuDropdowns(); executeCommand('G+V')">G+V</button>
-                <button onclick="closeMenuDropdowns(); executeCommand('G+H')">G+H</button>
-                <button onclick="closeMenuDropdowns(); executeCommand('G+T')">G+T</button>
-                <button onclick="closeMenuDropdowns(); executeCommand('QQ')">QQ</button>
-                <button onclick="closeMenuDropdowns(); executeCommand('Q')">Q</button>
-                <button onclick="closeMenuDropdowns(); executeCommand('C')">C</button>
-                <button onclick="closeMenuDropdowns(); executeCommand('T')">🎨 T</button>
-                <button onclick="closeMenuDropdowns(); showSortMenu(event)">📊 Sortera</button>
-                <button onclick="closeMenuDropdowns(); executeCommand('Pin')">📌 Pin</button>
-                <button onclick="closeMenuDropdowns(); executeCommand('Unpin')">🔓 Unpin</button>
-                <button onclick="closeMenuDropdowns(); executeCommand('Delete')">🗑️ Delete</button>
-                <button onclick="closeMenuDropdowns(); executeCommand('Ctrl+Z')">Ctrl+Z</button>
-                <button onclick="closeMenuDropdowns(); executeCommand('Ctrl+Y')">Ctrl+Y</button>
-                <button onclick="closeMenuDropdowns(); executeCommand('Ctrl+A')">Ctrl+A</button>
-                <button onclick="closeMenuDropdowns(); executeCommand('Ctrl+S')">Ctrl+S</button>
             </div>
         </div>
     </div>

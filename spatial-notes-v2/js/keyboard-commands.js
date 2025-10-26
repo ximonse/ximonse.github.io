@@ -598,7 +598,7 @@ function hideSimplifiedToolbar() {
 
 function createSimplifiedToolbar() {
     const toolbar = document.querySelector('.toolbar');
-    
+
     const simplifiedDiv = document.createElement('div');
     simplifiedDiv.id = 'simplifiedToolbar';
     simplifiedDiv.className = 'simplified-keep';
@@ -607,52 +607,26 @@ function createSimplifiedToolbar() {
         align-items: center;
         gap: 10px;
         flex: 1;
+        justify-content: flex-end;
     `;
-    
-    // Multi-import button
-    const importBtn = document.createElement('button');
-    importBtn.innerHTML = '📋';
-    importBtn.className = 'toolbar-btn';
-    importBtn.title = 'Multi-import (M)';
-    importBtn.style.cssText = 'padding: 8px 12px;';
-    importBtn.onclick = showMultiCardPasteDialog;
 
-    // Drive images picker button
-    const driveImagesBtn = document.createElement('button');
-    driveImagesBtn.innerHTML = '📁';
-    driveImagesBtn.className = 'toolbar-btn';
-    driveImagesBtn.title = 'Välj flera bilder från Drive';
-    driveImagesBtn.style.cssText = 'padding: 8px 12px;';
-    driveImagesBtn.onclick = openDriveImagePicker;
-
-    // Smart search button
-    const searchBtn = document.createElement('button');
-    searchBtn.innerHTML = '🔍';
-    searchBtn.className = 'toolbar-btn';
-    searchBtn.title = 'Smart sökning med automatisk sortering';
-    searchBtn.style.cssText = 'padding: 8px 12px;';
-    searchBtn.onclick = showSmartSearchDialog;
-    
-    // Sort button
-    const sortBtn = document.createElement('button');
-    sortBtn.innerHTML = '📊';
-    sortBtn.className = 'toolbar-btn';
-    sortBtn.title = 'Sortera kort';
-    sortBtn.style.cssText = 'padding: 8px 12px;';
-    sortBtn.onclick = (event) => showSortMenu(event);
+    // Keyboard shortcuts button
+    const shortcutsBtn = document.createElement('button');
+    shortcutsBtn.innerHTML = '⌨️ Shortcuts';
+    shortcutsBtn.className = 'toolbar-btn';
+    shortcutsBtn.title = 'Visa kortkommandon (Ctrl+Q)';
+    shortcutsBtn.style.cssText = 'padding: 8px 16px;';
+    shortcutsBtn.onclick = showKeyboardShortcutsDialog;
 
     // Toggle to full toolbar button
     const expandBtn = document.createElement('button');
-    expandBtn.innerHTML = '⚙️ Meny';
+    expandBtn.innerHTML = '🔄 Full Toolbar';
     expandBtn.className = 'toolbar-btn';
-    expandBtn.title = 'Visa hela menyn (Shift+T)';
-    expandBtn.style.cssText = 'padding: 8px 12px; margin-left: auto;';  // Push to right
+    expandBtn.title = 'Visa hela toolbar (Shift+T)';
+    expandBtn.style.cssText = 'padding: 8px 16px;';
     expandBtn.onclick = toggleSimplifiedToolbar;
 
-    simplifiedDiv.appendChild(importBtn);
-    simplifiedDiv.appendChild(driveImagesBtn);
-    simplifiedDiv.appendChild(searchBtn);
-    simplifiedDiv.appendChild(sortBtn);
+    simplifiedDiv.appendChild(shortcutsBtn);
     simplifiedDiv.appendChild(expandBtn);
 
     toolbar.appendChild(simplifiedDiv);
