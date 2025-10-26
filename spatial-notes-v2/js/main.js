@@ -1065,51 +1065,43 @@ function preventOrphansSubtly(text) {
 const initialCards = [
     {
         id: 'welcome-1',
-        title: '👋 Välkommen till Spatial Notes!',
-        text: 'Visuell anteckningsapp där du organiserar tankar i 2D-rum.\n\nBETA-VERSION: Allt funkar inte hundra. Spara ofta!\n\nHälsningar Ximon\n\nMail: spatial-notes@ximon.se\n\n(räkna inte med svar)',
-        tags: ['välkommen'],
+        title: '👋 Välkommen!',
+        text: 'Spatial Notes hjälper dig få koll på alla dina små anteckningar.\n\nSkapa kort. Organisera visuellt. Sortera med AI.\n\nEnkelt och kraftfullt.',
+        tags: ['start'],
         x: 667,
         y: 193
     },
     {
-        id: 'welcome-2', 
-        title: '🎯 Grundläggande',
-        text: 'SKAPA KORT: Klicka "Nytt kort" eller dubbelklicka i tom yta\n\nTA BORT: Välj kort → Delete-tangent\n\nMARKERA: Klicka kort (håll Ctrl för flera) eller dra-markera\n\nFLYTTA: Håll nere muspekare på det du vill flytta och flytta muspeklaren\n\nÅNGRA/GÖR OM: Ctrl+Z / Ctrl+Y',
+        id: 'welcome-2',
+        title: '✍️ Skapa Anteckningar',
+        text: 'Dubbelklicka i tom yta för att skapa kort.\n\nSkriv dina tankar, idéer, todos.\n\nFlytta kort genom att dra dem.\n\nMarkera flera: Håll Ctrl + klicka.\n\nRedigera: Dubbelklicka på kort.',
         tags: ['grunderna'],
         x: 987,
         y: 204
     },
     {
         id: 'welcome-3',
-        title: '📐 Arrangera Kort',
-        text: 'Markera flera kort, tryck sedan:\n\nH = Horisontell rad (20% mellanrum)\nV = Vertikal kolumn (20% mellanrum)\n\nG+V = Grid Vertical (max 6 bred, 20% mellanrum)\nG+H = Grid Horizontal (rader, 20% mellan rader)\nG+T = Grid Tight (max 6 bred, 40px överlapp)\n\nQ = Kluster (sporadisk skräphög)\nQQ = Stack (prydlig hög, dubbla Q)\nAlt+S = Stack (samma som QQ)\n\nKorten arrangeras runt muspekaren!',
-        tags: ['arrangemang'],
+        title: '🤖 Sortera med AI',
+        text: 'Tryck "ChatGPT Högar" eller "Claude AI".\n\nBerätta hur du vill sortera.\n\nAI:n organiserar korten åt dig.\n\nExempel:\n"Gruppera efter tema"\n"Organisera organiskt"\n"Skapa en tidslinje"',
+        tags: ['ai'],
         x: 1307,
         y: 247
     },
     {
         id: 'welcome-4',
-        title: '📌 Pinna Kort',
-        text: 'PINNA: Högerklicka kort → "Pinna kort"\n\nUNPINNA: Högerklicka → "Ta bort pinning"\n\nFÖRDELAR:\n\nPinnae kort stannar på plats\n\nKopiera kort och pinna originalen\n\nFlytta kopior medan original är säkra\n\nPerfekt för att organisera idéer!',
-        tags: ['pinning'],
+        title: '📸 Bilder',
+        text: 'Klistra in bilder: Ctrl+V\n\nEller tryck "Bilder"-knappen.\n\nSkriv anteckningar på bilder genom att dubbelklicka på bildkortet.\n\nPerfekt för handskrivna anteckningar!',
+        tags: ['bilder'],
         x: 667,
-        y: 642
+        y: 520
     },
     {
         id: 'welcome-5',
-        title: '🚀 Next Level: Kopiera + Arrangera',
-        text: '1. Markera kort du vill kopiera\n\n2. Tryck C för att kopiera\n\n3. Använd H, G+V, G+H, G+T eller Q\n\nKopiorna arrangeras runt muspekaren!',
-        tags: ['kopiera', 'avancerat'],
+        title: '💾 Spara & Exportera',
+        text: 'SPARA: Ctrl+S (sparas i webbläsaren)\n\nEXPORTERA: Meny → "Spara fil"\n\nIMPORTERA: Meny → "Ladda fil"\n\nAllt sparas automatiskt när du redigerar kort.',
+        tags: ['spara'],
         x: 987,
-        y: 598
-    },
-    {
-        id: 'welcome-6',
-        title: '🔥 The Shit: Sök + Arrangera',
-        text: '1. SÖK: Skriv i sökrutan för att hitta kort\n\n2. MARKERA: Tryck Enter för att välja alla sökresultat\n\n3. ARRANGERA: Använd H, G+V, G+H, G+T eller Q för att arrangera\n\n4. KOPIERA: Eller tryck C och arrangera kopior!\n\nDu kan också söka → kopiera → arrangera. Epic!',
-        tags: ['sökning', 'expert'],
-        x: 1307,
-        y: 728
+        y: 520
     }
 ];
 
