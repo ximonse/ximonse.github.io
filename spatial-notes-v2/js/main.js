@@ -9384,6 +9384,9 @@ function arrangeCircularSwarm() {
     }
 
     // Configure circle layout for tight circular swarm
+    // Use sweep that's ALMOST 360° to avoid first/last card overlap
+    const sweep = 2 * Math.PI * (selectedNodes.length - 1) / selectedNodes.length;
+
     const layoutConfig = {
         name: 'circle',
         animate: true,
@@ -9391,7 +9394,7 @@ function arrangeCircularSwarm() {
         animationEasing: 'ease-out',
         radius: radius,
         startAngle: 0, // Start at top
-        sweep: 2 * Math.PI, // Full circle
+        sweep: sweep, // Don't complete full circle to avoid overlap
         clockwise: true,
         sort: undefined, // Keep current order
         avoidOverlap: true,
