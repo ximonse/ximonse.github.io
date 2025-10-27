@@ -9370,17 +9370,17 @@ function arrangeCircularSwarm() {
     const centerX = arrangePos.x;
     const centerY = arrangePos.y;
 
-    // Calculate EXTREMELY tight radius - dubbelt så tight som innan!
-    // 2-3 kort: 15px, 4-6 kort: 20px, 7-12 kort: 22-30px, 13+ kort: max 40px
+    // Calculate EXTREMELY tight radius - 25% kortare än förut!
+    // 2-3 kort: 11px, 4-6 kort: 15px, 7-12 kort: 16.5-22.5px, 13+ kort: max 30px
     let radius;
     if (selectedNodes.length <= 3) {
-        radius = 15;
+        radius = 11;
     } else if (selectedNodes.length <= 6) {
-        radius = 20;
+        radius = 15;
     } else if (selectedNodes.length <= 12) {
-        radius = 22 + (selectedNodes.length - 6) * 1.3; // 22-30px
+        radius = 16.5 + (selectedNodes.length - 6) * 1; // 16.5-22.5px
     } else {
-        radius = 30 + Math.min(selectedNodes.length - 12, 8) * 1.3; // Max 40px
+        radius = 22.5 + Math.min(selectedNodes.length - 12, 8) * 1; // Max 30px
     }
 
     // Configure circle layout for tight circular swarm
