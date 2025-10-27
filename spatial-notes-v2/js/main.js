@@ -9349,7 +9349,18 @@ function clusterSelectedCards() {
 // X: Tight circular swarm - organic circular layout like Obsidian graph view
 function arrangeCircularSwarm() {
     const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
-    if (selectedNodes.length < 2) return;
+
+    if (selectedNodes.length < 2) {
+        // Show feedback
+        const searchInfo = document.getElementById('searchInfo');
+        if (searchInfo) {
+            searchInfo.textContent = 'X: Markera minst 2 kort först!';
+            searchInfo.classList.add('visible');
+            setTimeout(() => searchInfo.classList.remove('visible'), 2000);
+        }
+        console.log('X: Behöver minst 2 markerade kort');
+        return;
+    }
 
     // Save state for undo
     saveState();
