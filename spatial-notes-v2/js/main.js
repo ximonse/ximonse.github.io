@@ -539,14 +539,14 @@ function toggleAnnotationToolbar() {
     annotationToolbarVisible = !annotationToolbarVisible;
     const toolbar = document.getElementById('annotationToolbar');
     const toggleBtn = document.getElementById('annotationToggleBtn');
-    
+
     if (annotationToolbarVisible) {
         toolbar.classList.add('active');
-        toggleBtn.style.background = '#28a745';
+        if (toggleBtn) toggleBtn.style.background = '#28a745';
         console.log('🎨 Annotation toolbar activated');
     } else {
         toolbar.classList.remove('active');
-        toggleBtn.style.background = '';
+        if (toggleBtn) toggleBtn.style.background = '';
         setAnnotationMode('select');
         console.log('📐 Annotation toolbar deactivated');
     }
@@ -9314,27 +9314,27 @@ function clusterSelectedCards() {
         arrangeCopiedCardsInCluster();
         return;
     }
-    
+
     const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
     if (selectedNodes.length < 2) return;
-    
+
     // Save state for undo
     saveState();
-    
+
     // Get center position (mouse or screen center)
     const arrangePos = getArrangementPosition();
     const centerX = arrangePos.x;
     const centerY = arrangePos.y;
-    
+
     // Small cluster radius
     const radius = 50;
-    
+
     // Arrange in tight circle
     selectedNodes.forEach((node, index) => {
         const angle = (index / selectedNodes.length) * 2 * Math.PI;
         const x = centerX + Math.cos(angle) * radius;
         const y = centerY + Math.sin(angle) * radius;
-        
+
         node.animate({
             position: { x: x, y: y }
         }, {
@@ -9342,8 +9342,191 @@ function clusterSelectedCards() {
             easing: 'ease-out'
         });
     });
-    
+
     console.log(`Q: Klustrade ${selectedNodes.length} kort`);
+}
+
+// X: Tight circular swarm - organic circular layout like Obsidian graph view
+function arrangeCircularSwarm() {
+    const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
+    if (selectedNodes.length < 2) return;
+
+    // Save state for undo
+    saveState();
+
+    // Get center position (mouse or screen center)
+    const arrangePos = getArrangementPosition();
+    const centerX = arrangePos.x;
+    const centerY = arrangePos.y;
+
+    // Calculate EXTREMELY tight radius - dubbelt så tight som innan!
+    // 2-3 kort: 15px, 4-6 kort: 20px, 7-12 kort: 22-30px, 13+ kort: max 40px
+    let radius;
+    if (selectedNodes.length <= 3) {
+        radius = 15;
+    } else if (selectedNodes.length <= 6) {
+        radius = 20;
+    } else if (selectedNodes.length <= 12) {
+        radius = 22 + (selectedNodes.length - 6) * 1.3; // 22-30px
+    } else {
+        radius = 30 + Math.min(selectedNodes.length - 12, 8) * 1.3; // Max 40px
+    }
+
+    // Configure circle layout for tight circular swarm
+    const layoutConfig = {
+        name: 'circle',
+        animate: true,
+        animationDuration: 500,
+        animationEasing: 'ease-out',
+        radius: radius,
+        startAngle: 0, // Start at top
+        sweep: 2 * Math.PI, // Full circle
+        clockwise: true,
+        sort: undefined, // Keep current order
+        avoidOverlap: true,
+        nodeDimensionsIncludeLabels: true,
+        // Center the circle at mouse position
+        boundingBox: {
+            x1: centerX - radius - 150,
+            y1: centerY - radius - 150,
+            x2: centerX + radius + 150,
+            y2: centerY + radius + 150
+        }
+    };
+
+    // Apply the layout
+    const layout = selectedNodes.layout(layoutConfig);
+    layout.run();
+
+    console.log(`X: Circular swarm med ${selectedNodes.length} kort vid (${Math.round(centerX)}, ${Math.round(centerY)}), radie: ${radius}px`);
+}
+
+// B: Layout with connections - center selected node and arrange connected nodes around it
+function layoutWithConnections() {
+    const selectedNodes = cy.$('node:selected');
+
+    if (selectedNodes.length === 0) {
+        // Show feedback
+        const searchInfo = document.getElementById('searchInfo');
+        if (searchInfo) {
+            searchInfo.textContent = 'B: Markera ett eller flera kort först!';
+            searchInfo.classList.add('visible');
+            setTimeout(() => searchInfo.classList.remove('visible'), 2000);
+        }
+        console.log('B: Inget kort markerat');
+        return;
+    }
+
+    // If multiple nodes selected, find the one with MOST connections (the hub)
+    let centerNode;
+    if (selectedNodes.length > 1) {
+        let maxConnections = 0;
+        selectedNodes.forEach(node => {
+            const connections = node.connectedEdges().length;
+            if (connections > maxConnections) {
+                maxConnections = connections;
+                centerNode = node;
+            }
+        });
+        console.log(`B: Auto-selected hub node with ${maxConnections} connections:`, centerNode.id());
+    } else {
+        centerNode = selectedNodes[0];
+    }
+
+    // Find all connected nodes (via edges)
+    const connectedEdges = centerNode.connectedEdges();
+    const connectedNodes = connectedEdges.connectedNodes().filter(node => node.id() !== centerNode.id());
+
+    console.log(`B: Found ${connectedEdges.length} edges, ${connectedNodes.length} connected nodes`);
+
+    if (connectedNodes.length === 0) {
+        // Show feedback
+        const searchInfo = document.getElementById('searchInfo');
+        if (searchInfo) {
+            searchInfo.textContent = 'B: Inga pilar/linjer funna! Använd annotation-verktyg (D) för att skapa connectioner.';
+            searchInfo.classList.add('visible');
+            setTimeout(() => searchInfo.classList.remove('visible'), 3000);
+        }
+        console.log('B: Inga connectioner hittades för markerat kort');
+        return;
+    }
+
+    // Warn if too few connections for good force-directed layout
+    if (connectedNodes.length < 3) {
+        const searchInfo = document.getElementById('searchInfo');
+        if (searchInfo) {
+            searchInfo.textContent = `B: Bara ${connectedNodes.length} connection(s). För bäst resultat, markera ett kort med 3+ pilar!`;
+            searchInfo.classList.add('visible');
+            setTimeout(() => searchInfo.classList.remove('visible'), 3000);
+        }
+        console.log(`B: Warning - only ${connectedNodes.length} connection(s), may not look dramatic`);
+    }
+
+    // Save state for undo
+    saveState();
+
+    // Show feedback
+    const searchInfo = document.getElementById('searchInfo');
+    if (searchInfo) {
+        searchInfo.textContent = `B: Arrangerar ${connectedNodes.length + 1} kort organiskt runt centrum`;
+        searchInfo.classList.add('visible');
+        setTimeout(() => searchInfo.classList.remove('visible'), 2000);
+    }
+
+    // Combine center node and connected nodes
+    const allNodes = centerNode.union(connectedNodes);
+
+    // Stop any existing live layout
+    if (window.liveLayout) {
+        window.liveLayout.stop();
+        window.liveLayout = null;
+    }
+
+    // Start CONTINUOUS force-directed physics simulation
+    const layoutConfig = {
+        name: 'cose',
+        animate: true,
+
+        // Make it continuous/infinite
+        infinite: true, // Keep simulating forever!
+
+        // Physics settings
+        nodeRepulsion: function(node) { return 20000; }, // Strong repulsion
+        nodeOverlap: 100, // Avoid overlap
+        idealEdgeLength: function(edge) { return 250; }, // Edge length
+        edgeElasticity: function(edge) { return 150; }, // Spring strength
+
+        // Gravity
+        gravity: 0.3, // Pull towards center
+
+        // Temperature/simulation settings
+        numIter: 1000, // Initial iterations
+        initialTemp: 300,
+        coolingFactor: 0.95,
+        minTemp: 1.0,
+
+        // Allow interaction during simulation
+        ungrabifyWhileSimulating: false, // Can drag nodes during simulation!
+
+        // Start from current positions
+        randomize: false,
+
+        // Fit settings
+        fit: true,
+        padding: 100,
+
+        // Other settings
+        avoidOverlap: true,
+        nodeDimensionsIncludeLabels: true
+    };
+
+    console.log(`B: Starting LIVE force-directed physics with ${allNodes.length} nodes`);
+
+    // Start the layout and keep it running
+    window.liveLayout = allNodes.layout(layoutConfig);
+    window.liveLayout.run();
+
+    console.log(`B: LIVE PHYSICS ACTIVATED! Drag nodes to see them repel each other! Press B again to stop.`);
 }
 
 function executeCommand(command) {
@@ -9364,6 +9547,12 @@ function executeCommand(command) {
             break;
         case 'Q':
             clusterSelectedCards();
+            break;
+        case 'X':
+            arrangeCircularSwarm();
+            break;
+        case 'B':
+            layoutWithConnections();
             break;
         case 'C':
             copySelectedCards();
@@ -9499,6 +9688,28 @@ function toggleDarkTheme() {
     }
 }
 
+function toggleSepiaTheme() {
+    const body = document.body;
+    const themeBtn = document.getElementById('themeBtn');
+
+    body.classList.remove('dark-theme', 'eink-theme');
+    body.classList.add('sepia-theme');
+    themeBtn.innerHTML = '📄 E-ink';
+    localStorage.setItem('theme', 'sepia');
+    applyCardTheme('sepia');
+}
+
+function toggleEInkTheme() {
+    const body = document.body;
+    const themeBtn = document.getElementById('themeBtn');
+
+    body.classList.remove('dark-theme', 'sepia-theme');
+    body.classList.add('eink-theme');
+    themeBtn.innerHTML = '☀️ Ljust';
+    localStorage.setItem('theme', 'eink');
+    applyCardTheme('eink');
+}
+
 // Get card color value based on theme
 function getCardColorValue(colorId, theme) {
     const colors = {
@@ -9531,12 +9742,22 @@ function getCardColorValue(colorId, theme) {
             6: '#d6c7b3', // Sepia Blå
             7: '#c0b8a8', // Sepia Grå
             8: '#f5f2e8'  // Sepia Vit
+        },
+        eink: {
+            1: '#e8f5e8', // Väldigt ljus Grön
+            2: '#fff4e5', // Väldigt ljus Orange
+            3: '#ffe5eb', // Väldigt ljus Röd/Rosa
+            4: '#fffce5', // Väldigt ljus Gul
+            5: '#f8f0fa', // Väldigt ljus Lila
+            6: '#e5f4ff', // Väldigt ljus Blå
+            7: '#f0f0f0', // Ljus Grå
+            8: '#ffffff'  // Vit
         }
     };
-    
+
     // Extract number from colorId (card-color-1 -> 1)
     const colorNumber = colorId.toString().replace('card-color-', '');
-    
+
     return colors[theme] && colors[theme][colorNumber] ? colors[theme][colorNumber] : null;
 }
 
@@ -9622,14 +9843,14 @@ function applyCardTheme(theme) {
                 })
                 .update();
         } else if (theme === 'eink') {
-            // E-ink theme styling - no shadows, sharp contrast
+            // E-ink theme styling - no shadows, sharp contrast, light colors with black text
             cy.style()
                 .selector('node').style({
                     'background-color': function(node) {
                         const cardColor = node.data('cardColor');
                         if (cardColor) {
-                            // Keep card colors - user said it's OK
-                            return getCardColorValue(cardColor, 'light');
+                            // Use very light e-ink colors with black text
+                            return getCardColorValue(cardColor, 'eink');
                         }
                         return '#ffffff';
                     },
@@ -9989,6 +10210,14 @@ function createSimplifiedToolbar() {
     sortBtn.style.cssText = 'padding: 8px 12px;';
     sortBtn.onclick = (event) => showSortMenu(event);
 
+    // Keyboard shortcuts button
+    const shortcutsBtn = document.createElement('button');
+    shortcutsBtn.innerHTML = '⌨️';
+    shortcutsBtn.className = 'toolbar-btn';
+    shortcutsBtn.title = 'Visa kortkommandon (Ctrl+Q)';
+    shortcutsBtn.style.cssText = 'padding: 8px 12px;';
+    shortcutsBtn.onclick = showKeyboardShortcutsDialog;
+
     // Toggle to full toolbar button
     const expandBtn = document.createElement('button');
     expandBtn.innerHTML = '⚙️ Meny';
@@ -10001,6 +10230,7 @@ function createSimplifiedToolbar() {
     simplifiedDiv.appendChild(driveImagesBtn);
     simplifiedDiv.appendChild(searchBtn);
     simplifiedDiv.appendChild(sortBtn);
+    simplifiedDiv.appendChild(shortcutsBtn);
     simplifiedDiv.appendChild(expandBtn);
 
     toolbar.appendChild(simplifiedDiv);
@@ -10472,8 +10702,23 @@ function addNewCard() {
 
 // Zoom out to center (mobile function)
 function zoomOutToCenter() {
-    cy.fit(null, 50); // Fit all nodes with 50px padding
-    cy.center(); // Center the view
+    if (!cy) {
+        console.error('Cytoscape not initialized');
+        return;
+    }
+
+    const nodes = cy.nodes();
+    if (nodes.length === 0) {
+        console.log('No nodes to zoom to');
+        return;
+    }
+
+    try {
+        cy.fit(nodes, 50); // Fit all nodes with 50px padding
+        cy.center(); // Center the view
+    } catch (error) {
+        console.error('Error zooming out:', error);
+    }
 }
 
 // Helper function to create node from card data (handles both regular and image nodes)
@@ -12277,6 +12522,65 @@ function closeMenuDropdowns() {
     menuDropdowns.forEach(dropdown => {
         dropdown.classList.remove('active');
     });
+    // Close all submenus
+    const submenus = document.querySelectorAll('.submenu');
+    submenus.forEach(submenu => {
+        submenu.style.display = 'none';
+    });
+}
+
+// Initialize submenu interactions
+function initializeSubmenuInteractions() {
+    // Handle submenu clicks on mobile
+    const menuItemsWithSubmenu = document.querySelectorAll('.menu-item-with-submenu > button');
+
+    menuItemsWithSubmenu.forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.stopPropagation();
+
+            const submenu = this.parentElement.querySelector('.submenu');
+            const isCurrentlyOpen = submenu.style.display === 'block';
+
+            // Close all other submenus
+            document.querySelectorAll('.submenu').forEach(s => {
+                if (s !== submenu) {
+                    s.style.display = 'none';
+                }
+            });
+
+            // Toggle this submenu
+            submenu.style.display = isCurrentlyOpen ? 'none' : 'block';
+        });
+    });
+
+    // Close submenus when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.menu-dropdown')) {
+            document.querySelectorAll('.submenu').forEach(submenu => {
+                submenu.style.display = 'none';
+            });
+        }
+    });
+
+    // Close submenus when clicking a submenu item (addEventListener approach)
+    const submenuButtons = document.querySelectorAll('.submenu button');
+    submenuButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            // Close all submenus after a short delay to allow the click to process
+            setTimeout(() => {
+                document.querySelectorAll('.submenu').forEach(submenu => {
+                    submenu.style.display = 'none';
+                });
+            }, 100);
+        });
+    });
+}
+
+// Call initialization after DOM is loaded
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeSubmenuInteractions);
+} else {
+    initializeSubmenuInteractions();
 }
 
 // Rename current project
@@ -14122,7 +14426,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Track keys for combination detection
         window.keysPressed = window.keysPressed || new Set();
-        window.keysPressed.add(e.key.toLowerCase());
+        if (e.key) {
+            window.keysPressed.add(e.key.toLowerCase());
+        }
         
         // Handle G+V, G+H, G+T combinations (grid variants for selected cards)
         if (window.keysPressed.has('g') && window.keysPressed.has('v')) {
@@ -14222,9 +14528,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (e.key === 'q' && !e.ctrlKey && !e.altKey) {
             const now = Date.now();
             const lastQTime = window.lastQPress || 0;
-            
+
             e.preventDefault();
-            
+
             if (now - lastQTime < 500) {
                 // Recent Q press - toggle to the other arrangement
                 const wasCluster = window.lastQWasCluster || true;
@@ -14246,7 +14552,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 window.lastQPress = now;
             }
         }
-        
+
+        // X för circular swarm - organic circular layout (Obsidian-style)
+        if (e.key === 'x' && !e.ctrlKey && !e.altKey) {
+            e.preventDefault();
+            arrangeCircularSwarm();
+        }
+
+        // B för layout with connections - center selected node and arrange connected nodes
+        if (e.key === 'b' && !e.ctrlKey && !e.altKey) {
+            e.preventDefault();
+            layoutWithConnections();
+        }
+
         // Alt+S för neat stack (samma som N)
         if (e.key === 's' && e.altKey && !e.ctrlKey) {
             e.preventDefault();
@@ -14285,7 +14603,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Clear pressed keys on keyup for combination detection
     document.addEventListener('keyup', function(e) {
-        if (window.keysPressed) {
+        if (window.keysPressed && e.key) {
             window.keysPressed.delete(e.key.toLowerCase());
         }
     });
@@ -16004,6 +16322,349 @@ window.testZoteroLinkBadge = function() {
     console.log('✅ Test kort skapat! Leta efter 🔗-ikonen i övre högra hörnet.');
     return testCard;
 };
+
+// Keyboard shortcuts dialog - Make globally accessible
+window.showKeyboardShortcutsDialog = function() {
+    // Remove any existing dialog
+    const existing = document.getElementById('keyboardShortcutsDialog');
+    if (existing) {
+        existing.remove();
+        return;
+    }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'keyboardShortcutsDialog';
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.6);
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(8px);
+    `;
+
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        max-width: 700px;
+        width: 90%;
+        max-height: 80vh;
+        overflow-y: auto;
+        padding: 30px;
+    `;
+
+    dialog.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+            <h2 style="margin: 0; font-size: 28px;">⌨️ Kortkommandon</h2>
+            <button onclick="document.getElementById('keyboardShortcutsDialog').remove()" style="background: none; border: none; font-size: 28px; cursor: pointer; color: #666;">×</button>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 25px;">
+            <!-- Arrangement -->
+            <div class="shortcut-category">
+                <h3 style="font-size: 16px; color: #333; margin: 0 0 12px 0; font-weight: 600;">📐 Arrangement</h3>
+                <div class="shortcut-list">
+                    <div class="shortcut-item"><kbd data-action="H">H</kbd><span>Horisontell rad</span></div>
+                    <div class="shortcut-item"><kbd data-action="V">V</kbd><span>Vertikal kolumn</span></div>
+                    <div class="shortcut-item"><kbd data-action="G+V">G+V</kbd><span>Grid vertikal</span></div>
+                    <div class="shortcut-item"><kbd data-action="G+H">G+H</kbd><span>Grid horisontell</span></div>
+                    <div class="shortcut-item"><kbd data-action="G+T">G+T</kbd><span>Grid tight (kompakt)</span></div>
+                    <div class="shortcut-item"><kbd data-action="Q">Q</kbd><span>Kluster/skräphög</span></div>
+                    <div class="shortcut-item"><kbd data-action="X">X</kbd><span>Cirkulär svärm (Obsidian-style)</span></div>
+                    <div class="shortcut-item"><kbd data-action="B">B</kbd><span>Layout med connectioner (force-directed)</span></div>
+                    <div class="shortcut-item"><kbd data-action="C">C</kbd><span>Kopiera kort</span></div>
+                </div>
+            </div>
+
+            <!-- Färg -->
+            <div class="shortcut-category">
+                <h3 style="font-size: 16px; color: #333; margin: 0 0 12px 0; font-weight: 600;">🎨 Färg</h3>
+                <div class="shortcut-list">
+                    <div class="shortcut-item"><kbd data-action="0">0</kbd><span>Ta bort färg</span></div>
+                    <div class="shortcut-item"><kbd data-action="1">1</kbd><span>Grön</span></div>
+                    <div class="shortcut-item"><kbd data-action="2">2</kbd><span>Orange</span></div>
+                    <div class="shortcut-item"><kbd data-action="3">3</kbd><span>Röd</span></div>
+                    <div class="shortcut-item"><kbd data-action="4">4</kbd><span>Gul</span></div>
+                    <div class="shortcut-item"><kbd data-action="5">5</kbd><span>Lila</span></div>
+                    <div class="shortcut-item"><kbd data-action="6">6</kbd><span>Blå</span></div>
+                    <div class="shortcut-item"><kbd data-action="T">T</kbd><span>Färgväljare</span></div>
+                </div>
+            </div>
+
+            <!-- Kortredigering -->
+            <div class="shortcut-category">
+                <h3 style="font-size: 16px; color: #333; margin: 0 0 12px 0; font-weight: 600;">📌 Kortredigering</h3>
+                <div class="shortcut-list">
+                    <div class="shortcut-item"><kbd data-action="N">N</kbd><span>Nytt kort</span></div>
+                    <div class="shortcut-item"><kbd data-action="P">P</kbd><span>Pin/unpin kort</span></div>
+                    <div class="shortcut-item"><kbd data-action="U">U</kbd><span>Avmarkera alla</span></div>
+                    <div class="shortcut-item"><kbd data-action="Delete">Delete</kbd><span>Radera kort</span></div>
+                </div>
+            </div>
+
+            <!-- Navigation & Sök -->
+            <div class="shortcut-category">
+                <h3 style="font-size: 16px; color: #333; margin: 0 0 12px 0; font-weight: 600;">🔍 Navigation & Sök</h3>
+                <div class="shortcut-list">
+                    <div class="shortcut-item"><kbd data-action="Z">Z</kbd><span>Zooma ut</span></div>
+                    <div class="shortcut-item"><kbd data-action="Ctrl+A">Ctrl+A</kbd><span>Markera alla</span></div>
+                    <div class="shortcut-item"><kbd data-action="Ctrl+F">Ctrl+F</kbd><span>Sök</span></div>
+                    <div class="shortcut-item"><kbd data-action="Escape">Escape</kbd><span>Avbryt/stäng</span></div>
+                </div>
+            </div>
+
+            <!-- Spara & Export -->
+            <div class="shortcut-category">
+                <h3 style="font-size: 16px; color: #333; margin: 0 0 12px 0; font-weight: 600;">💾 Spara & Export</h3>
+                <div class="shortcut-list">
+                    <div class="shortcut-item"><kbd data-action="Ctrl+S">Ctrl+S</kbd><span>Spara</span></div>
+                    <div class="shortcut-item"><kbd data-action="Ctrl+E">Ctrl+E</kbd><span>Exportera</span></div>
+                    <div class="shortcut-item"><kbd data-action="Ctrl+O">Ctrl+O</kbd><span>Ladda fil</span></div>
+                    <div class="shortcut-item"><kbd data-action="Ctrl+Z">Ctrl+Z</kbd><span>Undo</span></div>
+                    <div class="shortcut-item"><kbd data-action="Ctrl+Y">Ctrl+Y</kbd><span>Redo</span></div>
+                    <div class="shortcut-item"><kbd data-action="Alt+S">Alt+S</kbd><span>Smart save</span></div>
+                </div>
+            </div>
+
+            <!-- Tema -->
+            <div class="shortcut-category">
+                <h3 style="font-size: 16px; color: #333; margin: 0 0 12px 0; font-weight: 600;">🌙 Tema</h3>
+                <div class="shortcut-list">
+                    <div class="shortcut-item"><kbd data-action="Shift+D">Shift+D</kbd><span>Mörkt tema</span></div>
+                    <div class="shortcut-item"><kbd data-action="Shift+S">Shift+S</kbd><span>Sepia tema</span></div>
+                    <div class="shortcut-item"><kbd data-action="Shift+E">Shift+E</kbd><span>E-ink tema</span></div>
+                </div>
+            </div>
+
+            <!-- Ritverktyg -->
+            <div class="shortcut-category">
+                <h3 style="font-size: 16px; color: #333; margin: 0 0 12px 0; font-weight: 600;">🎨 Ritverktyg</h3>
+                <div class="shortcut-list">
+                    <div class="shortcut-item"><kbd data-action="D">D</kbd><span>Annotation toolbar</span></div>
+                </div>
+            </div>
+
+            <!-- Övrigt -->
+            <div class="shortcut-category">
+                <h3 style="font-size: 16px; color: #333; margin: 0 0 12px 0; font-weight: 600;">⚙️ Övrigt</h3>
+                <div class="shortcut-list">
+                    <div class="shortcut-item"><kbd data-action="M">M</kbd><span>Multi-import</span></div>
+                    <div class="shortcut-item"><kbd data-action="I">I</kbd><span>Viktighet sort (kolumnvy)</span></div>
+                    <div class="shortcut-item"><kbd data-action="W">W</kbd><span>Färg sort (kolumnvy)</span></div>
+                    <div class="shortcut-item"><kbd data-action="K">K</kbd><span>Kolumnvy toggle</span></div>
+                    <div class="shortcut-item"><kbd data-action="Shift+T">Shift+T</kbd><span>Simplified toolbar</span></div>
+                    <div class="shortcut-item"><kbd data-action="Ctrl+Q">Ctrl+Q</kbd><span>Visa kortkommandon</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #eee; text-align: center;">
+            <button onclick="document.getElementById('keyboardShortcutsDialog').remove()" style="padding: 10px 24px; background: #007acc; color: white; border: none; border-radius: 6px; font-size: 14px; cursor: pointer;">
+                Stäng (ESC)
+            </button>
+        </div>
+
+        <style>
+            .shortcut-item {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 8px 0;
+                font-size: 14px;
+            }
+            /* Desktop - normala storlekar */
+            .shortcut-item kbd {
+                background: #f5f5f5;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-family: 'Courier New', monospace;
+                font-size: 12px;
+                font-weight: bold;
+                color: #333;
+                box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+                min-width: 50px;
+                text-align: center;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            }
+            .shortcut-item kbd:hover {
+                background: #e0e0e0;
+                border-color: #bbb;
+                transform: translateY(-1px);
+                box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+            }
+            .shortcut-item kbd:active {
+                transform: translateY(0);
+                box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+                background: #d0d0d0;
+            }
+            .shortcut-item span {
+                flex: 1;
+                margin-left: 12px;
+                color: #666;
+            }
+            .shortcut-list {
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+            }
+
+            /* Mobile - lite större touch-targets */
+            @media (max-width: 768px) {
+                #keyboardShortcutsDialog > div {
+                    padding: 20px;
+                }
+                .shortcut-item {
+                    padding: 6px 0;
+                }
+                .shortcut-item kbd {
+                    padding: 8px 10px;
+                    min-width: 55px;
+                    min-height: 40px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+            }
+        </style>
+    `;
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    // Add click handlers to all kbd elements
+    const kbdElements = dialog.querySelectorAll('kbd[data-action]');
+    kbdElements.forEach(kbd => {
+        kbd.addEventListener('click', function() {
+            const action = this.getAttribute('data-action');
+
+            // Close dialog
+            overlay.remove();
+
+            // Execute action
+            switch(action) {
+                // Arrangement
+                case 'H': arrangeSelectedInRow(); break;
+                case 'V': arrangeSelectedInColumn(); break;
+                case 'G+V': arrangeSelectedGridVerticalColumns(); break;
+                case 'G+H': arrangeSelectedGridHorizontalPacked(); break;
+                case 'G+T': arrangeSelectedGridTopAligned(); break;
+                case 'Q': clusterSelectedCards(); break;
+                case 'X': arrangeCircularSwarm(); break;
+                case 'B': layoutWithConnections(); break;
+                case 'C': copySelectedCards(); break;
+
+                // Färg
+                case '0': case '1': case '2': case '3': case '4': case '5': case '6':
+                    applyColorToSelected(parseInt(action)); break;
+                case 'T':
+                    const selectedNodes = cy.$('node:selected');
+                    if (selectedNodes.length > 0) {
+                        const fakeEvent = {
+                            clientX: window.innerWidth / 2,
+                            clientY: window.innerHeight / 2
+                        };
+                        showColorPicker(fakeEvent, selectedNodes);
+                    }
+                    break;
+
+                // Kortredigering
+                case 'N': addNewCard(); break;
+                case 'P':
+                    cy.$('node:selected').forEach(node => {
+                        if (node.hasClass('pinned')) {
+                            unpinCard(node);
+                        } else {
+                            pinCard(node);
+                        }
+                    });
+                    break;
+                case 'U': cy.nodes().unselect(); break;
+                case 'Delete': deleteSelectedCards(); break;
+
+                // Navigation & Sök
+                case 'Z': zoomOutToCenter(); break;
+                case 'Ctrl+A': cy.nodes().not('.pinned').select(); break;
+                case 'Ctrl+F': document.getElementById('searchInput').focus(); break;
+                case 'Escape': cy.nodes().unselect(); break;
+
+                // Spara & Export
+                case 'Ctrl+S': saveBoard(); break;
+                case 'Ctrl+E': showExportMenu(); break;
+                case 'Ctrl+O': loadBoard(); break;
+                case 'Ctrl+Z':
+                    if (undoStack.length > 0) {
+                        const currentState = {
+                            cards: cy.nodes().map(node => ({
+                                id: node.id(),
+                                position: { x: node.position().x, y: node.position().y },
+                                selected: node.selected()
+                            }))
+                        };
+                        redoStack.push(currentState);
+                        const previousState = undoStack.pop();
+                        restoreState(previousState);
+                    }
+                    break;
+                case 'Ctrl+Y':
+                    if (redoStack.length > 0) {
+                        const currentState = {
+                            cards: cy.nodes().map(node => ({
+                                id: node.id(),
+                                position: { x: node.position().x, y: node.position().y },
+                                selected: node.selected()
+                            }))
+                        };
+                        undoStack.push(currentState);
+                        const nextState = redoStack.pop();
+                        restoreState(nextState);
+                    }
+                    break;
+                case 'Alt+S': smartSave(); break;
+
+                // Tema
+                case 'Shift+D': toggleDarkTheme(); break;
+                case 'Shift+S': toggleSepiaTheme(); break;
+                case 'Shift+E': toggleEInkTheme(); break;
+
+                // Ritverktyg
+                case 'D': toggleAnnotationToolbar(); break;
+
+                // Övrigt
+                case 'M': showMultiCardPasteDialog(); break;
+                case 'I': if (isColumnView) setColumnViewSort('importance'); break;
+                case 'W': if (isColumnView) setColumnViewSort('background-color'); break;
+                case 'K': toggleView(); break;
+                case 'Shift+T': toggleSimplifiedToolbar(); break;
+                case 'Ctrl+Q': showKeyboardShortcutsDialog(); break;
+            }
+        });
+    });
+
+    // Close on ESC key
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            overlay.remove();
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
+
+    // Close on click outside
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+            overlay.remove();
+        }
+    });
+}
 
 // Initialize badge system after Cytoscape is ready
 document.addEventListener('DOMContentLoaded', function() {
