@@ -151,6 +151,28 @@ function toggleDarkTheme() {
     }
 }
 
+function toggleSepiaTheme() {
+    const body = document.body;
+    const themeBtn = document.getElementById('themeBtn');
+
+    body.classList.remove('dark-theme', 'eink-theme');
+    body.classList.add('sepia-theme');
+    themeBtn.innerHTML = '📄 E-ink';
+    localStorage.setItem('theme', 'sepia');
+    applyCardTheme('sepia');
+}
+
+function toggleEInkTheme() {
+    const body = document.body;
+    const themeBtn = document.getElementById('themeBtn');
+
+    body.classList.remove('dark-theme', 'sepia-theme');
+    body.classList.add('eink-theme');
+    themeBtn.innerHTML = '☀️ Ljust';
+    localStorage.setItem('theme', 'eink');
+    applyCardTheme('eink');
+}
+
 // Get card color value based on theme
 function getCardColorValue(colorId, theme) {
     const colors = {
