@@ -170,33 +170,38 @@ function toggleResizeMode() {
 function createShapeAnnotation(shape, position) {
     const id = generateCardId();
     const shapes = {
-        'rect': { shape: 'rectangle', label: '' },
-        'circle': { shape: 'ellipse', label: '' },
-        'triangle': { shape: 'triangle', label: '' },
-        'diamond': { shape: 'diamond', label: '' },
-        'star': { shape: 'star', label: '' },
-        'hexagon': { shape: 'hexagon', label: '' }
+        'rect': { shape: 'rectangle', label: '', width: 120, height: 120 },
+        'circle': { shape: 'ellipse', label: '', width: 120, height: 120 },
+        'triangle': { shape: 'triangle', label: '', width: 120, height: 120 },
+        'diamond': { shape: 'diamond', label: '', width: 120, height: 120 },
+        'star': { shape: 'star', label: '', width: 120, height: 120 },
+        'hexagon': { shape: 'hexagon', label: '', width: 120, height: 120 }
     };
-    
+
     const shapeInfo = shapes[shape] || shapes.rect;
-    
+
     cy.add({
         data: {
             id: id,
             label: shapeInfo.label,
+            text: shapeInfo.label, // Also store in 'text' for consistency
             isAnnotation: true,
             annotationType: 'shape',
-            shape: shape
+            shape: shape,
+            customWidth: shapeInfo.width,
+            customHeight: shapeInfo.height,
+            customZIndex: 0, // Normal layer
+            annotationColor: annotationColor // Store color in data for saving
         },
         position: position,
         classes: 'annotation-shape'
     });
-    
+
     // Apply color immediately
     const node = cy.getElementById(id);
     node.style('background-color', annotationColor);
-    
-    console.log(`🔷 Created ${shape} annotation at`, position);
+
+    console.log(`🔷 Created ${shape} annotation at`, position, 'with size', shapeInfo.width, 'x', shapeInfo.height);
     return node;
 }
 
@@ -204,33 +209,40 @@ function createShapeAnnotation(shape, position) {
 function createTextAnnotation(size, position) {
     const id = generateCardId();
     const sizes = {
-        'text-small': { fontSize: '16px', label: 'Liten text' },
-        'text-medium': { fontSize: '22px', label: 'Medium text' },
-        'text-large': { fontSize: '28px', label: 'Stor text' }
+        'text-small': { fontSize: 20, label: 'Text', width: 100, height: 50 },  // S: 100x50, font 20
+        'text-medium': { fontSize: 30, label: 'Text', width: 200, height: 75 }, // M: 200x75, font 30
+        'text-large': { fontSize: 50, label: 'Text', width: 300, height: 100 }  // L: 300x100, font 50
     };
-    
+
     const sizeInfo = sizes[size] || sizes['text-medium'];
-    
+
     cy.add({
         data: {
             id: id,
             label: sizeInfo.label,
+            text: sizeInfo.label, // Also store in 'text' for consistency
             isAnnotation: true,
             annotationType: 'text',
-            textSize: size
+            textSize: size,
+            customWidth: sizeInfo.width,
+            customHeight: sizeInfo.height,
+            customFontSize: sizeInfo.fontSize,
+            customZIndex: 0, // Normal layer
+            annotationColor: annotationColor, // Store color in data for saving
+            hidden_tags: [] // Empty array for potential tagging later
         },
         position: position,
         classes: 'annotation-text'
     });
-    
+
     const node = cy.getElementById(id);
     node.style({
-        'font-size': sizeInfo.fontSize,
+        'font-size': sizeInfo.fontSize + 'px',
         'background-color': annotationColor,
         'shape': 'rectangle'
     });
-    
-    console.log(`📝 Created ${size} text annotation at`, position);
+
+    console.log(`📝 Created ${size} text annotation at`, position, 'with size', sizeInfo.width, 'x', sizeInfo.height, 'font', sizeInfo.fontSize);
     return node;
 }
 
@@ -285,19 +297,32 @@ function editAnnotationText(node) {
         box-sizing: border-box;
     `;
     
+    const currentHiddenTags = node.data('hidden_tags') || [];
+    const hiddenTagsStr = currentHiddenTags.join(', ');
+
     dialog.innerHTML = `
-        <h3 style="margin-top: 0; color: #333; font-size: 18px;">Redigera annotation text</h3>
+        <h3 style="margin-top: 0; color: #333; font-size: 18px;">Redigera annotation</h3>
         <div style="margin-bottom: 15px;">
             <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #555;">Text:</label>
-            <textarea id="editAnnotationText" 
-                style="width: 100%; height: 120px; font-family: inherit; font-size: 14px; 
+            <textarea id="editAnnotationText"
+                style="width: 100%; height: 120px; font-family: inherit; font-size: 14px;
                        border: 1px solid #ccc; border-radius: 4px; padding: 8px;
                        box-sizing: border-box; resize: vertical;">${currentText}</textarea>
         </div>
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #555;">Osynliga taggar (kommaseparerade):</label>
+            <input type="text" id="editAnnotationTags"
+                style="width: 100%; font-family: inherit; font-size: 14px;
+                       border: 1px solid #ccc; border-radius: 4px; padding: 8px;
+                       box-sizing: border-box;"
+                placeholder="t.ex: viktigt, todo, projekt-x"
+                value="${hiddenTagsStr}">
+            <small style="color: #666; font-size: 12px;">Används för sökning utan att visas på kortet</small>
+        </div>
         <div style="text-align: right;">
-            <button id="cancelAnnotationEdit" style="margin-right: 10px; padding: 8px 16px; 
+            <button id="cancelAnnotationEdit" style="margin-right: 10px; padding: 8px 16px;
                    background: #ccc; border: none; border-radius: 4px; cursor: pointer;">Avbryt</button>
-            <button id="saveAnnotationEdit" style="padding: 8px 16px; 
+            <button id="saveAnnotationEdit" style="padding: 8px 16px;
                    background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Spara</button>
         </div>
     `;
@@ -313,9 +338,58 @@ function editAnnotationText(node) {
     // Event listeners
     document.getElementById('saveAnnotationEdit').addEventListener('click', function() {
         const newText = textArea.value.trim();
+        const tagsInput = document.getElementById('editAnnotationTags');
+        const tagsText = tagsInput.value.trim();
+
         if (newText) {
             node.data('label', newText);
+            node.data('text', newText); // Also save in 'text' for consistency and save/load
+            node.style('label', newText); // Update visual label
             console.log('✅ Updated annotation text to:', newText);
+
+            // AUTO-EXPANDERING: Expand ALL textboxes if text is too wide
+            const textSize = node.data('textSize');
+            const fontSize = node.data('customFontSize') || 18;
+
+            // Get minimum width based on size (S=100, M=200, L=300)
+            let minWidth = 100;
+            if (textSize === 'text-medium') minWidth = 200;
+            if (textSize === 'text-large') minWidth = 300;
+
+            if (newText.length > 0) {
+                // Create temporary element to measure text width
+                const measurer = document.createElement('span');
+                measurer.style.cssText = `
+                    position: absolute; visibility: hidden; white-space: nowrap;
+                    font-size: ${fontSize}px; font-family: inherit; padding: 10px;
+                `;
+                measurer.textContent = newText;
+                document.body.appendChild(measurer);
+
+                const textWidth = measurer.offsetWidth;
+                document.body.removeChild(measurer);
+
+                // If text is wider than minimum, expand the box
+                if (textWidth > minWidth) {
+                    const newWidth = Math.min(textWidth + 20, 1200); // Max 1200px
+                    node.data('customWidth', newWidth);
+                    node.style('width', newWidth + 'px');
+                    console.log(`📏 Auto-expanded textbox from ${minWidth}px to ${newWidth}px`);
+                } else {
+                    // Reset to minimum if text is shorter
+                    node.data('customWidth', minWidth);
+                    node.style('width', minWidth + 'px');
+                }
+            }
+        }
+
+        // Save hidden tags
+        if (tagsText.length > 0) {
+            const tags = tagsText.split(',').map(t => t.trim()).filter(t => t.length > 0);
+            node.data('hidden_tags', tags);
+            console.log('✅ Updated hidden tags:', tags);
+        } else {
+            node.data('hidden_tags', []);
         }
 
         // Save immediately to prevent data loss from autosave/Drive sync

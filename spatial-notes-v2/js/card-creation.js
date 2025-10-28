@@ -248,6 +248,7 @@ function createNodeFromCardData(cardData, newId, position) {
         id: newId,
         title: cardData.title,
         text: cardData.text,
+        label: cardData.text || cardData.title, // For annotations that use label
         tags: cardData.tags,
         hidden_tags: cardData.hidden_tags || [],
         searchMatch: false,
@@ -263,6 +264,16 @@ function createNodeFromCardData(cardData, newId, position) {
         copyOf: cardData.copyOf,
         isCopy: cardData.isCopy,
         copyTimestamp: cardData.copyTimestamp,
+        // ANNOTATION DATA - Essential for annotation nodes
+        isAnnotation: cardData.isAnnotation || false,
+        annotationType: cardData.annotationType || null,
+        textSize: cardData.textSize || null,
+        customWidth: cardData.customWidth || null,
+        customHeight: cardData.customHeight || null,
+        customZIndex: cardData.customZIndex || null,
+        customFontSize: cardData.customFontSize || null,
+        annotationColor: cardData.annotationColor || null,
+        shape: cardData.shape || null,
         // IMAGE DATA - Essential for image nodes
         type: cardData.type,
         imageData: cardData.imageData,
@@ -278,6 +289,39 @@ function createNodeFromCardData(cardData, newId, position) {
         data: nodeData,
         position: position
     });
+
+    // Apply annotation-specific styling and classes if it's an annotation
+    if (cardData.isAnnotation) {
+        if (cardData.annotationType === 'shape') {
+            newNode.addClass('annotation-shape');
+            if (cardData.text) {
+                newNode.data('label', cardData.text);
+                newNode.style('label', cardData.text);
+            }
+        } else if (cardData.annotationType === 'text') {
+            newNode.addClass('annotation-text');
+            if (cardData.text) {
+                newNode.data('label', cardData.text);
+                newNode.style('label', cardData.text);
+            }
+        }
+
+        // Apply custom size and color
+        if (cardData.customWidth || cardData.customHeight) {
+            const styleUpdate = {
+                'width': (cardData.customWidth || 120) + 'px',
+                'height': (cardData.customHeight || 120) + 'px'
+            };
+            if (cardData.annotationColor) {
+                styleUpdate['background-color'] = cardData.annotationColor;
+            }
+            if (cardData.customFontSize) {
+                styleUpdate['font-size'] = cardData.customFontSize + 'px';
+            }
+            newNode.style(styleUpdate);
+        }
+        console.log(`🎨 Created annotation copy: ${cardData.annotationType} (${cardData.textSize || cardData.shape})`);
+    }
 
     // Apply image-specific styling if it's an image node
     if (cardData.type === 'image' && cardData.imageData) {
@@ -326,6 +370,16 @@ function copySelectedCards() {
             page_number: node.data('page_number'),
             matched_terms: node.data('matched_terms'),
             card_index: node.data('card_index'),
+            // ANNOTATION DATA - Essential for copying annotations
+            isAnnotation: node.data('isAnnotation') || false,
+            annotationType: node.data('annotationType') || null,
+            textSize: node.data('textSize') || null,
+            customWidth: node.data('customWidth') || null,
+            customHeight: node.data('customHeight') || null,
+            customZIndex: node.data('customZIndex') || null,
+            customFontSize: node.data('customFontSize') || null,
+            annotationColor: node.data('isAnnotation') ? node.style('background-color') : null,
+            shape: node.data('shape') || null,
             // IMAGE NODE DATA - Essential for copying images
             type: node.data('type'), // 'image' for image nodes
             imageData: node.data('imageData'), // Base64 image data

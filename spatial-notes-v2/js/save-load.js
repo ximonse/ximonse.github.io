@@ -22,6 +22,7 @@ function saveBoard(filename = null, isAutosave = false) {
             // Annotation-specific data
             isAnnotation: node.data('isAnnotation') || false,
             annotationType: node.data('annotationType') || null,
+            textSize: node.data('textSize') || null, // CRITICAL: Save textSize for text annotations
             customWidth: node.data('customWidth') || null,
             customHeight: node.data('customHeight') || null,
             customZIndex: node.data('customZIndex') || null,
@@ -178,6 +179,7 @@ function loadBoardFromData(boardData) {
                     // Annotation-specific data
                     isAnnotation: cardData.isAnnotation || false,
                     annotationType: cardData.annotationType || null,
+                    textSize: cardData.textSize || null, // CRITICAL: Restore textSize for text annotations
                     customWidth: cardData.customWidth || null,
                     customHeight: cardData.customHeight || null,
                     customZIndex: cardData.customZIndex || null,
@@ -215,14 +217,31 @@ function loadBoardFromData(boardData) {
             // Restore annotation shape class and text label
             if (cardData.isAnnotation && cardData.annotationType === 'shape') {
                 newNode.addClass('annotation-shape');
-                
+
                 // Make sure text shows as label for annotations
                 if (cardData.text) {
                     newNode.style('label', cardData.text);
-                    console.log('✅ Restored annotation text:', cardData.text, 'for node:', cardData.id);
+                    console.log('✅ Restored annotation shape text:', cardData.text, 'for node:', cardData.id);
                 }
             }
-            
+
+            // Restore annotation TEXT class and styling
+            if (cardData.isAnnotation && cardData.annotationType === 'text') {
+                newNode.addClass('annotation-text');
+
+                // Make sure text shows as label for text annotations
+                if (cardData.text) {
+                    newNode.data('label', cardData.text); // CRITICAL: Set in data for Cytoscape
+                    newNode.style('label', cardData.text); // Also set in style
+                    console.log('✅ Restored annotation text:', cardData.text, 'for node:', cardData.id);
+                }
+
+                // Restore textSize for proper identification
+                if (cardData.textSize) {
+                    newNode.data('textSize', cardData.textSize);
+                }
+            }
+
             // Restore custom size, layer and color for annotation nodes
             if (cardData.isAnnotation && (cardData.customWidth || cardData.customHeight || cardData.customZIndex !== null || cardData.annotationColor)) {
                 const width = cardData.customWidth || 120;
@@ -514,6 +533,7 @@ function exportToJSON() {
                 // Annotation-specific data (geometric shapes)
                 isAnnotation: node.data('isAnnotation') || false,
                 annotationType: node.data('annotationType') || null,
+                textSize: node.data('textSize') || null, // CRITICAL: Export textSize for text annotations
                 customWidth: node.data('customWidth') || null,
                 customHeight: node.data('customHeight') || null,
                 customZIndex: node.data('customZIndex') || null,
@@ -679,6 +699,7 @@ function importFromJSON() {
                             // Annotation-specific data
                             isAnnotation: cardData.isAnnotation || false,
                             annotationType: cardData.annotationType || null,
+                            textSize: cardData.textSize || null, // CRITICAL: Restore textSize for text annotations
                             customWidth: cardData.customWidth || null,
                             customHeight: cardData.customHeight || null,
                             customZIndex: cardData.customZIndex || null,
@@ -709,13 +730,29 @@ function importFromJSON() {
                     // Restore annotation shape class and text label
                     if (cardData.isAnnotation && cardData.annotationType === 'shape') {
                         newNode.addClass('annotation-shape');
-                        
+
                         // Make sure text shows as label for annotations
                         if (cardData.text) {
                             newNode.style('label', cardData.text);
                         }
                     }
-                    
+
+                    // Restore annotation TEXT class and styling
+                    if (cardData.isAnnotation && cardData.annotationType === 'text') {
+                        newNode.addClass('annotation-text');
+
+                        // Make sure text shows as label for text annotations
+                        if (cardData.text) {
+                            newNode.data('label', cardData.text); // CRITICAL: Set in data for Cytoscape
+                            newNode.style('label', cardData.text); // Also set in style
+                        }
+
+                        // Restore textSize for proper identification
+                        if (cardData.textSize) {
+                            newNode.data('textSize', cardData.textSize);
+                        }
+                    }
+
                     // Restore custom size, layer, color and font size for annotation nodes
                     if (cardData.isAnnotation && (cardData.customWidth || cardData.customHeight || cardData.customZIndex !== null || cardData.annotationColor || cardData.customFontSize)) {
                         const width = cardData.customWidth || 120;

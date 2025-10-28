@@ -596,33 +596,38 @@ function toggleResizeMode() {
 function createShapeAnnotation(shape, position) {
     const id = generateCardId();
     const shapes = {
-        'rect': { shape: 'rectangle', label: '' },
-        'circle': { shape: 'ellipse', label: '' },
-        'triangle': { shape: 'triangle', label: '' },
-        'diamond': { shape: 'diamond', label: '' },
-        'star': { shape: 'star', label: '' },
-        'hexagon': { shape: 'hexagon', label: '' }
+        'rect': { shape: 'rectangle', label: '', width: 120, height: 120 },
+        'circle': { shape: 'ellipse', label: '', width: 120, height: 120 },
+        'triangle': { shape: 'triangle', label: '', width: 120, height: 120 },
+        'diamond': { shape: 'diamond', label: '', width: 120, height: 120 },
+        'star': { shape: 'star', label: '', width: 120, height: 120 },
+        'hexagon': { shape: 'hexagon', label: '', width: 120, height: 120 }
     };
-    
+
     const shapeInfo = shapes[shape] || shapes.rect;
-    
+
     cy.add({
         data: {
             id: id,
             label: shapeInfo.label,
+            text: shapeInfo.label, // Also store in 'text' for consistency
             isAnnotation: true,
             annotationType: 'shape',
-            shape: shape
+            shape: shape,
+            customWidth: shapeInfo.width,
+            customHeight: shapeInfo.height,
+            customZIndex: 0, // Normal layer
+            annotationColor: annotationColor // Store color in data for saving
         },
         position: position,
         classes: 'annotation-shape'
     });
-    
+
     // Apply color immediately
     const node = cy.getElementById(id);
     node.style('background-color', annotationColor);
-    
-    console.log(`🔷 Created ${shape} annotation at`, position);
+
+    console.log(`🔷 Created ${shape} annotation at`, position, 'with size', shapeInfo.width, 'x', shapeInfo.height);
     return node;
 }
 
@@ -630,33 +635,40 @@ function createShapeAnnotation(shape, position) {
 function createTextAnnotation(size, position) {
     const id = generateCardId();
     const sizes = {
-        'text-small': { fontSize: '16px', label: 'Liten text' },
-        'text-medium': { fontSize: '22px', label: 'Medium text' },
-        'text-large': { fontSize: '28px', label: 'Stor text' }
+        'text-small': { fontSize: 20, label: 'Text', width: 100, height: 50 },  // S: 100x50, font 20
+        'text-medium': { fontSize: 30, label: 'Text', width: 200, height: 75 }, // M: 200x75, font 30
+        'text-large': { fontSize: 50, label: 'Text', width: 300, height: 100 }  // L: 300x100, font 50
     };
-    
+
     const sizeInfo = sizes[size] || sizes['text-medium'];
-    
+
     cy.add({
         data: {
             id: id,
             label: sizeInfo.label,
+            text: sizeInfo.label, // Also store in 'text' for consistency
             isAnnotation: true,
             annotationType: 'text',
-            textSize: size
+            textSize: size,
+            customWidth: sizeInfo.width,
+            customHeight: sizeInfo.height,
+            customFontSize: sizeInfo.fontSize,
+            customZIndex: 0, // Normal layer
+            annotationColor: annotationColor, // Store color in data for saving
+            hidden_tags: [] // Empty array for potential tagging later
         },
         position: position,
         classes: 'annotation-text'
     });
-    
+
     const node = cy.getElementById(id);
     node.style({
-        'font-size': sizeInfo.fontSize,
+        'font-size': sizeInfo.fontSize + 'px',
         'background-color': annotationColor,
         'shape': 'rectangle'
     });
-    
-    console.log(`📝 Created ${size} text annotation at`, position);
+
+    console.log(`📝 Created ${size} text annotation at`, position, 'with size', sizeInfo.width, 'x', sizeInfo.height, 'font', sizeInfo.fontSize);
     return node;
 }
 
@@ -1394,14 +1406,13 @@ function initCytoscape() {
                     'label': 'data(label)',
                     'text-valign': 'center',
                     'text-halign': 'center',
-                    'font-size': '18px',
-                    'color': '#333',
-                    'text-wrap': 'wrap',
-                    'text-max-width': function(node) {
-                        // Adjust text width based on node width
-                        const width = node.data('customWidth') || 180;
-                        return (width - 10) + 'px';
+                    'font-size': function(node) {
+                        // Use custom font size if set, otherwise default
+                        return (node.data('customFontSize') || 18) + 'px';
                     },
+                    'color': '#333',
+                    'text-wrap': 'none', // NO line breaks - expand width instead
+                    'text-max-width': 10000, // Effectively unlimited - let box expand
                     'shape': 'rectangle'
                 }
             },
@@ -1502,12 +1513,23 @@ function initCytoscape() {
     
     // Canvas click for creating annotations
     cy.on('tap', function(evt) {
-        if (!annotationToolbarVisible || annotationMode === 'select') return;
-        
+        if (!annotationToolbarVisible) return;
+
         // Only create on background, not on nodes
         if (evt.target === cy) {
             const position = evt.position || evt.cyPosition;
-            
+
+            // Check if user has selected a size via keyboard shortcut (S/M/L)
+            if (pendingAnnotationSize) {
+                createTextAnnotation(pendingAnnotationSize, position);
+                pendingAnnotationSize = null; // Reset after creating
+                showBriefMessage('✅ Textbox skapad!');
+                return;
+            }
+
+            // Otherwise use normal annotation mode from toolbar
+            if (annotationMode === 'select') return;
+
             if (['rect', 'circle', 'triangle', 'diamond', 'star', 'hexagon'].includes(annotationMode)) {
                 createShapeAnnotation(annotationMode, position);
             } else if (['text-small', 'text-medium', 'text-large'].includes(annotationMode)) {
@@ -6023,6 +6045,18 @@ function showStatusMessage(message) {
         setTimeout(() => statusDiv.classList.remove('visible'), 3000);
     }
 }
+
+// Helper function to show brief messages in search info area
+function showBriefMessage(message, duration = 3000) {
+    const searchInfo = document.getElementById('searchInfo');
+    if (searchInfo) {
+        searchInfo.textContent = message;
+        searchInfo.classList.add('visible');
+        setTimeout(() => searchInfo.classList.remove('visible'), duration);
+    }
+}
+// Make globally available for other modules
+window.showBriefMessage = showBriefMessage;
 
 // Tag filtering functions with Boolean logic
 function performTagFilter(filterText) {
@@ -14246,14 +14280,14 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // (Delete-tangenten hanteras längre ner)
         
-        // S för spara - Smart save with Google Drive integration
-        if (e.key === 's' && !e.ctrlKey && !e.altKey) {
+        // S för spara - Smart save with Google Drive integration (NOT in annotation mode)
+        if (e.key === 's' && !e.ctrlKey && !e.altKey && !annotationToolbarVisible) {
             e.preventDefault();
             smartSave();
         }
-        
-        // L för ladda sparad bräda
-        if (e.key === 'l' && !e.ctrlKey && !e.altKey) {
+
+        // L för ladda sparad bräda (NOT in annotation mode)
+        if (e.key === 'l' && !e.ctrlKey && !e.altKey && !annotationToolbarVisible) {
             e.preventDefault();
             loadBoard();
         }
@@ -14443,7 +14477,63 @@ document.addEventListener('DOMContentLoaded', function() {
         if (e.key) {
             window.keysPressed.add(e.key.toLowerCase());
         }
-        
+
+        // ========== ANNOTATION MODE SHORTCUTS (ONLY when annotation toolbar is active) ==========
+        if (annotationToolbarVisible && !e.ctrlKey && !e.altKey) {
+            // Color shortcuts: Y, R, G, B, P
+            if (e.key === 'y') {
+                e.preventDefault();
+                setAnnotationColor('#f9ca24'); // Yellow
+                showBriefMessage('🎨 Färg: Gul');
+                return;
+            }
+            if (e.key === 'r') {
+                e.preventDefault();
+                setAnnotationColor('#ff6b6b'); // Red
+                showBriefMessage('🎨 Färg: Röd');
+                return;
+            }
+            if (e.key === 'g') {
+                e.preventDefault();
+                setAnnotationColor('#45b7d1'); // Green (actually blue according to user)
+                showBriefMessage('🎨 Färg: Blå');
+                return;
+            }
+            if (e.key === 'b') {
+                e.preventDefault();
+                setAnnotationColor('#4ecdc4'); // Blue (actually turkos according to user)
+                showBriefMessage('🎨 Färg: Turkos');
+                return;
+            }
+            if (e.key === 'p') {
+                e.preventDefault();
+                setAnnotationColor('#a55eea'); // Purple
+                showBriefMessage('🎨 Färg: Lila');
+                return;
+            }
+
+            // Size shortcuts: S, M, L (for textboxes)
+            if (e.key === 's') {
+                e.preventDefault();
+                pendingAnnotationSize = 'text-small';
+                showBriefMessage('📏 Storlek: Small (100x50, font 20)');
+                return;
+            }
+            if (e.key === 'm') {
+                e.preventDefault();
+                pendingAnnotationSize = 'text-medium';
+                showBriefMessage('📏 Storlek: Medium (200x75, font 30)');
+                return;
+            }
+            if (e.key === 'l') {
+                e.preventDefault();
+                pendingAnnotationSize = 'text-large';
+                showBriefMessage('📏 Storlek: Large (300x100, font 50)');
+                return;
+            }
+        }
+        // ========== END ANNOTATION MODE SHORTCUTS ==========
+
         // Handle G+V, G+H, G+T combinations (grid variants for selected cards)
         if (window.keysPressed.has('g') && window.keysPressed.has('v')) {
             e.preventDefault();
@@ -14601,8 +14691,8 @@ document.addEventListener('DOMContentLoaded', function() {
             setColumnViewSort('background-color');
         }
         
-        // M för multi-card paste (öppna dialog)
-        if (e.key === 'm' && !e.ctrlKey && !e.altKey) {
+        // M för multi-card paste (öppna dialog) (NOT in annotation mode)
+        if (e.key === 'm' && !e.ctrlKey && !e.altKey && !annotationToolbarVisible) {
             e.preventDefault();
             showMultiCardPasteDialog();
         }

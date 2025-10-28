@@ -14,6 +14,7 @@ let copiedCards = []; // Store copied cards for arrangement commands
 // Annotation system variables
 let annotationMode = 'select';
 let annotationColor = '#ff6b6b';
+let pendingAnnotationSize = null; // Track selected size for keyboard shortcuts (S/M/L)
 let connectionStartNode = null;
 let annotationToolbarVisible = false;
 let resizeMode = false;
