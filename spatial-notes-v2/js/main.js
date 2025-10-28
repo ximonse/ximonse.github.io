@@ -1516,11 +1516,17 @@ function initCytoscape() {
         if (!annotationToolbarVisible) return;
 
         // Only create on background, not on nodes
-        if (evt.target === cy) {
+        // Use isNode() check for better mobile compatibility
+        const isBackgroundTap = (evt.target === cy) || (!evt.target.isNode || !evt.target.isNode());
+
+        if (isBackgroundTap) {
             const position = evt.position || evt.cyPosition;
+
+            console.log('📍 Annotation tap on background at:', position, 'mode:', annotationMode);
 
             // Check if user has selected a size via keyboard shortcut (S/M/L)
             if (pendingAnnotationSize) {
+                console.log('🎯 Creating text annotation with pending size:', pendingAnnotationSize);
                 createTextAnnotation(pendingAnnotationSize, position);
                 pendingAnnotationSize = null; // Reset after creating
                 showBriefMessage('✅ Textbox skapad!');
@@ -1528,13 +1534,22 @@ function initCytoscape() {
             }
 
             // Otherwise use normal annotation mode from toolbar
-            if (annotationMode === 'select') return;
+            if (annotationMode === 'select') {
+                console.log('⏸️ Annotation mode is "select", skipping creation');
+                return;
+            }
 
             if (['rect', 'circle', 'triangle', 'diamond', 'star', 'hexagon'].includes(annotationMode)) {
+                console.log('🎨 Creating shape annotation:', annotationMode);
                 createShapeAnnotation(annotationMode, position);
+                showBriefMessage(`✅ ${annotationMode} skapad!`);
             } else if (['text-small', 'text-medium', 'text-large'].includes(annotationMode)) {
+                console.log('📝 Creating text annotation:', annotationMode);
                 createTextAnnotation(annotationMode, position);
+                showBriefMessage('✅ Textbox skapad!');
             }
+        } else {
+            console.log('⛔ Tap was on a node, not creating annotation');
         }
     });
     

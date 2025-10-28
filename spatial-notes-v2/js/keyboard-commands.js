@@ -1213,16 +1213,26 @@ function copySelectedCards() {
             imageData: node.data('imageData'), // Base64 image data
             annotation: node.data('annotation'), // Image annotation text
             searchableText: node.data('searchableText'), // Searchable text
-            originalFileName: node.data('originalFileName') // Original filename
+            originalFileName: node.data('originalFileName'), // Original filename
+            // ANNOTATION NODE DATA - Essential for copying annotation shapes/text
+            isAnnotation: node.data('isAnnotation'), // Is this an annotation?
+            annotationType: node.data('annotationType'), // 'shape', 'text', or 'connection'
+            shape: node.data('shape'), // Shape type: 'rect', 'circle', etc.
+            customWidth: node.data('customWidth'), // Custom width for annotations
+            customHeight: node.data('customHeight'), // Custom height for annotations
+            customZIndex: node.data('customZIndex'), // Z-index for layering
+            customFontSize: node.data('customFontSize'), // Font size for text annotations
+            annotationColor: node.data('annotationColor'), // Color for annotation
+            textSize: node.data('textSize') // Text size: 'text-small', 'text-medium', 'text-large'
         };
-        
+
         // Add copy metadata to hidden tags (searchable but not visible)
         const copyTag = `copy_${timestamp}_${index + 1}`;
         originalData.hidden_tags.push(copyTag);
         originalData.copyOf = node.id();
         originalData.isCopy = true;
         originalData.copyTimestamp = now.toISOString();
-        
+
         copiedCards.push(originalData);
     });
     
