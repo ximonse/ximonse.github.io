@@ -14200,26 +14200,58 @@ let renderColumnViewTimeout = null;
 function renderColumnView() {
     const container = document.getElementById('columnContainer');
     container.innerHTML = '';
-    
-    
+
+
     // Setup background handlers once
     setupColumnBackgroundHandlers();
-    
+
     if (!cy) return;
-    
+
     // Apply temporal markings before rendering
     if (typeof applyTemporalMarkings === 'function') {
         applyTemporalMarkings();
     }
-    
-    // Get all nodes and apply automatic sorting
-    let nodes = cy.nodes().stdFilter(function(node) {
-        return !node.data('isAnnotation'); // Exclude annotation nodes
-    });
-    
+
+    // Determine if we should filter (search active, selected cards, or tag filter)
+    const hasSearchMatches = searchActive && cy.$('.search-match').length > 0;
+    const hasSelectedCards = cy.$('node:selected').length > 0;
+    const showFilteredOnly = hasSearchMatches || hasSelectedCards;
+
+    // Get nodes - either filtered or all
+    let nodes;
+    if (showFilteredOnly) {
+        if (hasSearchMatches) {
+            // Show only search matches
+            nodes = cy.$('.search-match').stdFilter(function(node) {
+                return !node.data('isAnnotation');
+            });
+        } else {
+            // Show only selected cards
+            nodes = cy.$('node:selected').stdFilter(function(node) {
+                return !node.data('isAnnotation');
+            });
+        }
+    } else {
+        // Show all nodes
+        nodes = cy.nodes().stdFilter(function(node) {
+            return !node.data('isAnnotation'); // Exclude annotation nodes
+        });
+    }
+
     // Apply sorting based on current sort preference
     nodes = sortColumnViewNodes(nodes);
-    
+
+    // Show filter indicator if filtered
+    if (showFilteredOnly) {
+        const totalCards = cy.nodes().stdFilter(function(node) {
+            return !node.data('isAnnotation');
+        }).length;
+        const filterInfo = document.createElement('div');
+        filterInfo.style.cssText = 'padding: 12px; background: #e3f2fd; border-left: 4px solid #2196f3; margin-bottom: 16px; font-size: 14px; color: #1976d2;';
+        filterInfo.innerHTML = `📌 Visar <strong>${nodes.length}</strong> av ${totalCards} kort <span style="margin-left: 12px; cursor: pointer; text-decoration: underline;" onclick="clearSearch(); renderColumnView();">Visa alla</span>`;
+        container.appendChild(filterInfo);
+    }
+
     // Use document fragment for better performance
     const fragment = document.createDocumentFragment();
     nodes.forEach(node => {
@@ -14227,7 +14259,7 @@ function renderColumnView() {
         fragment.appendChild(cardDiv);
     });
     container.appendChild(fragment);
-    
+
     // Apply current search highlighting
     updateColumnViewSearch();
 }
