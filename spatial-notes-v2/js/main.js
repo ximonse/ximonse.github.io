@@ -118,7 +118,7 @@ function showImageSourceMenu(clientX, clientY) {
     }, 100);
 }
 
-// Process uploaded images
+// Process uploaded images and PDFs
 function handleImageFiles(files) {
     Array.from(files).forEach(file => {
         if (file && file.type.startsWith('image/')) {
@@ -126,6 +126,10 @@ function handleImageFiles(files) {
                 createImageNode(imageData, file.name);
             }).catch(err => {
                 console.error('Image processing failed:', err);
+            });
+        } else if (file && file.type === 'application/pdf') {
+            processPdfFile(file).catch(err => {
+                console.error('PDF processing failed:', err);
             });
         }
     });
@@ -261,6 +265,106 @@ function createImageNode(imageData, filename) {
     });
 
     console.log(`📷 Created image node: ${filename} (${Math.round(imageData.data.length/1024)} KB) - ${imageData.width}x${imageData.height} → ${displayWidth}x${displayHeight}`);
+}
+
+// Process PDF file and convert all pages to image nodes
+async function processPdfFile(file) {
+    // Configure PDF.js worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    const searchInfo = document.getElementById('searchInfo');
+    if (searchInfo) {
+        searchInfo.textContent = `📄 Bearbetar PDF: ${file.name}...`;
+        searchInfo.classList.add('visible');
+    }
+
+    try {
+        // Load the PDF file
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
+        const numPages = pdf.numPages;
+
+        if (searchInfo) {
+            searchInfo.textContent = `📄 Konverterar ${numPages} sidor från ${file.name}...`;
+            searchInfo.classList.add('visible');
+        }
+
+        // Process each page
+        for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+            const page = await pdf.getPage(pageNum);
+
+            // Get viewport with scale for good quality (2x for retina)
+            const viewport = page.getViewport({scale: 2.0});
+
+            // Create canvas for rendering
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+
+            // Render PDF page to canvas
+            await page.render({
+                canvasContext: ctx,
+                viewport: viewport
+            }).promise;
+
+            // Scale down to 800px width (same as images)
+            const finalCanvas = document.createElement('canvas');
+            const finalCtx = finalCanvas.getContext('2d');
+            const ratio = 800 / canvas.width;
+            finalCanvas.width = 800;
+            finalCanvas.height = Math.round(canvas.height * ratio);
+
+            finalCtx.drawImage(canvas, 0, 0, finalCanvas.width, finalCanvas.height);
+
+            // Convert to base64 (WebP or PNG)
+            let base64;
+            let format = 'unknown';
+
+            try {
+                base64 = finalCanvas.toDataURL('image/webp', 0.95);
+                if (base64.startsWith('data:image/webp')) {
+                    format = 'WebP 95%';
+                } else {
+                    throw new Error('WebP not supported');
+                }
+            } catch {
+                base64 = finalCanvas.toDataURL('image/png');
+                format = 'PNG';
+            }
+
+            // Create image node for this page
+            const imageData = {
+                data: base64,
+                width: finalCanvas.width,
+                height: finalCanvas.height,
+                originalName: `${file.name} - Sida ${pageNum}`
+            };
+
+            createImageNode(imageData, `${file.name} - Sida ${pageNum}/${numPages}`);
+
+            console.log(`📄 Page ${pageNum}/${numPages} converted: ${format} (${Math.round(base64.length/1024)} KB)`);
+        }
+
+        if (searchInfo) {
+            searchInfo.textContent = `✅ ${numPages} sidor importerade från ${file.name}`;
+            searchInfo.classList.add('visible');
+            setTimeout(() => {
+                searchInfo.classList.remove('visible');
+            }, 3000);
+        }
+
+    } catch (error) {
+        console.error('PDF processing error:', error);
+        if (searchInfo) {
+            searchInfo.textContent = `❌ PDF-import misslyckades: ${error.message}`;
+            searchInfo.classList.add('visible');
+            setTimeout(() => {
+                searchInfo.classList.remove('visible');
+            }, 5000);
+        }
+        throw error;
+    }
 }
 
 // Handle paste events (Ctrl+V) for images

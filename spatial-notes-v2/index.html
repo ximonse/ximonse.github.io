@@ -10,6 +10,7 @@
     <script src="https://unpkg.com/jquery@3.6.0/dist/jquery.min.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://apis.google.com/js/api.js" async defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
     <!-- CSS Modules -->
     <link rel="stylesheet" href="css/toolbar.css">
@@ -237,7 +238,7 @@
 
     <!-- Hidden file inputs for image upload -->
     <input type="file" id="hiddenCameraInput" accept="image/*" multiple capture="camera" style="display: none;">
-    <input type="file" id="hiddenGalleryInput" accept="image/*" multiple style="display: none;">
+    <input type="file" id="hiddenGalleryInput" accept="image/*,.pdf" multiple style="display: none;">
 
     <!-- Hidden file input for Zotero HTML import -->
     <input type="file" id="zoteroHtmlInput" accept=".html" style="display: none;">
