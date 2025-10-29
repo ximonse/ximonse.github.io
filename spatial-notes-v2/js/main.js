@@ -1391,7 +1391,7 @@ function initCytoscape() {
                         return getMeasuredTextHeight(node);
                     },
                     'background-image': 'data(imageData)',
-                    'background-fit': 'cover',
+                    'background-fit': 'contain', // Changed from 'cover' to preserve aspect ratio and show full image
                     'background-color': function(node) {
                         // Support color styling for image cards
                         const cardColor = node.data('cardColor');
@@ -8313,36 +8313,63 @@ function saveBoard(filename = null, isAutosave = false) {
         version: '2.0' // Updated for image support
     };
     
-    if (filename) {
-        // Save to file
-        const blob = new Blob([JSON.stringify(boardData, null, 2)], {type: 'application/json'});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    } else {
-        // Save to localStorage
-        localStorage.setItem('spatial-notes-board', JSON.stringify(boardData));
+    try {
+        if (filename) {
+            // Save to file
+            const blob = new Blob([JSON.stringify(boardData, null, 2)], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } else {
+            // Save to localStorage
+            const jsonString = JSON.stringify(boardData);
+            const sizeInMB = (jsonString.length / (1024 * 1024)).toFixed(2);
+            console.log(`💾 Saving to localStorage: ${sizeInMB} MB`);
+
+            localStorage.setItem('spatial-notes-board', jsonString);
+        }
+
+        // Reset change tracking
+        hasChanges = false;
+
+        // Show saved message
+        const searchInfo = document.getElementById('searchInfo');
+        if (isAutosave) {
+            searchInfo.textContent = 'Auto-sparad ✓';
+        } else {
+            searchInfo.textContent = 'Sparad ✓';
+        }
+        searchInfo.classList.add('visible');
+        setTimeout(() => {
+            searchInfo.classList.remove('visible');
+        }, 2000);
+    } catch (error) {
+        console.error('❌ Save failed:', error);
+
+        // Show error message
+        const searchInfo = document.getElementById('searchInfo');
+
+        if (error.name === 'QuotaExceededError') {
+            // localStorage is full
+            const boardSize = JSON.stringify(boardData).length;
+            const sizeInMB = (boardSize / (1024 * 1024)).toFixed(2);
+
+            searchInfo.textContent = `❌ Sparningen misslyckades: LocalStorage fullt (${sizeInMB} MB). Använd "Spara fil" istället.`;
+            console.error(`LocalStorage full. Board size: ${sizeInMB} MB. Use "Save to file" instead.`);
+        } else {
+            searchInfo.textContent = `❌ Sparningen misslyckades: ${error.message}`;
+        }
+
+        searchInfo.classList.add('visible');
+        setTimeout(() => {
+            searchInfo.classList.remove('visible');
+        }, 8000); // Longer timeout for error messages
     }
-    
-    // Reset change tracking
-    hasChanges = false;
-    
-    // Show saved message
-    const searchInfo = document.getElementById('searchInfo');
-    if (isAutosave) {
-        searchInfo.textContent = 'Auto-sparad ✓';
-    } else {
-        searchInfo.textContent = 'Sparad ✓';
-    }
-    searchInfo.classList.add('visible');
-    setTimeout(() => {
-        searchInfo.classList.remove('visible');
-    }, 2000);
 }
 
 // Save with timestamp filename
@@ -8511,7 +8538,7 @@ function loadBoardFromData(boardData) {
                 // Apply image-specific styling (height will be calculated by Cytoscape style function)
                 newNode.style({
                     'background-image': cardData.imageData,
-                    'background-fit': 'cover',
+                    'background-fit': 'contain',
                     'width': '300px' // Same as regular cards
                 });
                 
@@ -9010,7 +9037,7 @@ function importFromJSON() {
                         // Apply image-specific styling
                         newNode.style({
                             'background-image': cardData.imageData,
-                            'background-fit': 'cover',
+                            'background-fit': 'contain',
                             'width': '300px'
                         });
                         
@@ -10929,7 +10956,7 @@ function createNodeFromCardData(cardData, newId, position) {
     if (cardData.type === 'image' && cardData.imageData) {
         newNode.style({
             'background-image': cardData.imageData,
-            'background-fit': 'cover',
+            'background-fit': 'contain',
             'width': '300px'
         });
         console.log(`📷 Created image copy: ${cardData.originalFileName}`);
@@ -12836,22 +12863,55 @@ function initializeProjectName() {
 
 // Smart save function - handles Google Drive integration
 async function smartSave() {
+    let localSaveSuccess = false;
+
     try {
-        // Always save to localStorage first (instant backup)
+        // Try to save to localStorage first (instant backup)
         saveBoard();
+        localSaveSuccess = true;
         updateSyncStatus('Sparad lokalt ✓', 'success');
-        
+    } catch (localError) {
+        console.warn('localStorage save failed (likely full), continuing with Google Drive save...', localError);
+        // Don't stop - continue to Google Drive save
+    }
+
+    try {
         // Check if user is signed in to Google Drive
         if (isSignedIn && accessToken) {
             // User is signed in - save to Google Drive with structured filename
             await saveToGoogleDriveWithStructure();
+
+            // If localStorage failed but Google Drive succeeded, show appropriate message
+            if (!localSaveSuccess) {
+                const searchInfo = document.getElementById('searchInfo');
+                searchInfo.textContent = '✅ Sparad till Google Drive (LocalStorage fullt)';
+                searchInfo.classList.add('visible');
+                setTimeout(() => {
+                    searchInfo.classList.remove('visible');
+                }, 5000);
+            }
         } else {
             // User not signed in - offer to sign in
-            showGoogleDriveSignInPrompt();
+            if (!localSaveSuccess) {
+                // Both failed - show error
+                const searchInfo = document.getElementById('searchInfo');
+                searchInfo.textContent = '❌ LocalStorage fullt. Logga in på Google Drive eller använd "Spara fil".';
+                searchInfo.classList.add('visible');
+                setTimeout(() => {
+                    searchInfo.classList.remove('visible');
+                }, 8000);
+            } else {
+                // Local save worked, offer Google Drive
+                showGoogleDriveSignInPrompt();
+            }
         }
-    } catch (error) {
-        console.error('Smart save error:', error);
-        updateSyncStatus('Sparning misslyckades', 'error');
+    } catch (driveError) {
+        console.error('Google Drive save error:', driveError);
+        if (!localSaveSuccess) {
+            updateSyncStatus('❌ Båda sparningsmetoderna misslyckades. Använd "Spara fil".', 'error');
+        } else {
+            updateSyncStatus('Sparad lokalt (Google Drive misslyckades)', 'error');
+        }
     }
 }
 
@@ -13816,7 +13876,7 @@ async function loadFromGoogleDrive() {
 
                         node.style({
                             'background-image': card.imageData,
-                            'background-fit': 'cover',
+                            'background-fit': 'contain',
                             'background-position': 'center',
                             'width': displayWidth + 'px',
                             'height': displayHeight + 'px'
