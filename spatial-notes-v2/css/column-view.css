@@ -142,3 +142,71 @@
             border-color: #6b8db5;
             background: #e8f0f8;
         }
+
+        /* Inline Edit Area Styles */
+        .column-card-inline-edit {
+            animation: slideDown 0.3s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                max-height: 0;
+                overflow: hidden;
+            }
+            to {
+                opacity: 1;
+                max-height: 1000px;
+            }
+        }
+
+        .column-card-inline-edit textarea {
+            font-family: inherit;
+            line-height: 1.4;
+        }
+
+        .column-card-inline-edit button {
+            transition: all 0.2s ease;
+        }
+
+        .column-card-inline-edit button:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .column-card-inline-edit button:active {
+            transform: translateY(0);
+        }
+
+        /* Dark theme for inline edit */
+        .dark-theme .column-card-inline-edit {
+            background: #2d3748 !important;
+        }
+
+        .dark-theme .column-card-inline-edit textarea,
+        .dark-theme .column-card-inline-edit input {
+            background: #4a5568;
+            color: white;
+            border-color: #718096;
+        }
+
+        .dark-theme .column-card-inline-edit label {
+            color: #cbd5e0 !important;
+        }
+
+        /* Sepia theme for inline edit */
+        .sepia-theme .column-card-inline-edit {
+            background: #f0ead6 !important;
+            border-top-color: #d4c4a8 !important;
+        }
+
+        .sepia-theme .column-card-inline-edit textarea,
+        .sepia-theme .column-card-inline-edit input {
+            background: #faf8f1;
+            color: #5d4e37;
+            border-color: #d4c4a8;
+        }
+
+        .sepia-theme .column-card-inline-edit label {
+            color: #5d4e37 !important;
+        }

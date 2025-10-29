@@ -14935,28 +14935,33 @@ document.addEventListener('DOMContentLoaded', function() {
 // Column View Implementation
 let isColumnView = false;
 let columnCardStates = new Map(); // Track which cards show text vs image
+let columnCardEditStates = new Map(); // Track which cards are being edited inline
 
 function toggleView() {
     isColumnView = !isColumnView;
     const btn = document.getElementById('viewToggleBtn');
     const cyContainer = document.getElementById('cy');
     const columnContainer = document.getElementById('columnView');
-    
+
     if (isColumnView) {
         // Switch to column view
-        btn.innerHTML = '🗺️ Brädvy';
-        btn.title = 'Växla tillbaka till brädvy';
+        if (btn) {
+            btn.innerHTML = '🗺️ Brädvy';
+            btn.title = 'Växla tillbaka till brädvy';
+        }
         cyContainer.style.display = 'none';
         columnContainer.style.display = 'block';
         renderColumnViewDebounced();
     } else {
         // Switch to board view
-        btn.innerHTML = '📋 Kolumnvy';
-        btn.title = 'Växla till kolumnvy';
+        if (btn) {
+            btn.innerHTML = '📋 Kolumnvy';
+            btn.title = 'Växla till kolumnvy';
+        }
         cyContainer.style.display = 'block';
         columnContainer.style.display = 'none';
     }
-    
+
     // Save view state to localStorage
     localStorage.setItem('spatial-notes-view', isColumnView ? 'column' : 'board');
 }
@@ -15312,6 +15317,227 @@ function setColumnViewSort(sortType) {
     closeSortMenu();
 }
 
+// Create inline edit area for column view cards
+function createInlineEditArea(node, cardDiv) {
+    const nodeId = node.id();
+    const isImageNode = node.data('type') === 'image';
+    const currentText = isImageNode ? (node.data('annotation') || '') : (node.data('text') || '');
+    const currentTags = node.data('tags') || [];
+    const currentCardColor = node.data('cardColor') || '';
+    const currentColorNumber = currentCardColor.replace('card-color-', '') || '';
+
+    // HTML escape function
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // Create inline edit container
+    const editArea = document.createElement('div');
+    editArea.className = 'column-card-inline-edit';
+    editArea.dataset.nodeId = nodeId;
+
+    // Build edit interface (similar to editCard but inline)
+    editArea.innerHTML = `
+        <div style="background: #f8f9fa; padding: 15px; border-top: 2px solid #dee2e6; border-radius: 0 0 8px 8px;">
+            <div style="margin-bottom: 12px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: bold; font-size: 12px; color: #555;">Text:</label>
+                <textarea class="inline-edit-textarea"
+                    style="width: 100%; height: 150px; font-family: inherit; font-size: 14px;
+                           border: 1px solid #ccc; border-radius: 4px; padding: 8px;
+                           box-sizing: border-box; resize: vertical;">${escapeHtml(currentText)}</textarea>
+            </div>
+            <div style="margin-bottom: 12px;">
+                <label style="display: block; margin-bottom: 6px; font-weight: bold; font-size: 12px; color: #555;">Färg:</label>
+                <div class="inline-edit-color-picker" style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                    <div class="color-dot" data-color="" style="width: 22px; height: 22px; border-radius: 50%;
+                         background: #f5f5f5; border: 2px solid ${currentColorNumber === '' ? '#007acc' : '#ddd'}; cursor: pointer; position: relative;"
+                         title="Ingen färg">
+                        <span style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                              font-size: 14px; color: #666;">⭘</span>
+                    </div>
+                    <div class="color-dot" data-color="1" style="width: 22px; height: 22px; border-radius: 50%;
+                         background: #d4f2d4; border: 2px solid ${currentColorNumber === '1' ? '#007acc' : 'transparent'}; cursor: pointer;" title="Grön"></div>
+                    <div class="color-dot" data-color="2" style="width: 22px; height: 22px; border-radius: 50%;
+                         background: #ffe4b3; border: 2px solid ${currentColorNumber === '2' ? '#007acc' : 'transparent'}; cursor: pointer;" title="Orange"></div>
+                    <div class="color-dot" data-color="3" style="width: 22px; height: 22px; border-radius: 50%;
+                         background: #ffc1cc; border: 2px solid ${currentColorNumber === '3' ? '#007acc' : 'transparent'}; cursor: pointer;" title="Röd"></div>
+                    <div class="color-dot" data-color="4" style="width: 22px; height: 22px; border-radius: 50%;
+                         background: #fff7b3; border: 2px solid ${currentColorNumber === '4' ? '#007acc' : 'transparent'}; cursor: pointer;" title="Gul"></div>
+                    <div class="color-dot" data-color="5" style="width: 22px; height: 22px; border-radius: 50%;
+                         background: #f3e5f5; border: 2px solid ${currentColorNumber === '5' ? '#007acc' : 'transparent'}; cursor: pointer;" title="Lila"></div>
+                    <div class="color-dot" data-color="6" style="width: 22px; height: 22px; border-radius: 50%;
+                         background: #c7e7ff; border: 2px solid ${currentColorNumber === '6' ? '#007acc' : 'transparent'}; cursor: pointer;" title="Blå"></div>
+                    <div class="color-dot" data-color="7" style="width: 22px; height: 22px; border-radius: 50%;
+                         background: #e0e0e0; border: 2px solid ${currentColorNumber === '7' ? '#007acc' : 'transparent'}; cursor: pointer;" title="Grå"></div>
+                    <div class="color-dot" data-color="8" style="width: 22px; height: 22px; border-radius: 50%;
+                         background: #ffffff; border: 2px solid ${currentColorNumber === '8' ? '#007acc' : 'transparent'}; cursor: pointer;" title="Vit"></div>
+                </div>
+            </div>
+            <div style="margin-bottom: 12px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: bold; font-size: 12px; color: #555;">Tags:</label>
+                <input type="text" class="inline-edit-tags" value="${escapeHtml(currentTags.join(', '))}"
+                    style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;
+                           box-sizing: border-box; font-size: 13px;">
+            </div>
+            <div style="margin-bottom: 12px;">
+                <label style="display: block; margin-bottom: 6px; font-weight: bold; font-size: 12px; color: #555;">📅 Snabbveckor:</label>
+                <div class="inline-edit-week-buttons" style="display: flex; gap: 6px; flex-wrap: wrap;">
+                    <!-- Week buttons will be populated -->
+                </div>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                <button class="inline-edit-cancel" style="background: #666; color: white; border: none;
+                                     padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 13px;">Avbryt</button>
+                <button class="inline-edit-save" style="background: #007acc; color: white; border: none;
+                                    padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 13px;">Spara</button>
+            </div>
+            <div style="margin-top: 8px; font-size: 11px; color: #666;">
+                <strong>Tips:</strong> Ctrl+Enter = spara, Esc = avbryt
+            </div>
+        </div>
+    `;
+
+    // Get elements
+    const textarea = editArea.querySelector('.inline-edit-textarea');
+    const tagsInput = editArea.querySelector('.inline-edit-tags');
+    const saveBtn = editArea.querySelector('.inline-edit-save');
+    const cancelBtn = editArea.querySelector('.inline-edit-cancel');
+    const colorDots = editArea.querySelectorAll('.color-dot');
+    const weekButtonsContainer = editArea.querySelector('.inline-edit-week-buttons');
+
+    // Track selected color
+    let selectedColor = currentColorNumber;
+
+    // Color picker handler
+    colorDots.forEach(dot => {
+        dot.addEventListener('click', function() {
+            // Remove selection from all dots
+            colorDots.forEach(d => d.style.border = d.dataset.color ? '2px solid transparent' : '2px solid #ddd');
+
+            // Select this dot
+            this.style.border = '2px solid #007acc';
+            selectedColor = this.dataset.color;
+        });
+    });
+
+    // Populate week buttons
+    const weekData = getCurrentWeekData();
+    const weekButtons = [
+        { text: weekData.thisWeek, label: 'denna vecka', title: 'Denna vecka' },
+        { text: weekData.nextWeek, label: 'nästa vecka', title: 'Nästa vecka' },
+        { text: weekData.weekAfter, label: 'nästnästa vecka', title: 'Veckan efter nästa' }
+    ];
+
+    weekButtons.forEach(btn => {
+        const weekBtn = document.createElement('button');
+        weekBtn.type = 'button';
+        weekBtn.innerHTML = `<strong style="font-size: 11px;">${btn.text}</strong><br><small style="font-size: 9px;">${btn.label}</small>`;
+        weekBtn.title = btn.title;
+        weekBtn.style.cssText = `
+            background: #fff;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 6px 10px;
+            cursor: pointer;
+            font-size: 10px;
+            line-height: 1.2;
+            transition: all 0.2s ease;
+            text-align: center;
+            min-width: 60px;
+        `;
+
+        weekBtn.addEventListener('click', function() {
+            const currentTagsValue = tagsInput.value.trim();
+            const weekTag = btn.text;
+
+            if (currentTagsValue) {
+                if (!currentTagsValue.includes(weekTag)) {
+                    tagsInput.value = currentTagsValue + ', ' + weekTag;
+                }
+            } else {
+                tagsInput.value = weekTag;
+            }
+
+            // Visual feedback
+            this.style.background = '#d4edda';
+            this.style.borderColor = '#28a745';
+            setTimeout(() => {
+                this.style.background = '#fff';
+                this.style.borderColor = '#dee2e6';
+            }, 400);
+        });
+
+        weekButtonsContainer.appendChild(weekBtn);
+    });
+
+    // Save handler
+    const saveHandler = () => {
+        const newText = textarea.value.trim();
+        const tagsInputValue = tagsInput.value || '';
+        const newTags = tagsInputValue.split(',').map(tag => tag.trim()).filter(tag => tag);
+
+        if (!newText && newTags.length === 0) {
+            alert('Antingen text eller minst en tagg krävs');
+            return;
+        }
+
+        if (isImageNode) {
+            node.data('annotation', newText);
+            node.data('searchableText', newText.toLowerCase());
+            node.data('title', '');
+        } else {
+            node.data('text', newText);
+        }
+
+        node.data('tags', newTags);
+
+        if (selectedColor) {
+            node.data('cardColor', `card-color-${selectedColor}`);
+        } else if (selectedColor === '') {
+            node.data('cardColor', null);
+        }
+
+        applyAutoDoneColoring(node);
+        cy.style().update();
+        refreshSearchAndFilter();
+        saveBoard();
+
+        // Close inline edit and refresh card
+        columnCardEditStates.delete(nodeId);
+        renderColumnView();
+    };
+
+    // Cancel handler
+    const cancelHandler = () => {
+        columnCardEditStates.delete(nodeId);
+        renderColumnView();
+    };
+
+    // Keyboard handlers
+    const keyHandler = (e) => {
+        if (e.key === 'Escape') {
+            cancelHandler();
+        } else if (e.ctrlKey && e.key === 'Enter') {
+            e.preventDefault();
+            saveHandler();
+        }
+    };
+
+    saveBtn.addEventListener('click', saveHandler);
+    cancelBtn.addEventListener('click', cancelHandler);
+    textarea.addEventListener('keydown', keyHandler);
+
+    // Focus textarea
+    setTimeout(() => {
+        textarea.focus();
+        textarea.select();
+    }, 100);
+
+    return editArea;
+}
+
 function createColumnCard(node) {
     const cardDiv = document.createElement('div');
     cardDiv.className = 'column-card';
@@ -15346,38 +15572,30 @@ function createColumnCard(node) {
     
     const contentDiv = document.createElement('div');
     contentDiv.className = 'column-card-content';
-    
-    // Check if card should show image or text
+
+    // Display card content - always show images for image cards, text for text cards
     const nodeId = node.id();
-    const showText = columnCardStates.get(nodeId) || false;
     const hasImage = node.data('imageData');
-    
-    if (hasImage && !showText) {
-        // Show image ONLY - no text/annotation in image mode
+
+    if (hasImage) {
+        // For image cards: ALWAYS show the image
         const img = document.createElement('img');
         img.src = node.data('imageData');
         img.className = 'column-card-image';
         img.alt = node.data('originalFileName') || 'Bild';
         contentDiv.appendChild(img);
-    } else if (hasImage && showText) {
-        // Show text/annotation ONLY - no image in text mode
-        const annotation = node.data('annotation');
-        if (annotation) {
-            const displayText = convertMarkdownToHtml(annotation);
-            contentDiv.innerHTML = displayText;
-        }
     } else {
-        // Show text content
+        // For text cards: Show text content
         const title = node.data('title') || '';
         const text = node.data('text') || '';
         const isManualCard = node.data('isManualCard') || false;
-        
+
         let displayText = '';
         if (title && !isManualCard) {
             displayText = `<strong>${title}</strong><br><br>`;
         }
         displayText += convertMarkdownToHtml(text);
-        
+
         contentDiv.innerHTML = displayText;
     }
     
@@ -15488,14 +15706,6 @@ function createColumnCard(node) {
                 // Ctrl+click for multi-select (desktop)
                 console.log('DEBUG ctrl+click -> toggleColumnCardSelection');
                 toggleColumnCardSelection(node.id(), cardDiv);
-            } else if (hasImage) {
-                // Desktop: Toggle between image and text for image cards
-                const currentState = columnCardStates.get(nodeId) || false;
-                columnCardStates.set(nodeId, !currentState);
-                
-                // Re-render just this card
-                const newCard = createColumnCard(node);
-                cardDiv.parentNode.replaceChild(newCard, cardDiv);
             } else {
                 // Desktop: Select single card
                 selectColumnCard(node.id(), cardDiv);
@@ -15503,11 +15713,27 @@ function createColumnCard(node) {
         }
         // On mobile, content area clicks do nothing (avoid text selection conflicts)
     });
-    
-    // Add double-click handler for editing
+
+    // Add double-click handler for inline editing
     cardDiv.addEventListener('dblclick', (e) => {
         e.preventDefault();
-        editCard(node); // Reuse existing edit function
+        // Open inline edit in column view, modal in board view
+        if (isColumnView) {
+            // Toggle inline edit state
+            const currentlyEditing = columnCardEditStates.get(nodeId);
+            if (currentlyEditing) {
+                // Close inline edit
+                columnCardEditStates.delete(nodeId);
+            } else {
+                // Open inline edit
+                columnCardEditStates.set(nodeId, true);
+            }
+            // Re-render to show/hide inline edit area
+            renderColumnView();
+        } else {
+            // Board view: use modal dialog
+            editCard(node);
+        }
     });
 
     // Add right-click context menu
@@ -15516,16 +15742,17 @@ function createColumnCard(node) {
         showColumnContextMenu(e, node.id());
     });
     
-    // Add iPad/mobile long-press functionality for tagging and color change
+    // Add iPad/mobile touch functionality
     let longPressTimer = null;
     let touchStartTime = 0;
     let touchMoved = false;
-    
+    let lastTapTime = 0;
+
     cardDiv.addEventListener('touchstart', (e) => {
         console.log('DEBUG column touchstart:', node.id(), 'touches:', e.touches?.length);
         touchStartTime = Date.now();
         touchMoved = false;
-        
+
         // Set up long press detection (800ms)
         longPressTimer = setTimeout(() => {
             console.log('DEBUG column long press timeout fired, touchMoved:', touchMoved);
@@ -15537,7 +15764,7 @@ function createColumnCard(node) {
             }
         }, 800);
     }, { passive: false });
-    
+
     cardDiv.addEventListener('touchmove', () => {
         touchMoved = true;
         if (longPressTimer) {
@@ -15545,26 +15772,59 @@ function createColumnCard(node) {
             longPressTimer = null;
         }
     });
-    
+
     cardDiv.addEventListener('touchend', (e) => {
         if (longPressTimer) {
             clearTimeout(longPressTimer);
             longPressTimer = null;
         }
-        
-        // If it was a quick tap (< 200ms) and didn't move, treat as normal click
+
+        // If it was a quick tap (< 200ms) and didn't move
         if (!touchMoved && (Date.now() - touchStartTime) < 200) {
-            // Trigger normal click behavior
-            const clickEvent = new MouseEvent('click', {
-                bubbles: true,
-                cancelable: true,
-                clientX: e.changedTouches[0].clientX,
-                clientY: e.changedTouches[0].clientY
-            });
-            cardDiv.dispatchEvent(clickEvent);
+            const currentTime = Date.now();
+            const timeSinceLastTap = currentTime - lastTapTime;
+
+            // Double-tap detection (< 500ms between taps)
+            if (timeSinceLastTap < 500 && timeSinceLastTap > 0) {
+                e.preventDefault();
+                console.log('DEBUG double-tap detected, opening inline edit');
+
+                // Open inline edit in column view
+                if (isColumnView) {
+                    const currentlyEditing = columnCardEditStates.get(nodeId);
+                    if (currentlyEditing) {
+                        columnCardEditStates.delete(nodeId);
+                    } else {
+                        columnCardEditStates.set(nodeId, true);
+                    }
+                    renderColumnView();
+                } else {
+                    editCard(node);
+                }
+
+                // Reset to prevent triple-tap
+                lastTapTime = 0;
+            } else {
+                // Single tap - just select/deselect
+                const clickEvent = new MouseEvent('click', {
+                    bubbles: true,
+                    cancelable: true,
+                    clientX: e.changedTouches[0].clientX,
+                    clientY: e.changedTouches[0].clientY
+                });
+                cardDiv.dispatchEvent(clickEvent);
+                lastTapTime = currentTime;
+            }
         }
     });
-    
+
+    // Add inline edit area if this card is being edited
+    const isEditing = columnCardEditStates.get(nodeId);
+    if (isEditing) {
+        const editArea = createInlineEditArea(node, cardDiv);
+        cardDiv.appendChild(editArea);
+    }
+
     return cardDiv;
 }
 
