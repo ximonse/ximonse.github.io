@@ -11077,12 +11077,18 @@ function editCard(node) {
     
     overlay.appendChild(dialog);
     document.body.appendChild(overlay);
-    
+
     // Focus on textarea and select all text
     const textarea = document.getElementById('editCardText');
+    const tagsInput = document.getElementById('editCardTags');
     textarea.focus();
     textarea.select();
-    
+
+    // Prevent global shortcuts from interfering with tags input
+    tagsInput.addEventListener('keydown', function(e) {
+        e.stopPropagation();
+    });
+
     // Handle color picker selection and show current color
     let selectedColor = '';
     const currentCardColor = node.data('cardColor') || '';
@@ -11243,9 +11249,14 @@ function editCard(node) {
     
     // Handle keyboard shortcuts
     textarea.addEventListener('keydown', function(e) {
+        // Stop propagation to prevent global shortcuts from interfering
+        e.stopPropagation();
+
         if (e.ctrlKey && e.key === 'Enter') {
+            e.preventDefault();
             document.getElementById('saveEdit').click();
         } else if (e.key === 'Escape') {
+            e.preventDefault();
             cleanup();
         }
     });
