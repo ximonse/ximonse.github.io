@@ -14224,9 +14224,11 @@ function renderColumnView() {
     }
 
     // Determine if we should filter (search active, selected cards, or tag filter)
+    // BUT: Don't filter if any card is being edited (to keep context visible)
     const hasSearchMatches = searchActive && cy.$('.search-match').length > 0;
     const hasSelectedCards = cy.$('node:selected').length > 0;
-    const showFilteredOnly = hasSearchMatches || hasSelectedCards;
+    const isEditingAnyCard = columnCardEditStates.size > 0;
+    const showFilteredOnly = (hasSearchMatches || hasSelectedCards) && !isEditingAnyCard;
 
     // Get nodes - either filtered or all
     let nodes;
@@ -14909,6 +14911,9 @@ function createColumnCard(node) {
             } else {
                 // Open inline edit
                 columnCardEditStates.set(nodeId, true);
+
+                // Deselect all cards to prevent filtered view after edit closes
+                cy.nodes().unselect();
             }
             // Re-render to show/hide inline edit area
             renderColumnView();
