@@ -280,3 +280,11 @@ if (theme === 'dark') {
     if (themeBtn) {
         themeBtn.innerHTML = '☀️ Ljust';
     }
+    setTimeout(() => applyCardTheme('eink'), 100);
+} else {
+    if (themeBtn) {
+        themeBtn.innerHTML = '🌙 Mörkt';
+    }
+    setTimeout(() => applyCardTheme('light'), 100);
+}
+}

@@ -262,7 +262,14 @@ Exempel: Visa alla kort om projektet, Sortera todos i veckogrid" rows="2"></text
     </div>
 
 
-    <!-- JavaScript - Complete application (temporarily using monolithic version) -->
+    <!-- JavaScript Modules - Phase 1 Integration -->
+    <!-- Load order: text-measurement must be first (used by almost everything) -->
+    <script src="js/text-measurement.js"></script>
+    <script src="js/debug.js"></script>
+    <script src="js/themes.js"></script>
+    <script src="js/search.js"></script>
+
+    <!-- Main application (remaining functionality) -->
     <script src="js/main.js"></script>
 </body>
 </html>

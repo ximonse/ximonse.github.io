@@ -291,3 +291,8 @@ selectedNodes.forEach(node => {
         pinCard(node);
     }
 });
+if (selectedNodes.length > 0) {
+    console.log(`Pinned ${selectedNodes.length} cards`);
+    updateSelectionInfo(); // Update after pinning
+}
+}
