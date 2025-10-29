@@ -14690,13 +14690,22 @@ function createInlineEditArea(node, cardDiv) {
 
     // Keyboard handlers
     const keyHandler = (e) => {
+        // Stop propagation to prevent global shortcuts from interfering
+        e.stopPropagation();
+
         if (e.key === 'Escape') {
+            e.preventDefault();
             cancelHandler();
         } else if (e.ctrlKey && e.key === 'Enter') {
             e.preventDefault();
             saveHandler();
         }
     };
+
+    // Prevent global shortcuts from interfering with tags input
+    tagsInput.addEventListener('keydown', (e) => {
+        e.stopPropagation();
+    });
 
     saveBtn.addEventListener('click', saveHandler);
     cancelBtn.addEventListener('click', cancelHandler);
@@ -15428,15 +15437,9 @@ function watchEditDialogs() {
                         const nodeId = node.dataset?.nodeId || getEditingNodeId();
                         
                         if (textarea && nodeId && isColumnView) {
-                            // Add input listener to textarea
-                            textarea.addEventListener('input', function() {
-                                // Update node data temporarily for preview
-                                const cyNode = cy.getElementById(nodeId);
-                                if (cyNode) {
-                                    cyNode.data('text', this.value);
-                                    setTimeout(() => updateColumnViewCard(nodeId), 10);
-                                }
-                            });
+                            // DISABLED: This was breaking inline edit by re-rendering on every keystroke
+                            // The inline edit system now handles updates properly on save
+                            // DO NOT add input listener that updates node data and triggers re-render
                         }
                     }
                 });
