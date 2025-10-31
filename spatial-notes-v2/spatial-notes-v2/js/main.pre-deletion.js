@@ -13,7 +13,384 @@ let resizeMode = false;
 // Mouse position tracking
 let lastMousePosition = { x: null, y: null };
 
+// IMAGE HANDLING SYSTEM - Integration with existing architecture
 
+// Detect if user is on mobile/tablet device
+function isMobileDevice() {
+    const result = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+           (navigator.maxTouchPoints && navigator.maxTouchPoints > 1);
+    console.log('DEBUG isMobileDevice:', result, 'userAgent:', navigator.userAgent, 'maxTouchPoints:', navigator.maxTouchPoints);
+    return result;
+}
+
+// Direct image upload - use the three-choice function directly
+function triggerImageUpload() {
+    document.getElementById('hiddenGalleryInput').click();
+}
+
+// Show image source menu at specific position (for iPad/mobile)
+function showImageSourceMenu(clientX, clientY) {
+    // Remove any existing menu
+    const existingMenu = document.getElementById('imageSourceMenu');
+    if (existingMenu) {
+        document.body.removeChild(existingMenu);
+    }
+
+    // Create menu
+    const menu = document.createElement('div');
+    menu.id = 'imageSourceMenu';
+    menu.style.cssText = `
+        position: fixed;
+        left: ${Math.min(clientX, window.innerWidth - 200)}px;
+        top: ${Math.min(clientY, window.innerHeight - 200)}px;
+        background: white;
+        border: 1px solid #ccc;
+        border-radius: 12px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        z-index: 10000;
+        min-width: 180px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 16px;
+        padding: 8px 0;
+    `;
+
+    menu.innerHTML = `
+        <div class="image-menu-item" data-action="clipboard" style="padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #eee;">
+            📋 Klistra in
+        </div>
+        <div class="image-menu-item" data-action="camera" style="padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #eee;">
+            📷 Ta foto
+        </div>
+        <div class="image-menu-item" data-action="gallery" style="padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #eee;">
+            🖼️ Välj från galleri
+        </div>
+        <div class="image-menu-item" data-action="file" style="padding: 12px 16px; cursor: pointer;">
+            📁 Välj fil
+        </div>
+    `;
+
+    document.body.appendChild(menu);
+
+    // Handle menu item clicks
+    menu.querySelectorAll('.image-menu-item').forEach(item => {
+        item.addEventListener('click', async () => {
+            const action = item.dataset.action;
+            if (action === 'clipboard') {
+                // Paste from clipboard - call the existing paste function
+                try {
+                    await pasteClipboardContent(clientX, clientY);
+                } catch (err) {
+                    console.error('Clipboard paste failed:', err);
+                    alert('Kunde inte klistra in från clipboard. Kontrollera behörigheter.');
+                }
+            } else if (action === 'camera') {
+                document.getElementById('hiddenCameraInput').click();
+            } else if (action === 'gallery') {
+                document.getElementById('hiddenGalleryInput').click();
+            } else if (action === 'file') {
+                document.getElementById('hiddenGalleryInput').click();
+            }
+            document.body.removeChild(menu);
+        });
+
+        // Add hover effect
+        item.addEventListener('mouseenter', function() {
+            this.style.background = '#f0f0f0';
+        });
+        item.addEventListener('mouseleave', function() {
+            this.style.background = 'white';
+        });
+    });
+
+    // Close menu when clicking outside
+    setTimeout(() => {
+        const closeHandler = (e) => {
+            if (!menu.contains(e.target)) {
+                if (document.body.contains(menu)) {
+                    document.body.removeChild(menu);
+                }
+                document.removeEventListener('click', closeHandler);
+                document.removeEventListener('touchstart', closeHandler);
+            }
+        };
+        document.addEventListener('click', closeHandler);
+        document.addEventListener('touchstart', closeHandler);
+    }, 100);
+}
+
+// Process uploaded images
+function handleImageFiles(files) {
+    Array.from(files).forEach(file => {
+        if (file && file.type.startsWith('image/')) {
+            processImage(file).then(imageData => {
+                createImageNode(imageData, file.name);
+            }).catch(err => {
+                console.error('Image processing failed:', err);
+            });
+        }
+    });
+}
+
+// Process image to 800px width with S-curve + strong light-gray whitening for handwritten notes (~35-90 KB)
+function processImage(file) {
+    return new Promise((resolve, reject) => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+        
+        img.onload = () => {
+            // Scale to 800px width for better quality, maintain aspect ratio
+            const ratio = 800 / img.width;
+            canvas.width = 800;
+            canvas.height = Math.round(img.height * ratio);
+            
+            // Draw image to canvas
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            
+            // Enhance for handwritten notes - moderate contrast improvement
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            
+            for (let i = 0; i < data.length; i += 4) {
+                // Simple contrast enhancement without aggressive processing
+                let r = data[i];
+                let g = data[i + 1];
+                let b = data[i + 2];
+                
+                // Calculate grayscale value for contrast enhancement
+                const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+                
+                // Gentle contrast curve - improve readability without artifacts
+                let enhanced;
+                if (gray < 128) {
+                    // Darken text slightly
+                    enhanced = gray * 0.8;
+                } else {
+                    // Lighten background slightly
+                    enhanced = gray + (255 - gray) * 0.3;
+                }
+                
+                // Apply enhancement proportionally to preserve color balance
+                const factor = enhanced / Math.max(gray, 1);
+                
+                data[i] = Math.min(255, Math.max(0, r * factor));
+                data[i + 1] = Math.min(255, Math.max(0, g * factor));
+                data[i + 2] = Math.min(255, Math.max(0, b * factor));
+                // Alpha channel (data[i + 3]) remains unchanged
+            }
+            
+            // Apply the enhanced image data back to canvas
+            ctx.putImageData(imageData, 0, 0);
+            
+            // Try WebP for best quality/size ratio, fallback to PNG, then JPEG
+            let base64;
+            let format = 'unknown';
+            
+            try {
+                // Try WebP first (best compression + quality)
+                base64 = canvas.toDataURL('image/webp', 0.95);
+                if (base64.startsWith('data:image/webp')) {
+                    format = 'WebP 95%';
+                } else {
+                    throw new Error('WebP not supported');
+                }
+            } catch {
+                try {
+                    // Fallback to PNG
+                    base64 = canvas.toDataURL('image/png');
+                    format = 'PNG (lossless)';
+                    
+                    // If PNG too large, use max JPEG
+                    if (base64.length > 300000) { // ~225KB in base64
+                        base64 = canvas.toDataURL('image/jpeg', 1.0);
+                        format = 'JPEG 100%';
+                    }
+                } catch {
+                    // Final fallback
+                    base64 = canvas.toDataURL('image/jpeg', 1.0);
+                    format = 'JPEG 100%';
+                }
+            }
+            
+            console.log(`📷 Using ${format} (${Math.round(base64.length/1024)} KB)`);
+            
+            resolve({
+                data: base64,
+                width: canvas.width,
+                height: canvas.height,
+                originalName: file.name
+            });
+        };
+        
+        img.onerror = () => reject('Image loading failed');
+        img.src = URL.createObjectURL(file);
+    });
+}
+
+// Create image node integrated with existing system
+function createImageNode(imageData, filename) {
+    const position = getArrangementPosition();
+    const nodeId = generateCardId();
+
+    // Calculate proper aspect ratio height
+    const displayWidth = 300;
+    const ratio = imageData.height / imageData.width;
+    const displayHeight = Math.round(displayWidth * ratio);
+    const calculatedHeight = displayHeight; // Keep for backwards compatibility
+
+    cy.add({
+        group: 'nodes',
+        data: {
+            id: nodeId,
+            type: 'image', // New node type
+            imageData: imageData.data,
+            imageWidth: imageData.width,  // Store original dimensions
+            imageHeight: imageData.height, // Store original dimensions
+            displayWidth: displayWidth,    // Display width (can be changed by user)
+            displayHeight: displayHeight,  // Display height (maintains aspect ratio)
+            calculatedHeight: calculatedHeight, // Pre-calculated height for arrangement
+            annotation: '',
+            searchableText: '',
+            originalFileName: filename,
+            title: '', // No visible title for images
+            text: '', // Keep consistent with existing structure
+            tags: [],
+            isManualCard: true // Integrate with existing categorization
+        },
+        position: position
+    });
+
+    console.log(`📷 Created image node: ${filename} (${Math.round(imageData.data.length/1024)} KB) - ${imageData.width}x${imageData.height} → ${displayWidth}x${displayHeight}`);
+}
+
+// Handle paste events (Ctrl+V) for images
+function handlePasteImage(event) {
+    const items = event.clipboardData?.items;
+    if (!items) return;
+
+    for (let item of items) {
+        if (item.type.startsWith('image/')) {
+            event.preventDefault();
+            const file = item.getAsFile();
+            if (file) {
+                processImage(file).then(imageData => {
+                    createImageNode(imageData, 'pasted-image-' + Date.now() + '.jpg');
+                }).catch(err => {
+                    console.error('Paste image processing failed:', err);
+                });
+            }
+            break;
+        }
+    }
+}
+
+// Handle canvas long press - different behavior for mobile vs desktop
+function handleCanvasLongPress(clientX, clientY) {
+    if (isMobileDevice()) {
+        // Mobile/tablet: Show image source menu at touch position
+        showImageSourceMenu(clientX, clientY);
+    } else {
+        // Desktop: Paste clipboard content
+        pasteClipboardContent(clientX, clientY);
+    }
+}
+
+// Paste clipboard content (text or image) at specific position
+async function pasteClipboardContent(clientX, clientY) {
+    try {
+        const clipboardItems = await navigator.clipboard.read();
+        for (let item of clipboardItems) {
+            // Check for image first
+            for (let type of item.types) {
+                if (type.startsWith('image/')) {
+                    const blob = await item.getAsType(type);
+                    const position = getCanvasPosition(clientX, clientY);
+                    processImage(blob).then(imageData => {
+                        createImageNodeAtPosition(imageData, 'pasted-' + Date.now() + '.jpg', position);
+                    }).catch(err => {
+                        console.error('Image paste processing failed:', err);
+                    });
+                    return;
+                }
+            }
+        }
+        
+        // If no image, try text
+        const text = await navigator.clipboard.readText();
+        if (text && text.trim()) {
+            const position = getCanvasPosition(clientX, clientY);
+            createTextNodeAtPosition(text.trim(), position);
+        }
+    } catch (err) {
+        console.error('Kunde inte komma åt urklipp:', err);
+    }
+}
+
+// Get canvas position from client coordinates
+function getCanvasPosition(clientX, clientY) {
+    const cyContainer = document.getElementById('cy');
+    const rect = cyContainer.getBoundingClientRect();
+    const relativeX = clientX - rect.left;
+    const relativeY = clientY - rect.top;
+    
+    // Convert to Cytoscape coordinates
+    const pan = cy.pan();
+    const zoom = cy.zoom();
+    
+    return {
+        x: (relativeX - pan.x) / zoom,
+        y: (relativeY - pan.y) / zoom
+    };
+}
+
+// Create text node at specific position
+function createTextNodeAtPosition(text, position) {
+    const cardId = generateCardId();
+    cy.add({
+        group: 'nodes',
+        data: {
+            id: cardId,
+            label: text,
+            isManualCard: true,
+            tags: [],
+            annotation: '',
+            searchableText: text
+        },
+        position: position
+    });
+}
+
+// Create image node at specific position
+function createImageNodeAtPosition(imageData, filename, position) {
+    const displayWidth = 300;
+    const ratio = imageData.height / imageData.width;
+    const displayHeight = Math.round(displayWidth * ratio);
+    const calculatedHeight = displayHeight; // Keep for backwards compatibility
+    const cardId = generateCardId();
+
+    cy.add({
+        group: 'nodes',
+        data: {
+            id: cardId,
+            label: '📝',
+            type: 'image',
+            imageData: imageData.data,
+            imageWidth: imageData.width,
+            imageHeight: imageData.height,
+            displayWidth: displayWidth,
+            displayHeight: displayHeight,
+            calculatedHeight: calculatedHeight,
+            annotation: '',
+            searchableText: '',
+            originalFileName: filename,
+            title: '',
+            text: '',
+            tags: [],
+            isManualCard: true
+        },
+        position: position
+    });
+}
 
 
 // Generate unique timestamp-based card ID
@@ -47,7 +424,357 @@ function generateCardId() {
     return uniqueId;
 }
 
+// ====================================================================================================
+// 🔧 FALLBACK RESIZE FUNCTIONALITY
+// ====================================================================================================
 
+function setupFallbackResize() {
+    console.log('🛠️ Setting up simple resize with Ctrl+click...');
+    
+    // Add Ctrl+click OR right-click resize for annotation nodes
+    cy.on('cxttap', 'node', function(evt) {
+        const node = evt.target;
+        console.log('🖱️ Right-click on node:', node.id(), 'isAnnotation:', node.data('isAnnotation'), 'resizeMode:', resizeMode, 'classes:', node.classes());
+        
+        if (node.data('isAnnotation') && resizeMode) {
+            console.log('🎯 Processing right-click resize for annotation node...');
+            evt.stopPropagation();
+            evt.preventDefault();
+            
+            const currentWidth = node.data('customWidth') || 120;
+            const currentHeight = node.data('customHeight') || 120;
+            
+            console.log('📐 Current size:', currentWidth, 'x', currentHeight);
+            
+            // Simple resize: cycle through 4 sizes
+            let newWidth, newHeight;
+            
+            if (currentWidth <= 80) {
+                newWidth = 120;
+                newHeight = 120;
+            } else if (currentWidth <= 120) {
+                newWidth = 160;
+                newHeight = 160;
+            } else if (currentWidth <= 160) {
+                newWidth = 200;
+                newHeight = 200;
+            } else {
+                newWidth = 80;
+                newHeight = 80;
+            }
+            
+            console.log('📏 Resizing to:', newWidth, 'x', newHeight);
+            
+            // Update the data properties and force style refresh
+            node.data('customWidth', newWidth);
+            node.data('customHeight', newHeight);
+            
+            // Force Cytoscape to recalculate styles by triggering style refresh
+            node.removeStyle('width height');
+            node.trigger('data');
+            cy.style().update();
+            
+            console.log(`✅ Resized annotation ${node.id()} to ${newWidth}x${newHeight}`);
+            return false;
+        }
+    });
+    
+    // Backup: Also try Ctrl+click 
+    cy.on('click', 'node', function(evt) {
+        const node = evt.target;
+        console.log('🖱️ Node clicked:', node.id(), 'isAnnotation:', node.data('isAnnotation'), 'resizeMode:', resizeMode, 'ctrlKey:', evt.originalEvent?.ctrlKey);
+        
+        if (node.data('isAnnotation') && resizeMode && evt.originalEvent?.ctrlKey) {
+            console.log('🎯 Processing Ctrl+click resize for annotation node...');
+            evt.stopPropagation();
+            evt.preventDefault();
+            
+            const currentWidth = node.data('customWidth') || 120;
+            const currentHeight = node.data('customHeight') || 120;
+            
+            console.log('📐 Current size:', currentWidth, 'x', currentHeight);
+            
+            // Simple resize: cycle through 4 sizes
+            let newWidth, newHeight;
+            
+            if (currentWidth <= 80) {
+                newWidth = 120;
+                newHeight = 120;
+            } else if (currentWidth <= 120) {
+                newWidth = 160;
+                newHeight = 160;
+            } else if (currentWidth <= 160) {
+                newWidth = 200;
+                newHeight = 200;
+            } else {
+                newWidth = 80;
+                newHeight = 80;
+            }
+            
+            console.log('📏 Resizing to:', newWidth, 'x', newHeight);
+            
+            // Update the data properties and force style refresh
+            node.data('customWidth', newWidth);
+            node.data('customHeight', newHeight);
+            
+            // Force Cytoscape to recalculate styles by triggering style refresh
+            node.removeStyle('width height');
+            node.trigger('data');
+            cy.style().update();
+            
+            console.log(`✅ Resized annotation ${node.id()} to ${newWidth}x${newHeight}`);
+            return false; // Prevent further event handling
+        }
+    });
+    
+    console.log('✅ Fallback resize setup complete - Ctrl+click annotations in resize mode');
+}
+
+// ====================================================================================================
+// 🎨 ANNOTATION SYSTEM FUNCTIONS
+// ====================================================================================================
+
+// Toggle annotation toolbar visibility
+function toggleAnnotationToolbar() {
+    annotationToolbarVisible = !annotationToolbarVisible;
+    const toolbar = document.getElementById('annotationToolbar');
+    const toggleBtn = document.getElementById('annotationToggleBtn');
+    
+    if (annotationToolbarVisible) {
+        toolbar.classList.add('active');
+        toggleBtn.style.background = '#28a745';
+        console.log('🎨 Annotation toolbar activated');
+    } else {
+        toolbar.classList.remove('active');
+        toggleBtn.style.background = '';
+        setAnnotationMode('select');
+        console.log('📐 Annotation toolbar deactivated');
+    }
+}
+
+// Set annotation mode and update UI
+function setAnnotationMode(mode) {
+    annotationMode = mode;
+    connectionStartNode = null;
+    
+    // Update tool buttons
+    document.querySelectorAll('.annotation-tool').forEach(tool => {
+        tool.classList.remove('active');
+    });
+    
+    const activeTool = document.querySelector(`[data-tool="${mode}"]`);
+    if (activeTool) {
+        activeTool.classList.add('active');
+    }
+    
+    console.log('🎯 Annotation mode set to:', mode);
+}
+
+// Set annotation color
+function setAnnotationColor(color) {
+    annotationColor = color;
+    console.log('🎨 Annotation color set to:', color);
+}
+
+// Toggle resize mode for annotations
+function toggleResizeMode() {
+    resizeMode = !resizeMode;
+    
+    console.log('↗️ Resize mode:', resizeMode ? 'enabled' : 'disabled');
+    
+    // Show user-friendly status message
+    if (window.showBriefMessage) {
+        if (resizeMode) {
+            window.showBriefMessage('↗️ Storleksändring aktiverad - Högerklicka på annotations för att ändra storlek');
+        } else {
+            window.showBriefMessage('📐 Storleksändring avstängd');
+        }
+    }
+}
+
+// Create geometric shape annotation
+function createShapeAnnotation(shape, position) {
+    const id = generateCardId();
+    const shapes = {
+        'rect': { shape: 'rectangle', label: '' },
+        'circle': { shape: 'ellipse', label: '' },
+        'triangle': { shape: 'triangle', label: '' },
+        'diamond': { shape: 'diamond', label: '' },
+        'star': { shape: 'star', label: '' },
+        'hexagon': { shape: 'hexagon', label: '' }
+    };
+    
+    const shapeInfo = shapes[shape] || shapes.rect;
+    
+    cy.add({
+        data: {
+            id: id,
+            label: shapeInfo.label,
+            isAnnotation: true,
+            annotationType: 'shape',
+            shape: shape
+        },
+        position: position,
+        classes: 'annotation-shape'
+    });
+    
+    // Apply color immediately
+    const node = cy.getElementById(id);
+    node.style('background-color', annotationColor);
+    
+    console.log(`🔷 Created ${shape} annotation at`, position);
+    return node;
+}
+
+// Create text annotation
+function createTextAnnotation(size, position) {
+    const id = generateCardId();
+    const sizes = {
+        'text-small': { fontSize: '16px', label: 'Liten text' },
+        'text-medium': { fontSize: '22px', label: 'Medium text' },
+        'text-large': { fontSize: '28px', label: 'Stor text' }
+    };
+    
+    const sizeInfo = sizes[size] || sizes['text-medium'];
+    
+    cy.add({
+        data: {
+            id: id,
+            label: sizeInfo.label,
+            isAnnotation: true,
+            annotationType: 'text',
+            textSize: size
+        },
+        position: position,
+        classes: 'annotation-text'
+    });
+    
+    const node = cy.getElementById(id);
+    node.style({
+        'font-size': sizeInfo.fontSize,
+        'background-color': annotationColor,
+        'shape': 'rectangle'
+    });
+    
+    console.log(`📝 Created ${size} text annotation at`, position);
+    return node;
+}
+
+// Create connection (arrow or line) between nodes
+function createConnection(sourceNode, targetNode, type) {
+    const id = generateCardId();
+    const isArrow = type === 'arrow';
+    
+    cy.add({
+        data: {
+            id: id,
+            source: sourceNode.id(),
+            target: targetNode.id(),
+            isAnnotation: true,
+            annotationType: 'connection',
+            connectionType: type
+        },
+        classes: 'annotation-connection'
+    });
+    
+    const edge = cy.getElementById(id);
+    edge.style({
+        'line-color': annotationColor,
+        'target-arrow-color': annotationColor,
+        'target-arrow-shape': isArrow ? 'triangle' : 'none',
+        'curve-style': 'bezier',
+        'width': 5,
+        'arrow-scale': 1.8
+    });
+    
+    console.log(`🔗 Created ${type} connection between`, sourceNode.id(), 'and', targetNode.id());
+    return edge;
+}
+
+// Edit annotation text function
+function editAnnotationText(node) {
+    const currentText = node.data('label') || 'Text';
+    
+    // Create overlay for editing
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.7); z-index: 10000;
+        display: flex; justify-content: center; align-items: center;
+    `;
+    
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+        background: white; padding: 20px; border-radius: 10px;
+        max-width: 400px; width: 90%; max-height: 80vh;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        box-sizing: border-box;
+    `;
+    
+    dialog.innerHTML = `
+        <h3 style="margin-top: 0; color: #333; font-size: 18px;">Redigera annotation text</h3>
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #555;">Text:</label>
+            <textarea id="editAnnotationText" 
+                style="width: 100%; height: 120px; font-family: inherit; font-size: 14px; 
+                       border: 1px solid #ccc; border-radius: 4px; padding: 8px;
+                       box-sizing: border-box; resize: vertical;">${currentText}</textarea>
+        </div>
+        <div style="text-align: right;">
+            <button id="cancelAnnotationEdit" style="margin-right: 10px; padding: 8px 16px; 
+                   background: #ccc; border: none; border-radius: 4px; cursor: pointer;">Avbryt</button>
+            <button id="saveAnnotationEdit" style="padding: 8px 16px; 
+                   background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Spara</button>
+        </div>
+    `;
+    
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    
+    // Focus on text area and select all
+    const textArea = document.getElementById('editAnnotationText');
+    textArea.focus();
+    textArea.select();
+    
+    // Event listeners
+    document.getElementById('saveAnnotationEdit').addEventListener('click', function() {
+        const newText = textArea.value.trim();
+        if (newText) {
+            node.data('label', newText);
+            console.log('✅ Updated annotation text to:', newText);
+        }
+
+        // Save immediately to prevent data loss from autosave/Drive sync
+        saveBoard();
+
+        document.body.removeChild(overlay);
+    });
+    
+    document.getElementById('cancelAnnotationEdit').addEventListener('click', function() {
+        document.body.removeChild(overlay);
+    });
+    
+    // Close on ESC key
+    overlay.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            document.body.removeChild(overlay);
+        }
+    });
+    
+    // Close on overlay click (outside dialog)
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) {
+            document.body.removeChild(overlay);
+        }
+    });
+}
+
+// MINIMAL UNDO/REDO SYSTEM - Define early so functions can use it
+let undoStack = [];
+let redoStack = [];
+const MAX_UNDO_STEPS = 20;
+
+// Generate unique timestamp-based ID for new cards
 function generateUniqueId() {
     const now = new Date();
     const timestamp = now.getFullYear().toString() +
@@ -176,59 +903,1107 @@ function getArrangementPosition() {
 // Text measurement using invisible ruler
 let textRuler = null;
 
+function initTextRuler() {
+    textRuler = document.getElementById('text-ruler');
+}
+
 // Memoization cache for getMeasuredTextHeight
 const heightCache = new Map();
+
+// Generate content hash for memoization
+function getContentHash(node) {
+    const title = node.data('title') || '';
+    const text = node.data('text') || '';
+    const tags = node.data('tags') || [];
+    const isImported = node.data('export_source') === 'pdf_extractor' || 
+                     node.data('source_file') || 
+                     node.data('matched_terms');
+    const isWelcomeCard = node.id().startsWith('welcome-');
+    
+    // Create hash from content and styling factors
+    return `${title}|${text}|${tags.join(',')}|${isImported}|${isWelcomeCard}`;
+}
+
+// Clear cache for a specific node (when content changes)
+function clearNodeCache(node) {
+    // Remove all cached entries that might match this node
+    // We need to remove by pattern since content might have changed
+    const nodeId = node.id();
+    const keysToDelete = [];
+    for (const key of heightCache.keys()) {
+        // Simple heuristic: if cache gets too large, clear it periodically
+        if (heightCache.size > 500) {
+            heightCache.clear();
+            break;
+        }
+    }
+}
+
+/**
+ * Measures the actual rendered height of a node's text using the invisible ruler (with memoization).
+ * @param {object} node The Cytoscape node.
+ * @returns {number} The measured height of the text in pixels.
+ */
+function getMeasuredTextHeight(node) {
+    // SPECIAL HANDLING FOR IMAGE NODES
+    if (node.data('type') === 'image' && node.data('imageData')) {
+        // Use pre-calculated height if available (for new images)
+        const preCalculated = node.data('calculatedHeight');
+        if (preCalculated) {
+            return preCalculated;
+        }
+        
+        // For imported images, calculate from stored dimensions
+        const imageWidth = node.data('imageWidth');
+        const imageHeight = node.data('imageHeight');
+        if (imageWidth && imageHeight) {
+            const ratio = imageHeight / imageWidth;
+            return Math.round(300 * ratio); // 300px width, maintain aspect ratio
+        }
+        
+        // Last resort: Use a reasonable default to avoid creating Image objects
+        // which can be expensive and cause performance issues
+        return 260; // Safe default for images - avoid creating Image objects
+    }
+    
+    // NORMAL TEXT NODE PROCESSING
+    // Check cache first
+    const hash = getContentHash(node);
+    if (heightCache.has(hash)) {
+        return heightCache.get(hash);
+    }
+    
+    if (!textRuler) initTextRuler();
+    
+    const title = node.data('title') || '';
+    const text = node.data('text') || '';
+    const tags = node.data('tags') || [];
+    
+    // Get the final text content without custom wrapping
+    let rawText = text.replace(/\*\*|`|\*|\[|\]/g, '').replace(/^- /gm, '• ');
+    
+    // Add tags to the measurement
+    let tagDisplay = '';
+    if (tags.length > 0) {
+        tagDisplay = '\n\n' + tags.map(tag => `#${tag}`).join(' ');
+    }
+    
+    const mainText = title ? `${title.toUpperCase()}\n\n${rawText}` : rawText;
+    const fullLabel = mainText + tagDisplay;
+
+    // Use EXACT same text-max-width calculation as Cytoscape will use
+    const nodeWidth = 300; // Fixed width for all cards
+    const textMaxWidth = nodeWidth - 15;
+
+    // Style the ruler to match the node's text properties EXACTLY
+    textRuler.style.width = `${textMaxWidth}px`;
+    textRuler.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    
+    // Use same font-size logic as the Cytoscape style
+    const isImported = node.data('export_source') === 'pdf_extractor' || 
+                     node.data('source_file') || 
+                     node.data('matched_terms');
+    const isWelcomeCard = node.id().startsWith('welcome-');
+    
+    // Imported cards and welcome cards get 18px, all others get 23px
+    textRuler.style.fontSize = (isImported || isWelcomeCard) ? '18px' : '23px';
+    textRuler.style.lineHeight = '1.2';
+    textRuler.style.padding = '0';
+    textRuler.style.margin = '0';
+    textRuler.style.border = 'none';
+    textRuler.style.textAlign = 'center'; // Match Cytoscape text alignment
+    textRuler.style.wordWrap = 'break-word';
+    
+    // Set the text and measure
+    textRuler.textContent = fullLabel;
+    const measuredTextHeight = textRuler.offsetHeight;
+    
+    // Add padding that Cytoscape applies to cards
+    // Cards need minimum padding for visual breathing room
+    const minCardHeight = 140; // 140px minimum height
+    
+    // Dynamic padding: less padding for longer text, more for short text
+    let paddingBuffer;
+    if (measuredTextHeight <= 50) {
+        paddingBuffer = 25; // Short text needs more padding
+    } else if (measuredTextHeight <= 100) {
+        paddingBuffer = 20; // Medium text gets normal padding
+    } else if (measuredTextHeight <= 200) {
+        paddingBuffer = 15; // Long text needs less extra padding
+    } else {
+        paddingBuffer = 10; // Very long text needs minimal padding
+    }
+    
+    const totalHeight = Math.max(minCardHeight, measuredTextHeight + paddingBuffer);
+    
+    // Cache the result
+    heightCache.set(hash, totalHeight);
+    
+    return totalHeight;
+}
+
+// Subtle orphan prevention - use non-breaking spaces to keep last 2-3 words together
+function preventOrphansSubtly(text) {
+    const words = text.split(' ');
+    
+    // If text is short, don't modify
+    if (words.length <= 4) return text;
+    
+    // Join last 2-3 words with non-breaking spaces to prevent orphan words
+    const lastWords = words.slice(-3); // Last 3 words
+    const beforeWords = words.slice(0, -3); // Everything before last 3 words
+    
+    // Use non-breaking space (Unicode 00A0) to keep last words together
+    const joinedLastWords = lastWords.join('\u00A0');
+    
+    return beforeWords.length > 0 ? 
+        beforeWords.join(' ') + ' ' + joinedLastWords : 
+        joinedLastWords;
+}
 
 // Sample data - strukturerade kort med titel och text (arrangerade med G+V layout)
 const initialCards = [
     {
         id: 'welcome-1',
-        title: '👋 Välkommen!',
-        text: 'Spatial Notes hjälper dig få koll på alla dina små anteckningar.\n\nSkapa kort. Organisera visuellt. Sortera med AI.\n\nEnkelt och kraftfullt.',
-        tags: ['start'],
+        title: '👋 Välkommen till Spatial Notes!',
+        text: 'Visuell anteckningsapp där du organiserar tankar i 2D-rum.\n\nBETA-VERSION: Allt funkar inte hundra. Spara ofta!\n\nHälsningar Ximon\n\nMail: spatial-notes@ximon.se\n\n(räkna inte med svar)',
+        tags: ['välkommen'],
         x: 667,
         y: 193
     },
     {
-        id: 'welcome-2',
-        title: '✍️ Skapa Anteckningar',
-        text: 'Dubbelklicka i tom yta för att skapa kort.\n\nSkriv dina tankar, idéer, todos.\n\nFlytta kort genom att dra dem.\n\nMarkera flera: Håll Ctrl + klicka.\n\nRedigera: Dubbelklicka på kort.',
+        id: 'welcome-2', 
+        title: '🎯 Grundläggande',
+        text: 'SKAPA KORT: Klicka "Nytt kort" eller dubbelklicka i tom yta\n\nTA BORT: Välj kort → Delete-tangent\n\nMARKERA: Klicka kort (håll Ctrl för flera) eller dra-markera\n\nFLYTTA: Håll nere muspekare på det du vill flytta och flytta muspeklaren\n\nÅNGRA/GÖR OM: Ctrl+Z / Ctrl+Y',
         tags: ['grunderna'],
         x: 987,
         y: 204
     },
     {
         id: 'welcome-3',
-        title: '🤖 Sortera med AI',
-        text: 'Tryck "ChatGPT Högar" eller "Claude AI".\n\nBerätta hur du vill sortera.\n\nAI:n organiserar korten åt dig.\n\nExempel:\n"Gruppera efter tema"\n"Organisera organiskt"\n"Skapa en tidslinje"',
-        tags: ['ai'],
+        title: '📐 Arrangera Kort',
+        text: 'Markera flera kort, tryck sedan:\n\nH = Horisontell rad (20% mellanrum)\nV = Vertikal kolumn (20% mellanrum)\n\nG+V = Grid Vertical (max 6 bred, 20% mellanrum)\nG+H = Grid Horizontal (rader, 20% mellan rader)\nG+T = Grid Tight (max 6 bred, 40px överlapp)\n\nQ = Kluster (sporadisk skräphög)\nQQ = Stack (prydlig hög, dubbla Q)\nAlt+S = Stack (samma som QQ)\n\nKorten arrangeras runt muspekaren!',
+        tags: ['arrangemang'],
         x: 1307,
         y: 247
     },
     {
         id: 'welcome-4',
-        title: '📸 Bilder',
-        text: 'Klistra in bilder: Ctrl+V\n\nEller tryck "Bilder"-knappen.\n\nSkriv anteckningar på bilder genom att dubbelklicka på bildkortet.\n\nPerfekt för handskrivna anteckningar!',
-        tags: ['bilder'],
+        title: '📌 Pinna Kort',
+        text: 'PINNA: Högerklicka kort → "Pinna kort"\n\nUNPINNA: Högerklicka → "Ta bort pinning"\n\nFÖRDELAR:\n\nPinnae kort stannar på plats\n\nKopiera kort och pinna originalen\n\nFlytta kopior medan original är säkra\n\nPerfekt för att organisera idéer!',
+        tags: ['pinning'],
         x: 667,
-        y: 520
+        y: 642
     },
     {
         id: 'welcome-5',
-        title: '💾 Spara & Exportera',
-        text: 'SPARA: Ctrl+S (sparas i webbläsaren)\n\nEXPORTERA: Meny → "Spara fil"\n\nIMPORTERA: Meny → "Ladda fil"\n\nAllt sparas automatiskt när du redigerar kort.',
-        tags: ['spara'],
+        title: '🚀 Next Level: Kopiera + Arrangera',
+        text: '1. Markera kort du vill kopiera\n\n2. Tryck C för att kopiera\n\n3. Använd H, G+V, G+H, G+T eller Q\n\nKopiorna arrangeras runt muspekaren!',
+        tags: ['kopiera', 'avancerat'],
         x: 987,
-        y: 520
+        y: 598
+    },
+    {
+        id: 'welcome-6',
+        title: '🔥 The Shit: Sök + Arrangera',
+        text: '1. SÖK: Skriv i sökrutan för att hitta kort\n\n2. MARKERA: Tryck Enter för att välja alla sökresultat\n\n3. ARRANGERA: Använd H, G+V, G+H, G+T eller Q för att arrangera\n\n4. KOPIERA: Eller tryck C och arrangera kopior!\n\nDu kan också söka → kopiera → arrangera. Epic!',
+        tags: ['sökning', 'expert'],
+        x: 1307,
+        y: 728
     }
 ];
 
 
+// Initialize Cytoscape
+function initCytoscape() {
+    cy = cytoscape({
+        container: document.getElementById('cy'),
+        
+        elements: initialCards.map((card, index) => ({
+            data: {
+                id: card.id,
+                title: card.title || '',
+                text: card.text || '', 
+                tags: card.tags || [],
+                searchMatch: false,
+                // Hidden metadata for advanced analysis
+                export_timestamp: card.export_timestamp || null,
+                export_session: card.export_session || null,
+                export_source: card.export_source || null,
+                source_file: card.source_file || null,
+                page_number: card.page_number || null,
+                matched_terms: card.matched_terms || null,
+                card_index: card.card_index || null
+            },
+            position: {
+                x: card.x !== undefined ? card.x : (200 + (index % 3) * 300),
+                y: card.y !== undefined ? card.y : (200 + Math.floor(index / 3) * 200)
+            }
+        })),
+        
+        style: [
+            {
+                selector: 'node',
+                style: {
+                    'background-color': '#ffffff',
+                    'border-width': 2,
+                    'border-color': '#ddd',
+                    'width': function(node) {
+                        // Skip width override for annotation nodes (they have their own sizing)
+                        if (node.data('isAnnotation')) {
+                            return node.data('customWidth') || 120;
+                        }
+                        // Fixed width for all cards to ensure consistency
+                        return 300;
+                    },
+                    'height': function(node) {
+                        // Skip height override for annotation nodes (they have their own sizing)
+                        if (node.data('isAnnotation')) {
+                            return node.data('customHeight') || 120;
+                        }
+                        
+                        const isManualCard = node.data('isManualCard') || false;
+                        
+                        if (isManualCard) {
+                            // Same padding logic as other cards, but with double padding
+                            const measuredHeight = getMeasuredTextHeight(node);
+                            return Math.max(140, measuredHeight + 40); // Double padding for larger text
+                        }
+                        
+                        // Use the ruler to get exact height for other cards
+                        const measuredHeight = getMeasuredTextHeight(node);
+                        return Math.max(140, measuredHeight + 10); // Standard padding, 140px minimum
+                    },
+                    'shape': 'round-rectangle',
+                    'label': function(node) {
+                        const title = node.data('title') || '';
+                        const text = node.data('text') || '';
+                        const tags = node.data('tags') || [];
+                        const isManualCard = node.data('isManualCard') || false;
+                        
+                        
+                        // Simple markdown conversion for display
+                        let displayText = text;
+                        displayText = displayText.replace(/\*\*(.*?)\*\*/g, '$1'); // Remove **bold**
+                        displayText = displayText.replace(/\*(.*?)\*/g, '$1'); // Remove *italic*
+                        displayText = displayText.replace(/`(.*?)`/g, '$1'); // Remove `code`
+                        displayText = displayText.replace(/^- /gm, '• '); // Convert - to bullets
+                        
+                        // Apply subtle orphan prevention using non-breaking spaces
+                        displayText = preventOrphansSubtly(displayText);
+                        
+                        // Add tags at the bottom if they exist (filter out PDF filename tags)
+                        let tagDisplay = '';
+                        if (tags.length > 0) {
+                            // Filter out tags that look like PDF filenames (author-year-title format)
+                            const visibleTags = tags.filter(tag => {
+                                // Hide tags that match PDF filename pattern: Author-YYYY-title-words
+                                const pdfPattern = /^[A-Za-z\-]+\-\d{4}\-[a-z\-]+$/;
+                                return !pdfPattern.test(tag);
+                            });
+                            
+                            if (visibleTags.length > 0) {
+                                tagDisplay = '\n\n' + visibleTags.map(tag => `#${tag}`).join(' ');
+                            }
+                        }
+                        
+                        // For manually created cards, show ONLY text (no title processing)
+                        // For imported cards, show title in caps + text
+                        const mainText = (isManualCard || !title) ? displayText : `${title.toUpperCase()}\n\n${displayText}`;
+                        return mainText + tagDisplay;
+                    },
+                    'text-wrap': 'wrap',
+                    'text-max-width': 285, // Fixed 285px for all cards to match getMeasuredTextHeight ruler
+                    'text-valign': 'center',
+                    'text-halign': 'center',
+                    'font-size': function(node) {
+                        const isImported = node.data('export_source') === 'pdf_extractor' || 
+                                         node.data('source_file') || 
+                                         node.data('matched_terms');
+                        const isWelcomeCard = node.id().startsWith('welcome-');
+                        
+                        // Imported cards and welcome cards get 18px
+                        if (isImported || isWelcomeCard) {
+                            return 18;
+                        }
+                        
+                        // ALL other cards (manual) get 23px
+                        return 23;
+                    },
+                    'font-family': '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                    'color': '#333'
+                }
+            },
+            {
+                selector: 'node.search-match',
+                style: {
+                    'background-color': '#fff9c4',
+                    'border-color': '#f57f17',
+                    'border-width': 2
+                }
+            },
+            {
+                selector: 'node.tag-filtered',
+                style: {
+                    'background-color': '#f0f0f0',
+                    'border-color': '#ddd',
+                    'opacity': 0.3
+                }
+            },
+            {
+                selector: 'node.search-non-match',
+                style: {
+                    'opacity': 0.3
+                }
+            },
+            {
+                selector: 'node:selected',
+                style: {
+                    'border-color': '#1565c0',
+                    'border-width': 4
+                }
+            },
+            {
+                selector: 'node.pinned',
+                style: {
+                    'border-color': '#2e7d32',
+                    'border-width': 4,
+                    'background-color': '#c8e6c9'
+                }
+            },
+            // ====================================================================================================
+            // 📷 IMAGE NODE STYLES - Post-it feel (~10cm) with image background
+            // ====================================================================================================
+            {
+                selector: 'node[type="image"]',
+                style: {
+                    'width': 300, // Same as regular cards
+                    'height': function(node) {
+                        // Use the same logic as getMeasuredTextHeight for consistency
+                        return getMeasuredTextHeight(node);
+                    },
+                    'background-image': 'data(imageData)',
+                    'background-fit': 'cover',
+                    'background-color': function(node) {
+                        // Support color styling for image cards
+                        const cardColor = node.data('cardColor');
+                        if (cardColor) {
+                            const colorValue = getCardColorValue(cardColor, getCurrentTheme());
+                            return colorValue;
+                        }
+                        return '#ffffff'; // Default white background
+                    },
+                    'border-width': function(node) {
+                        // Thicker border when colored to show the color better
+                        const cardColor = node.data('cardColor');
+                        return cardColor ? 6 : 3;
+                    },
+                    'border-color': function(node) {
+                        // Use the card color for border, or default gray
+                        const cardColor = node.data('cardColor');
+                        if (cardColor) {
+                            const colorValue = getCardColorValue(cardColor, getCurrentTheme());
+                            return colorValue;
+                        }
+                        return '#ddd';
+                    },
+                    'shape': 'round-rectangle',
+                    'label': function(node) {
+                        // Only show annotation icon if present, no filename
+                        const hasAnnotation = (node.data('annotation') || '').length > 0;
+                        return hasAnnotation ? '📝' : '';
+                    },
+                    'text-valign': 'bottom',
+                    'text-halign': 'center',
+                    'text-background-color': 'rgba(255, 255, 255, 0.9)',
+                    'text-background-padding': '4px',
+                    'text-background-shape': 'round-rectangle',
+                    'font-size': '14px',
+                    'font-weight': 'bold',
+                    'color': '#333',
+                    'text-wrap': 'wrap',
+                    'text-max-width': 280
+                }
+            },
+            {
+                selector: 'node[type="image"]:selected',
+                style: {
+                    'border-color': '#1565c0',
+                    'border-width': 5
+                }
+            },
+            {
+                selector: 'node[type="image"].search-match',
+                style: {
+                    'border-color': '#f57f17',
+                    'border-width': 4
+                }
+            },
+            // ====================================================================================================
+            // 🎨 ANNOTATION STYLES
+            // ====================================================================================================
+            {
+                selector: 'node.annotation-shape',
+                style: {
+                    'width': function(node) {
+                        // Allow dynamic width for annotation shapes
+                        return node.data('customWidth') || 120;
+                    },
+                    'height': function(node) {
+                        // Allow dynamic height for annotation shapes
+                        return node.data('customHeight') || 120;
+                    },
+                    'background-color': '#ff6b6b',
+                    'border-width': 3,
+                    'border-color': '#444',
+                    'label': 'data(label)',
+                    'text-valign': 'center',
+                    'text-halign': 'center',
+                    'font-size': '32px',
+                    'color': '#333',
+                    'text-wrap': 'none',
+                    'z-index': function(node) {
+                        // Cytoscape z-index must be non-negative integers
+                        // 0 = background, 1 = normal, 2 = foreground
+                        const zIndex = node.data('customZIndex');
+                        if (zIndex === -1) return 0; // Background
+                        if (zIndex === 0) return 1;  // Normal
+                        if (zIndex === 1) return 2;  // Foreground
+                        return 1; // Default to normal
+                    },
+                    'shape': function(node) {
+                        const shape = node.data('shape') || 'rectangle';
+                        const shapeMap = {
+                            'rect': 'rectangle',
+                            'circle': 'ellipse',
+                            'triangle': 'triangle',
+                            'diamond': 'diamond',
+                            'star': 'star',
+                            'hexagon': 'hexagon'
+                        };
+                        return shapeMap[shape] || 'rectangle';
+                    }
+                }
+            },
+            {
+                selector: 'node.annotation-text',
+                style: {
+                    'width': function(node) {
+                        // Allow dynamic width for annotation text
+                        return node.data('customWidth') || 180;
+                    },
+                    'height': function(node) {
+                        // Allow dynamic height for annotation text
+                        return node.data('customHeight') || 90;
+                    },
+                    'background-color': '#fff',
+                    'border-width': 2,
+                    'border-color': '#ccc',
+                    'label': 'data(label)',
+                    'text-valign': 'center',
+                    'text-halign': 'center',
+                    'font-size': '18px',
+                    'color': '#333',
+                    'text-wrap': 'wrap',
+                    'text-max-width': function(node) {
+                        // Adjust text width based on node width
+                        const width = node.data('customWidth') || 180;
+                        return (width - 10) + 'px';
+                    },
+                    'shape': 'rectangle'
+                }
+            },
+            {
+                selector: 'edge.annotation-connection',
+                style: {
+                    'width': 5,
+                    'line-color': '#ff6b6b',
+                    'target-arrow-color': '#ff6b6b',
+                    'arrow-scale': 1.8,
+                    'curve-style': 'bezier',
+                    'control-point-step-size': 40
+                }
+            }
+        ],
+        
+        layout: {
+            name: 'preset'
+        },
+        
+        // Enable panning and zooming
+        zoomingEnabled: true,
+        userZoomingEnabled: true,
+        wheelSensitivity: 0.3,
+        minZoom: 0.1,
+        maxZoom: 3,
+        panningEnabled: false,  // Start with panning disabled
+        userPanningEnabled: true,  // Keep user controls available
+        boxSelectionEnabled: true,
+        selectionType: 'additive',  // Allow multiple selection
+        
+        // Configure user interaction
+        autoungrabify: false,
+        autounselectify: false
+    });
+    
+    // Make nodes draggable
+    cy.nodes().grabify();
+    
+    // Save state before dragging starts (for undo support)
+    cy.on('grab', 'node', function(evt) {
+        saveState();
+    });
+    
+    // Double-click to edit card
+    cy.on('dblclick', 'node', function(evt) {
+        const node = evt.target;
+        console.log('🖱️ Double-click on node:', node.id(), 'isAnnotation:', node.data('isAnnotation'), 'classes:', node.classes());
+        
+        if (node.data('isAnnotation') && node.hasClass('annotation-text')) {
+            console.log('📝 Opening text editor for annotation text...');
+            editAnnotationText(node);
+        } else {
+            console.log('📝 Opening card editor for regular node...');
+            editCard(node);
+        }
+    });
+    
+    // Right-click context menu
+    cy.on('cxttap', 'node', function(evt) {
+        evt.preventDefault();
+        const node = evt.target;
+        showContextMenu(evt.originalEvent || evt, node);
+    });
+    
+    // Touch and hold to edit card on mobile
+    let touchTimer = null;
+    let touchedNode = null;
+    
+    cy.on('touchstart', 'node', function(evt) {
+        touchedNode = evt.target;
+        touchTimer = setTimeout(() => {
+            if (touchedNode) {
+                editCard(touchedNode);
+                touchedNode = null;
+            }
+        }, 1000); // 1 second hold
+    });
+    
+    cy.on('touchend touchmove', 'node', function(evt) {
+        if (touchTimer) {
+            clearTimeout(touchTimer);
+            touchTimer = null;
+        }
+        if (evt.type === 'touchend') {
+            touchedNode = null;
+        }
+    });
+    
+    // Update selection info when selection changes
+    cy.on('select unselect', 'node', function(evt) {
+        updateSelectionInfo();
+    });
+    
+    // ====================================================================================================
+    // 🎨 ANNOTATION EVENT HANDLERS
+    // ====================================================================================================
+    
+    // Canvas click for creating annotations
+    cy.on('tap', function(evt) {
+        if (!annotationToolbarVisible || annotationMode === 'select') return;
+        
+        // Only create on background, not on nodes
+        if (evt.target === cy) {
+            const position = evt.position || evt.cyPosition;
+            
+            if (['rect', 'circle', 'triangle', 'diamond', 'star', 'hexagon'].includes(annotationMode)) {
+                createShapeAnnotation(annotationMode, position);
+            } else if (['text-small', 'text-medium', 'text-large'].includes(annotationMode)) {
+                createTextAnnotation(annotationMode, position);
+            }
+        }
+    });
+    
+    // Node click for connections
+    cy.on('tap', 'node', function(evt) {
+        if (!annotationToolbarVisible) return;
+        
+        const node = evt.target;
+        
+        if (annotationMode === 'arrow' || annotationMode === 'line') {
+            if (!connectionStartNode) {
+                // First click - select start node
+                connectionStartNode = node;
+                node.style('border-color', '#ff0000');
+                node.style('border-width', '4px');
+                console.log('🎯 Connection start node selected:', node.id());
+            } else if (connectionStartNode !== node) {
+                // Second click - create connection
+                createConnection(connectionStartNode, node, annotationMode);
+                
+                // Reset start node styling
+                connectionStartNode.style('border-color', '');
+                connectionStartNode.style('border-width', '');
+                connectionStartNode = null;
+                
+                console.log('✅ Connection created');
+            }
+        }
+    });
+    
+    // Track mouse position for arrangement positioning
+    cy.on('mousemove', function(evt) {
+        lastMousePosition.x = evt.originalEvent.clientX;
+        lastMousePosition.y = evt.originalEvent.clientY;
+    });
+    
+    // Also track mouse on the container directly
+    document.addEventListener('mousemove', function(evt) {
+        lastMousePosition.x = evt.clientX;
+        lastMousePosition.y = evt.clientY;
+        // Debug: uncomment to see if mouse tracking works
+        // console.log('Mouse moved to:', evt.clientX, evt.clientY);
+    });
+    
+    // ====================================================================================================
+    // 🎨 ANNOTATION TOOLBAR EVENT LISTENERS
+    // ====================================================================================================
+    
+    // Add click listeners to annotation tools
+    document.querySelectorAll('.annotation-tool').forEach(tool => {
+        tool.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const toolType = tool.dataset.tool;
+            
+            if (toolType.startsWith('color-')) {
+                // Color selection
+                const colors = {
+                    'color-red': '#ff6b6b',
+                    'color-blue': '#4ecdc4', 
+                    'color-green': '#45b7d1',
+                    'color-yellow': '#f9ca24',
+                    'color-purple': '#a55eea'
+                };
+                setAnnotationColor(colors[toolType]);
+            } else if (toolType === 'resize') {
+                // Toggle resize mode
+                toggleResizeMode();
+                tool.classList.toggle('active', resizeMode);
+            } else {
+                // Tool selection
+                setAnnotationMode(toolType);
+            }
+        });
+    });
+    
+    // Starta med panorering på, så att zoom fungerar direkt
+    cy.panningEnabled(true);
+    
+    // Auto-center on mobile devices after initial load
+    if (window.matchMedia && window.matchMedia("(max-width: 768px)").matches) {
+        setTimeout(() => {
+            cy.fit(null, 50); // Fit all nodes with 50px padding
+            cy.center(); // Center the view
+            console.log('Mobile auto-center applied');
+        }, 500); // Small delay to ensure nodes are rendered
+    }
+    
+    // Re-center when orientation changes on mobile
+    window.addEventListener('orientationchange', function() {
+        if (window.matchMedia && window.matchMedia("(max-width: 768px)").matches) {
+            setTimeout(() => {
+                cy.fit(null, 50);
+                cy.center();
+                console.log('Mobile orientation-change auto-center applied');
+            }, 300);
+        }
+    });
 
+    // Hantera Ctrl+drag för att växla mellan panorering och markeringsruta
+    cy.on('mousedown', function(evt) {
+        if (evt.originalEvent.ctrlKey) {
+            // Med Ctrl nedtryckt: aktivera panorering, inaktivera markeringsruta
+            cy.boxSelectionEnabled(false);
+            cy.panningEnabled(true);
+        } else {
+            // Utan Ctrl: inaktivera panorering, aktivera markeringsruta
+            cy.boxSelectionEnabled(true);
+            cy.panningEnabled(false);
+        }
+    });
+
+    cy.on('mouseup', function(evt) {
+        // Återställ alltid till att panorering är på, så att zoom fungerar igen
+        cy.panningEnabled(true);
+        cy.boxSelectionEnabled(true);
+    });
+
+    // ====================================================================================================
+    // 📷 IMAGE SYSTEM EVENT LISTENERS - Integration with existing architecture
+    // ====================================================================================================
+    
+    // File input change handlers
+    document.getElementById('hiddenCameraInput').addEventListener('change', function(e) {
+        if (e.target.files.length > 0) {
+            handleImageFiles(e.target.files);
+            // Reset input to allow same file again
+            e.target.value = '';
+        }
+    });
+    
+    document.getElementById('hiddenGalleryInput').addEventListener('change', function(e) {
+        if (e.target.files.length > 0) {
+            handleImageFiles(e.target.files);
+            // Reset input to allow same file again
+            e.target.value = '';
+        }
+    });
+
+    // Zotero HTML import file input handler
+    document.getElementById('zoteroHtmlInput').addEventListener('change', function(e) {
+        if (e.target.files.length > 0) {
+            importFromZoteroHTML(e.target.files[0]);
+            // Reset input to allow same file again
+            e.target.value = '';
+        }
+    });
+
+    // Paste event listener for Ctrl+V images
+    document.addEventListener('paste', handlePasteImage);
+    
+    // Long press on canvas to paste clipboard content (text or image)
+    let canvasPressTimer = null;
+    const cyContainer = document.getElementById('cy');
+    
+    // Canvas background long press using Cytoscape events
+    let backgroundTouchTimer = null;
+    let backgroundTouchPos = null;
+    
+    // Touch handling on canvas background (not on nodes)
+    cy.on('touchstart', function(evt) {
+        console.log('DEBUG touchstart:', evt.target, 'target===cy:', evt.target === cy, 'touches:', evt.originalEvent?.touches?.length);
+        if (!evt.target || evt.target === cy) { // Background touch
+            const touch = evt.originalEvent.touches[0];
+            backgroundTouchPos = { clientX: touch.clientX, clientY: touch.clientY };
+            let backgroundTouchStartTime = Date.now();
+            console.log('DEBUG background touchstart, pos:', backgroundTouchPos);
+            
+            backgroundTouchTimer = setTimeout(() => {
+                console.log('DEBUG LONG PRESS timeout fired, isMobileDevice():', isMobileDevice(), 'backgroundTouchPos:', backgroundTouchPos);
+                if (isMobileDevice() && backgroundTouchPos) {
+                    // Check if we have selected cards
+                    const selectedNodes = cy.$('node:selected');
+                    console.log('DEBUG selectedNodes.length:', selectedNodes.length);
+                    if (selectedNodes.length > 0) {
+                        // Show mobile card menu for selected cards
+                        console.log('DEBUG calling showMobileCardMenu with pos:', backgroundTouchPos, 'nodeId:', selectedNodes[0].id());
+                        showMobileCardMenu(backgroundTouchPos, selectedNodes[0].id());
+                    } else {
+                        // Show image source menu if no cards selected
+                        console.log('DEBUG calling showImageSourceMenu');
+                        showImageSourceMenu(backgroundTouchPos.clientX, backgroundTouchPos.clientY);
+                    }
+                }
+                backgroundTouchStartTime = null; // Mark as long press handled
+            }, 1000);
+            
+            // Store start time for short tap detection
+            evt._boardTouchStartTime = backgroundTouchStartTime;
+        }
+    });
+    
+    cy.on('touchend', function(evt) {
+        if (backgroundTouchTimer) {
+            clearTimeout(backgroundTouchTimer);
+            backgroundTouchTimer = null;
+        }
+        
+        if (backgroundTouchPos && evt._boardTouchStartTime && (!evt.target || evt.target === cy)) {
+            const tapDuration = Date.now() - evt._boardTouchStartTime;
+            console.log('DEBUG board background touch end, duration:', tapDuration);
+            
+            if (tapDuration < 300) { // Short tap
+                console.log('DEBUG board background short tap - deselecting all cards');
+                cy.nodes().unselect();
+            }
+        }
+        
+        backgroundTouchPos = null;
+    });
+    
+    cy.on('touchmove', function(evt) {
+        if (backgroundTouchTimer) {
+            clearTimeout(backgroundTouchTimer);
+            backgroundTouchTimer = null;
+            backgroundTouchPos = null;
+        }
+    });
+    
+    // Desktop mouse handling on background
+    cy.on('mousedown', function(evt) {
+        if (!evt.target || evt.target === cy) { // Background click
+            const mouseEvent = evt.originalEvent;
+            let mouseDownTime = Date.now();
+            
+            canvasPressTimer = setTimeout(() => {
+                if (!isMobileDevice()) {
+                    pasteClipboardContent(mouseEvent.clientX, mouseEvent.clientY);
+                }
+                mouseDownTime = null; // Mark as long press handled
+            }, 1000);
+            
+            evt._mouseDownTime = mouseDownTime;
+        }
+    });
+    
+    cy.on('mouseup', function(evt) {
+        if (canvasPressTimer) {
+            clearTimeout(canvasPressTimer);
+            canvasPressTimer = null;
+        }
+        
+        if (evt._mouseDownTime && (!evt.target || evt.target === cy)) {
+            const clickDuration = Date.now() - evt._mouseDownTime;
+            console.log('DEBUG board background click end, duration:', clickDuration);
+            
+            if (clickDuration < 300) { // Short click
+                console.log('DEBUG board background short click - deselecting all cards');
+                cy.nodes().unselect();
+            }
+        }
+    });
+    
+    cy.on('mousemove', function(evt) {
+        if (canvasPressTimer) {
+            clearTimeout(canvasPressTimer);
+            canvasPressTimer = null;
+        }
+    });
+    
+    // Drag and drop support (bonus functionality)
+    // cyContainer already declared above
+    cyContainer.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    });
+    
+    cyContainer.addEventListener('drop', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const files = Array.from(e.dataTransfer.files).filter(file => 
+            file.type.startsWith('image/')
+        );
+        
+        if (files.length > 0) {
+            handleImageFiles(files);
+            console.log(`📷 ${files.length} bild(er) droppade`);
+        }
+    });
+    
+    // Background click events temporarily disabled to test zoom
+    // TODO: Re-enable with zoom preservation
+    
+    // Disable context menu on right click
+    cy.container().addEventListener('contextmenu', function(evt) {
+        evt.preventDefault();
+    });
+    
+    // ====================================================================================================
+    // 🎯 SIMPLE RESIZE SYSTEM
+    // ====================================================================================================
+    
+    // Setup simple resize functionality using mouse events
+    console.log('🔄 Setting up simple resize functionality...');
+    setupFallbackResize();
+    
+    
+}
 
 // Boolean search functionality
+function performSearch(query) {
+    if (!query.trim()) {
+        clearSearch();
+        return;
+    }
+    
+    searchActive = true;
+    let matchCount = 0;
+    
+    cy.nodes().forEach(node => {
+        const title = (node.data('title') || '').toLowerCase();
+        const text = (node.data('text') || '').toLowerCase();
+        const tags = (node.data('tags') || []).join(' ').toLowerCase();
+        const hiddenTags = (node.data('hidden_tags') || []).join(' ').toLowerCase();
+        
+        // IMAGE SEARCH INTEGRATION - Add image annotation and filename to searchable text
+        const imageAnnotation = (node.data('annotation') || '').toLowerCase();
+        const originalFileName = (node.data('originalFileName') || '').toLowerCase();
+        const searchableImageText = imageAnnotation + ' ' + originalFileName;
+        
+        const searchableText = title + ' ' + text + ' ' + tags + ' ' + hiddenTags + ' ' + searchableImageText;
+        
+        const matches = evaluateBooleanQuery(query.toLowerCase(), searchableText);
+        
+        if (matches) {
+            node.addClass('search-match');
+            node.removeClass('search-non-match'); // Remove blur if it was there
+            node.data('searchMatch', true);
+            // Don't select directly - let ESC convert to selected
+            matchCount++;
+        } else {
+            node.removeClass('search-match');
+            node.addClass('search-non-match'); // Add blur for non-matches
+            node.data('searchMatch', false);
+            node.unselect(); // Avmarkera kortet
+        }
+    });
+    
+    // Show search results info
+    const searchInfo = document.getElementById('searchInfo');
+    searchInfo.textContent = `${matchCount} kort hittade`;
+    searchInfo.classList.add('visible');
+    
+    // Show/hide mobile select button
+    const selectBtn = document.getElementById('searchSelectBtn');
+    if (matchCount > 0) {
+        selectBtn.style.display = 'inline-block';
+    } else {
+        selectBtn.style.display = 'none';
+    }
+    
+    // Apply smart sorting to search results if in column view
+    if (isColumnView && matchCount > 0) {
+        applySmartSearchSorting();
+    }
+}
+
 // Smart search sorting: week+todo priorities, then color order
+function applySmartSearchSorting() {
+    // Get all search-matched nodes
+    const matchedNodes = cy.nodes('.search-match').toArray();
+    
+    // Sort with complex priority system
+    const sortedNodes = matchedNodes.sort((a, b) => {
+        // Priority 1: Week tags + todo tags (oldest week first)
+        const aWeekTodo = getWeekTodoPriority(a);
+        const bWeekTodo = getWeekTodoPriority(b);
+        if (aWeekTodo !== bWeekTodo) {
+            return aWeekTodo - bWeekTodo; // Lower number = higher priority
+        }
+        
+        // Priority 2: Color order (röd, orange, vit, gul, lila, blå, grön, grå)
+        const aColor = getColorPriority(a);
+        const bColor = getColorPriority(b);
+        return aColor - bColor;
+    });
+    
+    // Apply visual order in column view
+    if (isColumnView) {
+        setTimeout(() => {
+            renderColumnView(); // This will use the sorted order
+        }, 50);
+    }
+}
+
+function getWeekTodoPriority(node) {
+    const tags = (node.data('tags') || []).map(tag => tag.toLowerCase());
+    const hasTodo = tags.some(tag => tag.includes('todo'));
+    
+    if (!hasTodo) return 1000; // No todo = lowest priority
+    
+    // Find week tags (format: 25v40, 24v52, etc.)
+    const weekTags = tags.filter(tag => /\d{2}v\d{1,2}/.test(tag));
+    if (weekTags.length === 0) return 500; // Todo but no week = medium priority
+    
+    // Get earliest week number for sorting
+    let earliestWeek = 9999;
+    weekTags.forEach(weekTag => {
+        const match = weekTag.match(/(\d{2})v(\d{1,2})/);
+        if (match) {
+            const year = parseInt(match[1]);
+            const week = parseInt(match[2]);
+            const sortValue = year * 100 + week; // 2540 for 25v40
+            earliestWeek = Math.min(earliestWeek, sortValue);
+        }
+    });
+    
+    return earliestWeek; // Lower week number = higher priority
+}
+
+function getColorPriority(node) {
+    const cardColor = node.data('cardColor');
+    if (!cardColor) return 8; // No color = lowest color priority
+    
+    // Extract color number (card-color-3 -> 3)
+    const colorMatch = cardColor.match(/card-color-(\d)/);
+    if (!colorMatch) return 8;
+    
+    const colorNum = parseInt(colorMatch[1]);
+    
+    // Color priority order: röd(3), orange(2), vit(8), gul(4), lila(5), blå(6), grön(1), grå(7)
+    const colorOrder = {
+        3: 1, // röd
+        2: 2, // orange  
+        8: 3, // vit
+        4: 4, // gul
+        5: 5, // lila
+        6: 6, // blå
+        1: 7, // grön
+        7: 8  // grå
+    };
+    
+    return colorOrder[colorNum] || 9;
+}
+
 // Boolean query evaluation
+function evaluateBooleanQuery(query, searchableText) {
+    // Handle different boolean operators
+    
+    // Split by OR first (lowest precedence)
+    if (query.includes(' or ')) {
+        const orParts = query.split(' or ');
+        return orParts.some(part => evaluateBooleanQuery(part.trim(), searchableText));
+    }
+    
+    // Handle NOT operations - improved logic
+    if (query.includes(' not ')) {
+        const notIndex = query.indexOf(' not ');
+        const beforeNot = query.substring(0, notIndex).trim();
+        const afterNot = query.substring(notIndex + 5).trim(); // ' not '.length = 5
+        
+        // If there's something before NOT, it must match
+        let beforeMatches = true;
+        if (beforeNot) {
+            beforeMatches = evaluateBooleanQuery(beforeNot, searchableText);
+        }
+        
+        // The part after NOT must NOT match
+        const afterMatches = evaluateBooleanQuery(afterNot, searchableText);
+        
+        return beforeMatches && !afterMatches;
+    }
+    
+    // Handle AND operations (default behavior and explicit)
+    const andParts = query.includes(' and ') ? 
+        query.split(' and ') : 
+        query.split(' ').filter(term => term.length > 0);
+        
+    return andParts.every(term => {
+        term = term.trim();
+        if (term.startsWith('"') && term.endsWith('"')) {
+            // Exact phrase search
+            const phrase = term.slice(1, -1);
+            return searchableText.includes(phrase);
+        } else {
+            // Regular word search
+            return searchableText.includes(term);
+        }
+    });
+}
+
 // Pin/unpin functionality
 function pinCard(node) {
     node.addClass('pinned');
@@ -243,13 +2018,401 @@ function unpinCard(node) {
 }
 
 // Context Menu System
+function showContextMenu(event, node) {
+    // Remove any existing context menu
+    hideContextMenu();
+    
+    // Get mouse position
+    const x = event.clientX || event.pageX;
+    const y = event.clientY || event.pageY;
+    
+    // Create context menu
+    const menu = document.createElement('div');
+    menu.className = 'context-menu';
+    menu.style.position = 'fixed';
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+    menu.style.zIndex = '3000';
+    
+    // Pin/Unpin option
+    const isPinned = node.hasClass('pinned');
+    const pinOption = document.createElement('div');
+    pinOption.className = 'context-menu-item';
+    pinOption.innerHTML = isPinned ? '📌 Ta bort pinning' : '📌 Pinna kort';
+    pinOption.onclick = () => {
+        if (isPinned) {
+            unpinCard(node);
+        } else {
+            pinCard(node);
+        }
+        hideContextMenu();
+    };
+    menu.appendChild(pinOption);
+    
+    // Color option
+    const colorOption = document.createElement('div');
+    colorOption.className = 'context-menu-item';
+    colorOption.innerHTML = '🎨 Färga kort';
+    colorOption.onclick = () => {
+        hideContextMenu();
+        // If the right-clicked node is selected, color all selected nodes
+        // Otherwise, color just the right-clicked node
+        const selectedNodes = cy.$('node:selected');
+        const nodesToColor = node.selected() && selectedNodes.length > 1 ? selectedNodes : [node];
+        showColorPicker(event, nodesToColor);
+    };
+    menu.appendChild(colorOption);
+    
+    // Remove color option (if card has color)
+    if (node.data('cardColor')) {
+        const removeColorOption = document.createElement('div');
+        removeColorOption.className = 'context-menu-item';
+        removeColorOption.innerHTML = '❌ Ta bort färg';
+        removeColorOption.onclick = () => {
+            // If the right-clicked node is selected, remove color from all selected nodes
+            // Otherwise, remove color from just the right-clicked node
+            const selectedNodes = cy.$('node:selected');
+            const nodesToProcess = node.selected() && selectedNodes.length > 1 ? selectedNodes : [node];
+            nodesToProcess.forEach(n => removeCardColor(n));
 
+            // Save immediately to prevent data loss from autosave/Drive sync
+            saveBoard();
 
+            hideContextMenu();
+        };
+        menu.appendChild(removeColorOption);
+    }
 
+    // Resize option for image nodes
+    if (node.data('type') === 'image' || node.data('isImageCard')) {
+        const resizeOption = document.createElement('div');
+        resizeOption.className = 'context-menu-item';
+        resizeOption.innerHTML = '↗️ Ändra storlek';
+        resizeOption.onclick = () => {
+            hideContextMenu();
+            showImageResizeDialog(node);
+        };
+        menu.appendChild(resizeOption);
+    }
 
+    // Resize option for annotation/geometric shapes
+    if (node.data('isAnnotation') && node.data('annotationType') !== 'connection') {
+        const resizeOption = document.createElement('div');
+        resizeOption.className = 'context-menu-item';
+        resizeOption.innerHTML = '↗️ Ändra storlek';
+        resizeOption.onclick = () => {
+            hideContextMenu();
+            showResizeDialog(node);
+        };
+        menu.appendChild(resizeOption);
+        
+        // Font size option for geometric shapes
+        const fontSizeOption = document.createElement('div');
+        fontSizeOption.className = 'context-menu-item';
+        fontSizeOption.innerHTML = '🔤 Ändra fontstorlek';
+        fontSizeOption.onclick = () => {
+            hideContextMenu();
+            showFontSizeDialog(node);
+        };
+        menu.appendChild(fontSizeOption);
+    }
+    
+    // Arrow visibility toggle (global option)
+    const arrowToggleOption = document.createElement('div');
+    arrowToggleOption.className = 'context-menu-item';
+    const arrowsVisible = !window.arrowsHidden;
+    arrowToggleOption.innerHTML = arrowsVisible ? '👁️ Dölj pilar' : '👁️ Visa pilar';
+    arrowToggleOption.onclick = () => {
+        hideContextMenu();
+        toggleArrowVisibility();
+    };
+    menu.appendChild(arrowToggleOption);
+    
+    // Remove arrows between selected cards (if multiple cards selected)
+    const selectedNodes = cy.$('node:selected');
+    if (selectedNodes.length > 1) {
+        const removeArrowsOption = document.createElement('div');
+        removeArrowsOption.className = 'context-menu-item';
+        removeArrowsOption.innerHTML = '🗑️ Ta bort pilar mellan markerade';
+        removeArrowsOption.onclick = () => {
+            hideContextMenu();
+            removeArrowsBetweenSelected();
+        };
+        menu.appendChild(removeArrowsOption);
+        
+        // Bulk tag option for multiple selected cards
+        const bulkTagOption = document.createElement('div');
+        bulkTagOption.className = 'context-menu-item';
+        bulkTagOption.innerHTML = '🏷️ Lägg till tagg på alla markerade';
+        bulkTagOption.onclick = () => {
+            hideContextMenu();
+            showBulkTagDialog(selectedNodes);
+        };
+        menu.appendChild(bulkTagOption);
+    }
+    
+    document.body.appendChild(menu);
+    
+    // Close menu on click elsewhere
+    setTimeout(() => {
+        document.addEventListener('click', hideContextMenu, { once: true });
+    }, 0);
+}
 
+function hideContextMenu() {
+    const existingMenu = document.querySelector('.context-menu');
+    if (existingMenu) {
+        existingMenu.remove();
+    }
+}
 
+// Resize dialog for geometric shapes
+function showResizeDialog(node) {
+    // Get current size or defaults
+    const currentWidth = node.data('customWidth') || 120;
+    const currentHeight = node.data('customHeight') || 120;
+    const currentZIndex = node.data('customZIndex') || -1;
+    
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+    
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+        background: white;
+        padding: 30px;
+        border-radius: 15px;
+        max-width: 400px;
+        width: 90%;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    `;
+    
+    dialog.innerHTML = `
+        <h3 style="margin-top: 0; text-align: center;">↗️ Ändra storlek & lager</h3>
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Bredd (px):</label>
+            <input type="number" id="resizeWidth" value="${currentWidth}" min="20" max="500" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Höjd (px):</label>
+            <input type="number" id="resizeHeight" value="${currentHeight}" min="20" max="500" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Lagerhöjd:</label>
+            <select id="layerSelect" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <option value="-1" ${currentZIndex === -1 ? 'selected' : ''}>🔻 Bakgrund (under kort)</option>
+                <option value="0" ${currentZIndex === 0 ? 'selected' : ''}>📄 Normal nivå</option>
+                <option value="1" ${currentZIndex === 1 ? 'selected' : ''}>🔺 Förgrund (över kort)</option>
+            </select>
+            <small style="color: #666; display: block; margin-top: 5px;">Bakgrund: figurerna hamnar under korten som underlägg</small>
+        </div>
+        <div style="margin-bottom: 20px;">
+            <label style="display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" id="keepAspectRatio" checked>
+                <span>Behåll proportioner</span>
+            </label>
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <button id="cancelResize" style="padding: 10px 20px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">Avbryt</button>
+            <button id="applyResize" style="padding: 10px 20px; border: none; background: #007acc; color: white; border-radius: 4px; cursor: pointer;">Tillämpa</button>
+        </div>
+    `;
+    
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    
+    // Focus first input
+    const widthInput = document.getElementById('resizeWidth');
+    const heightInput = document.getElementById('resizeHeight');
+    const aspectCheckbox = document.getElementById('keepAspectRatio');
+    widthInput.focus();
+    
+    // Keep aspect ratio functionality
+    const originalAspectRatio = currentWidth / currentHeight;
+    
+    widthInput.addEventListener('input', () => {
+        if (aspectCheckbox.checked) {
+            heightInput.value = Math.round(widthInput.value / originalAspectRatio);
+        }
+    });
+    
+    heightInput.addEventListener('input', () => {
+        if (aspectCheckbox.checked) {
+            widthInput.value = Math.round(heightInput.value * originalAspectRatio);
+        }
+    });
+    
+    // Handle buttons
+    document.getElementById('cancelResize').onclick = () => {
+        document.body.removeChild(overlay);
+    };
+    
+    document.getElementById('applyResize').onclick = () => {
+        const newWidth = parseInt(widthInput.value) || currentWidth;
+        const newHeight = parseInt(heightInput.value) || currentHeight;
+        const newZIndex = parseInt(document.getElementById('layerSelect').value);
+        
+        // Apply resize and layer change
+        resizeAnnotationNode(node, newWidth, newHeight, newZIndex);
+        
+        document.body.removeChild(overlay);
+    };
+    
+    // ESC to close
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            document.body.removeChild(overlay);
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
+    
+    // Enter to apply
+    const handleEnter = (e) => {
+        if (e.key === 'Enter') {
+            document.getElementById('applyResize').click();
+            document.removeEventListener('keydown', handleEnter);
+        }
+    };
+    document.addEventListener('keydown', handleEnter);
+}
 
+// Show resize dialog for image nodes (maintains aspect ratio)
+function showImageResizeDialog(node) {
+    // Get current and original dimensions
+    const currentWidth = node.data('displayWidth') || 300;
+    const imageWidth = node.data('imageWidth');
+    const imageHeight = node.data('imageHeight');
+    const aspectRatio = imageHeight / imageWidth;
+    const currentHeight = Math.round(currentWidth * aspectRatio);
+
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+        background: white;
+        padding: 30px;
+        border-radius: 15px;
+        max-width: 400px;
+        width: 90%;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    `;
+
+    dialog.innerHTML = `
+        <h3 style="margin-top: 0; text-align: center;">📏 Ändra bildstorlek</h3>
+        <p style="color: #666; font-size: 13px; margin-bottom: 15px;">Original: ${imageWidth}×${imageHeight}px</p>
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Bredd (px):</label>
+            <input type="range" id="imageWidthSlider" min="100" max="800" value="${currentWidth}" step="10"
+                   style="width: 100%; margin-bottom: 5px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <input type="number" id="imageWidthInput" value="${currentWidth}" min="100" max="800"
+                       style="width: 80px; padding: 5px; border: 1px solid #ddd; border-radius: 4px;">
+                <span id="imageDimensions" style="color: #666; font-size: 13px;">${currentWidth}×${currentHeight}px</span>
+            </div>
+        </div>
+        <div style="margin-bottom: 20px;">
+            <p style="color: #888; font-size: 12px; margin: 0;">
+                ℹ️ Proportionerna bevaras automatiskt
+            </p>
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <button id="cancelImageResize" style="padding: 10px 20px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">Avbryt</button>
+            <button id="applyImageResize" style="padding: 10px 20px; border: none; background: #007acc; color: white; border-radius: 4px; cursor: pointer;">Tillämpa</button>
+        </div>
+    `;
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    // Get elements
+    const widthSlider = document.getElementById('imageWidthSlider');
+    const widthInput = document.getElementById('imageWidthInput');
+    const dimensionsDisplay = document.getElementById('imageDimensions');
+
+    // Update display when slider or input changes
+    const updateDimensions = () => {
+        const width = parseInt(widthSlider.value);
+        const height = Math.round(width * aspectRatio);
+        widthInput.value = width;
+        dimensionsDisplay.textContent = `${width}×${height}px`;
+    };
+
+    widthSlider.addEventListener('input', updateDimensions);
+    widthInput.addEventListener('input', () => {
+        widthSlider.value = widthInput.value;
+        updateDimensions();
+    });
+
+    // Handle buttons
+    document.getElementById('cancelImageResize').onclick = () => {
+        document.body.removeChild(overlay);
+    };
+
+    document.getElementById('applyImageResize').onclick = () => {
+        const newWidth = parseInt(widthSlider.value);
+        const newHeight = Math.round(newWidth * aspectRatio);
+
+        // Update node data and styling
+        node.data('displayWidth', newWidth);
+        node.data('displayHeight', newHeight);
+        node.style({
+            'width': newWidth + 'px',
+            'height': newHeight + 'px'
+        });
+
+        console.log(`📏 Resized image to ${newWidth}×${newHeight}px`);
+        saveBoard(); // Save changes
+
+        document.body.removeChild(overlay);
+    };
+
+    // ESC to close
+    const handleEscape = (e) => {
+        if (e.key === 'Escape' && document.body.contains(overlay)) {
+            document.body.removeChild(overlay);
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
+
+    // Enter to apply
+    const handleEnter = (e) => {
+        if (e.key === 'Enter' && document.body.contains(overlay)) {
+            document.getElementById('applyImageResize').click();
+            document.removeEventListener('keydown', handleEnter);
+        }
+    };
+    document.addEventListener('keydown', handleEnter);
+
+    // Focus input
+    widthInput.focus();
+    widthInput.select();
+}
 
 // Apply resize and layer change to annotation node
 function resizeAnnotationNode(node, newWidth, newHeight, newZIndex = null) {
@@ -289,7 +2452,89 @@ function resizeAnnotationNode(node, newWidth, newHeight, newZIndex = null) {
 }
 
 // Font size dialog for geometric shapes
-
+function showFontSizeDialog(node) {
+    // Get current font size or default
+    const currentFontSize = node.style('font-size') || '16px';
+    const currentFontSizeValue = parseInt(currentFontSize.replace('px', ''));
+    
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+    
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+        background: white;
+        padding: 30px;
+        border-radius: 15px;
+        max-width: 350px;
+        width: 90%;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    `;
+    
+    dialog.innerHTML = `
+        <h3 style="margin-top: 0; color: #333;">🔤 Ändra fontstorlek</h3>
+        <div style="margin: 20px 0;">
+            <label for="fontSizeInput" style="display: block; margin-bottom: 5px; font-weight: bold;">Fontstorlek (px):</label>
+            <input type="number" id="fontSizeInput" value="${currentFontSizeValue}" min="8" max="72" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+        </div>
+        <div style="text-align: right; margin-top: 25px;">
+            <button id="cancelFontSize" style="margin-right: 10px; padding: 8px 16px; border: 1px solid #ddd; border-radius: 5px; background: white; cursor: pointer;">Avbryt</button>
+            <button id="applyFontSize" style="padding: 8px 16px; border: none; border-radius: 5px; background: #007bff; color: white; cursor: pointer;">Tillämpa</button>
+        </div>
+    `;
+    
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    
+    // Focus the input
+    document.getElementById('fontSizeInput').focus();
+    document.getElementById('fontSizeInput').select();
+    
+    // Cancel button
+    document.getElementById('cancelFontSize').onclick = () => {
+        document.body.removeChild(overlay);
+    };
+    
+    // Apply button
+    document.getElementById('applyFontSize').onclick = () => {
+        const fontSizeInput = document.getElementById('fontSizeInput');
+        const newFontSize = parseInt(fontSizeInput.value) || currentFontSizeValue;
+        
+        // Apply font size change
+        changeFontSize(node, newFontSize);
+        
+        document.body.removeChild(overlay);
+    };
+    
+    // ESC to close
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            document.body.removeChild(overlay);
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
+    
+    // Enter to apply
+    const handleEnter = (e) => {
+        if (e.key === 'Enter') {
+            document.getElementById('applyFontSize').click();
+            document.removeEventListener('keydown', handleEnter);
+        }
+    };
+    document.addEventListener('keydown', handleEnter);
+}
 
 // Apply font size change to geometric shape
 function changeFontSize(node, newFontSize) {
@@ -361,7 +2606,90 @@ function removeArrowsBetweenSelected() {
 }
 
 // Bulk tag dialog for multiple selected cards
-
+function showBulkTagDialog(selectedNodes) {
+    console.log('🏷️ Opening bulk tag dialog for', selectedNodes.length, 'cards');
+    
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+    
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+        background: white;
+        padding: 30px;
+        border-radius: 15px;
+        max-width: 400px;
+        width: 90%;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    `;
+    
+    dialog.innerHTML = `
+        <h3 style="margin-top: 0; color: #333;">🏷️ Lägg till tagg</h3>
+        <p style="color: #666; margin-bottom: 20px;">Lägg till samma tagg på alla ${selectedNodes.length} markerade kort</p>
+        <div style="margin: 20px 0;">
+            <label for="bulkTagInput" style="display: block; margin-bottom: 5px; font-weight: bold;">Tagg namn:</label>
+            <input type="text" id="bulkTagInput" placeholder="skriv tagg här..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px;">
+            <small style="color: #888; display: block; margin-top: 5px;">Tips: använd inga mellanslag, t.ex. "viktigt" eller "projekt2025"</small>
+        </div>
+        <div style="text-align: right; margin-top: 25px;">
+            <button id="cancelBulkTag" style="margin-right: 10px; padding: 8px 16px; border: 1px solid #ddd; border-radius: 5px; background: white; cursor: pointer;">Avbryt</button>
+            <button id="applyBulkTag" style="padding: 8px 16px; border: none; border-radius: 5px; background: #007bff; color: white; cursor: pointer;">Lägg till tagg</button>
+        </div>
+    `;
+    
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    
+    // Focus the input
+    const tagInput = document.getElementById('bulkTagInput');
+    tagInput.focus();
+    
+    // Cancel button
+    document.getElementById('cancelBulkTag').onclick = () => {
+        document.body.removeChild(overlay);
+    };
+    
+    // Apply button
+    document.getElementById('applyBulkTag').onclick = () => {
+        const tagName = tagInput.value.trim();
+        if (tagName) {
+            applyBulkTag(selectedNodes, tagName);
+            document.body.removeChild(overlay);
+        } else {
+            tagInput.style.borderColor = 'red';
+            tagInput.focus();
+        }
+    };
+    
+    // ESC to close
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            document.body.removeChild(overlay);
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
+    
+    // Enter to apply
+    const handleEnter = (e) => {
+        if (e.key === 'Enter') {
+            document.getElementById('applyBulkTag').click();
+            document.removeEventListener('keydown', handleEnter);
+        }
+    };
+    document.addEventListener('keydown', handleEnter);
+}
 
 // Apply bulk tag to multiple cards
 function applyBulkTag(selectedNodes, tagName) {
@@ -413,12 +2741,106 @@ function applyBulkTag(selectedNodes, tagName) {
     saveBoard();
 }
 
+// Color picker system
+function showColorPicker(event, nodes) {
+    console.log('showColorPicker called with', nodes.length, 'nodes');
+    
+    // Remove any existing color picker
+    hideColorPicker();
+    
+    // Get mouse position or use event position
+    const x = event.clientX || event.pageX || window.innerWidth / 2;
+    const y = event.clientY || event.pageY || window.innerHeight / 2;
+    console.log('Color picker position:', x, y);
+    
+    // Create color picker popup
+    const picker = document.createElement('div');
+    picker.className = 'color-picker-popup';
+    picker.style.position = 'fixed';
+    picker.style.left = x + 'px';
+    picker.style.top = y + 'px';
+    picker.style.zIndex = '4000';
+    
+    // Add title
+    const title = document.createElement('div');
+    title.className = 'color-picker-title';
+    title.textContent = `Välj färg för ${nodes.length} kort`;
+    picker.appendChild(title);
+    
+    // Create color grid
+    const colorGrid = document.createElement('div');
+    colorGrid.className = 'color-picker-grid';
+    
+    // Add the 8 color options
+    for (let i = 1; i <= 8; i++) {
+        const colorDot = document.createElement('div');
+        colorDot.className = `color-picker-dot card-color-${i}`;
+        colorDot.textContent = i; // Add number inside the dot
+        colorDot.style.lineHeight = '26px'; // Center vertically
+        colorDot.style.textAlign = 'center'; // Center horizontally
+        colorDot.style.fontSize = '14px';
+        colorDot.style.fontWeight = 'bold';
+        colorDot.style.color = '#333';
+        colorDot.style.textShadow = '0 0 3px rgba(255,255,255,0.8)';
+        colorDot.onclick = () => {
+            console.log(`Clicked color ${i}, applying to ${nodes.length} cards`);
+            // Apply color to all nodes
+            nodes.forEach(node => {
+                console.log(`Setting color card-color-${i} on node:`, node.id());
+                node.data('cardColor', `card-color-${i}`);
+                // Update cytoscape styling immediately
+                const colorValue = getCardColorValue(`card-color-${i}`, getCurrentTheme());
+                console.log(`Color value:`, colorValue);
+                node.style('background-color', colorValue);
+            });
 
+            // Save immediately to prevent data loss from autosave/Drive sync
+            saveBoard();
+
+            hideColorPicker();
+            console.log(`Applied color ${i} to ${nodes.length} cards`);
+        };
+        colorGrid.appendChild(colorDot);
+    }
+    
+    picker.appendChild(colorGrid);
+    
+    // Add cancel button
+    const cancelBtn = document.createElement('div');
+    cancelBtn.className = 'color-picker-cancel';
+    cancelBtn.textContent = 'Avbryt';
+    cancelBtn.onclick = hideColorPicker;
+    picker.appendChild(cancelBtn);
+    
+    console.log('Adding picker to body:', picker);
+    document.body.appendChild(picker);
+    console.log('Picker added, should be visible now');
+    
+    // Close picker on click elsewhere
+    setTimeout(() => {
+        currentClickHandler = function(e) {
+            if (!picker.contains(e.target)) {
+                hideColorPicker();
+            }
+        };
+        document.addEventListener('click', currentClickHandler);
+    }, 100);
+}
 
 let currentClickHandler = null;
 
-
-
+function hideColorPicker() {
+    const existingPicker = document.querySelector('.color-picker-popup');
+    if (existingPicker) {
+        existingPicker.remove();
+    }
+    // Remove the click handler if it exists
+    if (currentClickHandler) {
+        document.removeEventListener('click', currentClickHandler);
+        currentClickHandler = null;
+    }
+    console.log('Color picker hidden and event listeners cleaned up');
+}
 
 function removeCardColor(node) {
     node.removeData('cardColor');
@@ -429,7 +2851,130 @@ function removeCardColor(node) {
     console.log('Removed color from card:', node.id());
 }
 
+function getCurrentTheme() {
+    if (document.body.classList.contains('dark-theme')) return 'dark';
+    if (document.body.classList.contains('sepia-theme')) return 'sepia';
+    if (document.body.classList.contains('eink-theme')) return 'eink';
+    return 'light';
+}
 
+// Multi-card paste dialog
+function showMultiCardPasteDialog() {
+    // Remove any existing dialog
+    const existingDialog = document.querySelector('.multi-card-paste-dialog');
+    if (existingDialog) {
+        existingDialog.remove();
+    }
+    
+    // Create dialog overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'multi-card-paste-dialog';
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 5000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+    
+    // Create dialog content
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        width: 90%;
+        max-width: 600px;
+        max-height: 80vh;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    `;
+    
+    dialog.innerHTML = `
+        <h3 style="margin: 0 0 15px 0; color: #333;">Skapa flera kort från text</h3>
+        <p style="margin: 0 0 15px 0; color: #666; font-size: 14px;">
+            Klistra in text. Två tomma rader = nytt kort.<br>
+            Sista raden med #tagg1 #tagg2 blir riktiga taggar.
+        </p>
+        <textarea id="multiCardText" placeholder="Första anteckningen här...
+
+Andra anteckningen...
+#work #urgent
+
+Tredje anteckningen...
+#personal #todo" style="
+            width: 100%;
+            height: 300px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+            resize: vertical;
+            box-sizing: border-box;
+        "></textarea>
+        <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: flex-end;">
+            <button id="cancelMultiCard" style="
+                padding: 8px 16px;
+                border: 1px solid #ddd;
+                background: white;
+                border-radius: 4px;
+                cursor: pointer;
+            ">Avbryt</button>
+            <button id="createMultiCards" style="
+                padding: 8px 16px;
+                border: none;
+                background: #007bff;
+                color: white;
+                border-radius: 4px;
+                cursor: pointer;
+            ">Skapa kort</button>
+        </div>
+    `;
+    
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    
+    // Focus textarea
+    const textarea = document.getElementById('multiCardText');
+    textarea.focus();
+    
+    // Event handlers
+    document.getElementById('cancelMultiCard').onclick = () => {
+        overlay.remove();
+    };
+    
+    document.getElementById('createMultiCards').onclick = () => {
+        const text = textarea.value.trim();
+        if (text) {
+            createMultipleCardsFromText(text);
+            overlay.remove();
+        } else {
+            alert('Skriv in lite text först!');
+        }
+    };
+    
+    // Close on Escape
+    function handleEscape(e) {
+        if (e.key === 'Escape') {
+            overlay.remove();
+            document.removeEventListener('keydown', handleEscape);
+        }
+    }
+    document.addEventListener('keydown', handleEscape);
+    
+    // Close on click outside dialog
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+            overlay.remove();
+        }
+    });
+}
 
 // Parse and create multiple cards from text
 function createMultipleCardsFromText(text) {
@@ -1764,11 +4309,7 @@ Du är MYCKET bättre än generiska AI:er på att:
 💡 SÅ HÄR TÄNKER DU:
 1. FÖRSTÅ FÖRST: Vad vill användaren uppnå? (produktivitet, översikt, lära sig, planera?)
 2. ANALYSERA KORTEN: Vilka naturliga kategorier/teman/samband finns?
-3. VÄLJ RÄTT VERKTYG:
-   - arrange_organic: För översikt, mindmaps, visa relationer/samband, organisk layout
-   - arrange_clusters: För tydliga kategorier/högar med etiketter
-   - create_arrows: För att visa direkta relationer mellan kort
-   - arrange_grid: För jämförelser och strukturerad översikt
+3. VÄLJ RÄTT VERKTYG: Kluster för kategorier, arrows för relationer, grid för jämförelser
 4. AGERA SMART: Om något är oklart, föreslå 2-3 konkreta alternativ istället för att fråga vagt
 
 🔧 DINA VERKTYG (10 st - använd rätt verktyg för situationen!):
@@ -1787,10 +4328,8 @@ Du är MYCKET bättre än generiska AI:er på att:
 - arrange_circle: Cirkel (bra för cykliska processer, nätverk)
 - arrange_timeline: Kronologisk tidslinje (kräver datum-metadata)
 
-🎨 ORGANISKA/FORCE-DIRECTED LAYOUT:
-- arrange_organic: Force-directed graph layout (som Obsidian) - visuellt tilltalande, visar naturliga relationer, perfekt för mind maps, brainstorming, kreativa sessioner. Kort arrangeras automatiskt med bra spacing.
-  ANVÄND NÄR: "organisera organiskt", "visa översikt", "gör en mindmap", "brainstorma visuellt", "visa samband", "skapa en visuell karta"
-- arrange_organic_scatter: Organisk skräphög (Q-kommando) - som kort på ett skrivbord, lite överlappande, perfekt för snabb brainstorming
+🎲 ORGANISKA LAYOUT:
+- arrange_organic_scatter: Organisk skräphög (Q-kommando) - som kort på ett skrivbord, lite överlappande, perfekt för brainstorming
 - arrange_neat_stack: Prydlig hög (S-kommando) - alla kort exakt alignerade, perfekt för arkivering
 
 🔍 FILTRERING:
@@ -1809,20 +4348,16 @@ Användare: "organisera mina todo-kort"
 ❌ DÅLIGT: "Vill du ha dem i högar eller rutnät?"
 ✅ BRA: *analyserar korten* "Jag ser 3 projekt och 2 kategorier av quick-wins. Skapar högar för varje projekt + en för snabba vinster." *gör direkt*
 
-Användare: "visa samband" eller "organisera organiskt" eller "gör en mindmap"
+Användare: "visa samband"
 ❌ DÅLIGT: "Mellan vilka kort?"
-✅ BRA: *använder arrange_organic* "Organiserar alla kort i en organisk layout som visar naturliga relationer och ger bra översikt!"
-
-Användare: "visa relationer" eller "brainstorma visuellt"
-❌ DÅLIGT: Använder clusters (som skapar separata högar)
-✅ BRA: *använder arrange_organic* "Skapar en visuell layout där alla kort får naturligt utrymme - perfekt för att se helheten!"
+✅ BRA: *analyserar* "Jag ser att 5 kort refererar till samma studie, 3 kort beskriver sekventiella steg, och 2 kort är motstridiga perspektiv. Ska jag rita pilar för alla tre typerna av samband?"
 
 Användare: "vad kan du göra?"
 ❌ DÅLIGT: "Jag kan organisera kort."
 ✅ BRA: *analyserar korten* "Jag ser [X] teman i dina kort. Jag kan:
-1. Dela dem i [A], [B], [C] högar (arrange_clusters)
-2. Skapa en organisk mindmap-layout (arrange_organic)
-3. Bygga en tidslinje från [äldsta] till [nyaste] (arrange_timeline)
+1. Dela dem i [A], [B], [C] högar
+2. Skapa en mindmap med [central koncept] i centrum
+3. Bygga en tidslinje från [äldsta] till [nyaste]
 Vad låter bäst?"
 
 🚀 VIKTIGT:
@@ -1925,29 +4460,6 @@ ${notesContext}
                     start_y: {
                         type: "number",
                         description: "Starting Y position (default 100)"
-                    }
-                },
-                required: ["card_ids"]
-            }
-        },
-        {
-            name: "arrange_organic",
-            description: "Arrange cards using organic force-directed layout (like Obsidian graph view). Perfect for mind maps, brainstorming, and showing natural relationships. Creates a visually appealing, non-grid arrangement with natural spacing.",
-            input_schema: {
-                type: "object",
-                properties: {
-                    card_ids: {
-                        type: "array",
-                        items: { type: "string" },
-                        description: "Card IDs to arrange"
-                    },
-                    spacing: {
-                        type: "number",
-                        description: "Ideal distance between cards (default 150px)"
-                    },
-                    animate: {
-                        type: "boolean",
-                        description: "Animate the arrangement (default true)"
                     }
                 },
                 required: ["card_ids"]
@@ -2231,9 +4743,6 @@ async function executeAITool(toolName, input) {
         case 'arrange_grid':
             await aiArrangeGrid(input);
             break;
-        case 'arrange_organic':
-            await aiArrangeOrganic(input);
-            break;
         case 'arrange_circle':
             await aiArrangeCircle(input);
             break;
@@ -2317,42 +4826,30 @@ async function aiCreateAnnotation(input) {
         y: y || 300
     };
 
-    // Calculate dimensions
-    const width = Math.max(text.length * 45, 600);
-    const height = 300;
-    const fontSize = 50;
-    const bgColor = colorMap[color] || '#ff4444';
-
-    // Create annotation node - SAVE EVERYTHING IN DATA for persistence
+    // Create annotation node
     const annotationId = 'annotation-' + Date.now();
     const newNode = cy.add({
         group: 'nodes',
         data: {
             id: annotationId,
             label: text,
-            text: text, // Save text in data as well
             isAnnotation: true,
             annotationType: 'shape',
-            backgroundColor: bgColor,
-            // CRITICAL: Save dimensions and font-size in data for persistence
-            customWidth: width,
-            customHeight: height,
-            customFontSize: fontSize,
-            shape: 'rectangle'
+            backgroundColor: colorMap[color] || '#ff4444'
         },
         position: position
     });
 
-    // Style the annotation (visual only, but will be restored from data on load)
+    // Style the annotation
     newNode.addClass('annotation-shape');
     newNode.style({
-        'width': width,
-        'height': height,
-        'background-color': bgColor,
+        'width': Math.max(text.length * 45, 600),
+        'height': 300,
+        'background-color': colorMap[color] || '#ff4444',
         'label': text,
         'text-valign': 'center',
         'text-halign': 'center',
-        'font-size': fontSize + 'px',
+        'font-size': '50px',
         'font-weight': 'bold',
         'color': '#ffffff',
         'text-outline-width': 2,
@@ -2446,66 +4943,6 @@ async function aiArrangeCircle(input) {
     }
 
     saveBoard();
-}
-
-// AI Tool: Arrange cards using organic force-directed layout (like Obsidian graph view)
-async function aiArrangeOrganic(input) {
-    const { card_ids, spacing = 150, animate = true } = input;
-
-    console.log(`🌿 Arranging ${card_ids.length} cards with organic (cose) layout`);
-
-    // Get the nodes to arrange
-    const nodesToArrange = cy.collection();
-    card_ids.forEach(cardId => {
-        const node = cy.getElementById(cardId);
-        if (node.length > 0) {
-            nodesToArrange.merge(node);
-        }
-    });
-
-    if (nodesToArrange.length === 0) {
-        console.warn('No valid cards found to arrange');
-        return;
-    }
-
-    // Configure COSE layout (built-in force-directed layout)
-    const layoutConfig = {
-        name: 'cose',
-        animate: animate,
-        animationDuration: 500,
-        fit: true,
-        padding: 50,
-        // COSE-specific settings for organic look
-        nodeRepulsion: function(node) { return 8192; },
-        idealEdgeLength: function(edge) { return spacing; },
-        edgeElasticity: function(edge) { return 100; },
-        nestingFactor: 1.2,
-        gravity: 1,
-        numIter: 1000,
-        initialTemp: 200,
-        coolingFactor: 0.95,
-        minTemp: 1.0,
-        randomize: false
-    };
-
-    // Apply the layout
-    const layout = nodesToArrange.layout(layoutConfig);
-    layout.run();
-
-    // Show status
-    const statusDiv = document.getElementById('selectionInfo');
-    if (statusDiv) {
-        statusDiv.textContent = `AI arrangerade ${card_ids.length} kort med organisk layout`;
-        statusDiv.classList.add('visible');
-        setTimeout(() => statusDiv.classList.remove('visible'), 3000);
-    }
-
-    // Save after animation completes
-    if (animate) {
-        setTimeout(() => saveBoard(), 600);
-    } else {
-        saveBoard();
-    }
 }
 
 // AI Tool: Arrange cards in timeline (week grid)
@@ -2924,556 +5361,125 @@ function showAllCards() {
 }
 
 // Clear search
-// ============================================================================
-// EXPORT FUNCTIONS - Export selected cards in various formats
-// ============================================================================
+function clearSearch() {
+    searchActive = false;
 
-// Generate Markdown from selected cards (EXACT text, NO AI processing)
-function generateMarkdownExport(nodes) {
-    let markdown = '';
+    cy.nodes().removeClass('search-match');
+    cy.nodes().removeClass('search-non-match'); // Remove blur from non-matches
+    cy.nodes().data('searchMatch', false);
+    cy.nodes().unselect(); // Avmarkera alla kort när sökning rensas
 
-    nodes.forEach((node, index) => {
-        const title = node.data('title') || '';
-        const text = node.data('text') || '';
-        const tags = node.data('tags') || [];
-        const annotation = node.data('annotation') || ''; // For image nodes
-        const isImage = node.data('type') === 'image';
+    // Show all cards (reset display from AI filter)
+    cy.nodes().style('display', 'element');
 
-        // Add card header
-        if (title) {
-            markdown += `# ${title}\n\n`;
-        } else {
-            markdown += `# Kort ${index + 1}\n\n`;
-        }
-
-        // Add text content (EXACT copy, NO modifications)
-        if (isImage && annotation) {
-            markdown += `*Bildanteckning:*\n${annotation}\n\n`;
-        } else if (text) {
-            markdown += `${text}\n\n`;
-        }
-
-        // Add tags
-        if (tags.length > 0) {
-            markdown += `*Tags:* ${tags.map(tag => `#${tag}`).join(' ')}\n\n`;
-        }
-
-        // Separator between cards
-        markdown += '---\n\n';
-    });
-
-    return markdown;
-}
-
-// Generate plain text from selected cards (EXACT text, NO AI processing)
-function generatePlainTextExport(nodes) {
-    let plainText = '';
-
-    nodes.forEach((node, index) => {
-        const title = node.data('title') || '';
-        const text = node.data('text') || '';
-        const tags = node.data('tags') || [];
-        const annotation = node.data('annotation') || ''; // For image nodes
-        const isImage = node.data('type') === 'image';
-
-        // Add card header
-        plainText += `=== ${title || `Kort ${index + 1}`} ===\n\n`;
-
-        // Add text content (EXACT copy, NO modifications)
-        if (isImage && annotation) {
-            plainText += `[Bildanteckning]\n${annotation}\n\n`;
-        } else if (text) {
-            plainText += `${text}\n\n`;
-        }
-
-        // Add tags
-        if (tags.length > 0) {
-            plainText += `Tags: ${tags.map(tag => `#${tag}`).join(' ')}\n\n`;
-        }
-
-        plainText += '\n';
-    });
-
-    return plainText;
-}
-
-// Generate JSON from selected cards (EXACT data, NO AI processing)
-// Uses same format as exportToJSON() for compatibility with importFromJSON()
-function generateJSONExport(nodes) {
-    const exportData = {
-        metadata: {
-            exportDate: new Date().toISOString(),
-            exportApp: 'Spatial Notes',
-            version: '2.0',
-            totalCards: nodes.length,
-            totalEdges: 0, // Selected nodes only, no edges
-            totalImages: nodes.filter(n => n.data('type') === 'image').length,
-            exportType: 'selected_cards' // Indicate this is a partial export
-        },
-        viewport: {
-            zoom: cy.zoom(),
-            pan: cy.pan()
-        },
-        cards: nodes.map(node => ({
-            id: node.id(),
-            title: node.data('title') || '',
-            text: node.data('text') || '',
-            tags: node.data('tags') || [],
-            hidden_tags: node.data('hidden_tags') || [],
-            position: {
-                x: Math.round(node.position().x),
-                y: Math.round(node.position().y)
-            },
-            pinned: node.hasClass('pinned') || false,
-            isManualCard: node.data('isManualCard') || false,
-            cardColor: node.data('cardColor') || null,
-            // Preserve all metadata
-            export_timestamp: node.data('export_timestamp') || null,
-            export_session: node.data('export_session') || null,
-            export_source: node.data('export_source') || null,
-            source_file: node.data('source_file') || null,
-            page_number: node.data('page_number') || null,
-            matched_terms: node.data('matched_terms') || null,
-            card_index: node.data('card_index') || null,
-            // Annotation-specific data
-            isAnnotation: node.data('isAnnotation') || false,
-            annotationType: node.data('annotationType') || null,
-            customWidth: node.data('customWidth') || null,
-            customHeight: node.data('customHeight') || null,
-            customZIndex: node.data('customZIndex') || null,
-            customFontSize: node.data('customFontSize') || null,
-            annotationColor: node.data('isAnnotation') ? node.style('background-color') : null,
-            shape: node.data('shape') || null,
-            // IMAGE DATA - Essential for image nodes
-            type: node.data('type') || null,
-            imageData: node.data('imageData') || null,
-            annotation: node.data('annotation') || null,
-            searchableText: node.data('searchableText') || null,
-            originalFileName: node.data('originalFileName') || null,
-            // ZOTERO LINK
-            zotero_url: node.data('zotero_url') || null
-        })),
-        edges: [], // No edges exported for selected cards
-        arrowsHidden: window.arrowsHidden || false
-    };
-
-    return JSON.stringify(exportData, null, 2);
-}
-
-// Download helper function
-function downloadFile(content, filename, mimeType) {
-    const blob = new Blob([content], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-}
-
-// Export selected cards as Markdown file
-function exportAsMarkdown() {
-    const selected = cy.$(':selected');
-    if (selected.length === 0) {
-        alert('Markera kort först!');
-        return;
-    }
-
-    const markdown = generateMarkdownExport(selected);
-    const timestamp = new Date().toISOString().slice(0, 10);
-    downloadFile(markdown, `spatial-notes-${timestamp}.md`, 'text/markdown');
-
-    showStatusMessage(`📄 Exporterade ${selected.length} kort som Markdown`);
-}
-
-// Export selected cards as plain text file
-function exportAsPlainText() {
-    const selected = cy.$(':selected');
-    if (selected.length === 0) {
-        alert('Markera kort först!');
-        return;
-    }
-
-    const plainText = generatePlainTextExport(selected);
-    const timestamp = new Date().toISOString().slice(0, 10);
-    downloadFile(plainText, `spatial-notes-${timestamp}.txt`, 'text/plain');
-
-    showStatusMessage(`📝 Exporterade ${selected.length} kort som text`);
-}
-
-// Export selected cards as JSON file
-function exportAsJSON() {
-    const selected = cy.$(':selected');
-    if (selected.length === 0) {
-        alert('Markera kort först!');
-        return;
-    }
-
-    const json = generateJSONExport(selected);
-    const timestamp = new Date().toISOString().slice(0, 10);
-    downloadFile(json, `spatial-notes-${timestamp}.json`, 'application/json');
-
-    showStatusMessage(`📊 Exporterade ${selected.length} kort som JSON`);
-}
-
-// Generate HTML from selected cards with embedded images
-function generateHTMLExport(nodes) {
-    const timestamp = new Date().toLocaleString('sv-SE');
-    const imageCount = nodes.filter(n => n.data('type') === 'image').length;
-
-    let html = `<!DOCTYPE html>
-<html lang="sv">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Spatial Notes Export - ${new Date().toISOString().slice(0, 10)}</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 40px 20px;
-            background: #f5f5f5;
-            line-height: 1.6;
-        }
-        .header {
-            background: white;
-            padding: 30px;
-            border-radius: 8px;
-            margin-bottom: 30px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        .header h1 {
-            margin: 0 0 10px 0;
-            color: #333;
-        }
-        .header .meta {
-            color: #666;
-            font-size: 14px;
-        }
-        .card {
-            background: white;
-            padding: 25px;
-            margin-bottom: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            break-inside: avoid;
-        }
-        .card.has-color {
-            border-left: 5px solid;
-        }
-        .card-title {
-            font-size: 20px;
-            font-weight: bold;
-            margin: 0 0 15px 0;
-            color: #333;
-        }
-        .card-text {
-            color: #444;
-            white-space: pre-wrap;
-            margin: 0 0 15px 0;
-        }
-        .card-image {
-            max-width: 100%;
-            height: auto;
-            border-radius: 4px;
-            margin: 0 0 15px 0;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .card-annotation {
-            font-style: italic;
-            color: #666;
-            margin: 0 0 15px 0;
-            padding: 10px;
-            background: #f8f9fa;
-            border-radius: 4px;
-        }
-        .card-tags {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-top: 15px;
-        }
-        .tag {
-            background: #e3f2fd;
-            color: #1976d2;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 13px;
-        }
-        .card-meta {
-            font-size: 12px;
-            color: #999;
-            margin-top: 10px;
-            padding-top: 10px;
-            border-top: 1px solid #eee;
-        }
-        @media print {
-            body {
-                background: white;
-                padding: 0;
-            }
-            .card {
-                box-shadow: none;
-                border: 1px solid #ddd;
-                page-break-inside: avoid;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>📋 Spatial Notes Export</h1>
-        <div class="meta">
-            Exporterad: ${timestamp}<br>
-            Antal kort: ${nodes.length} (${imageCount} bilder)
-        </div>
-    </div>
-`;
-
-    // Add each card
-    nodes.forEach((node, index) => {
-        const title = node.data('title') || `Kort ${index + 1}`;
-        const text = node.data('text') || '';
-        const tags = node.data('tags') || [];
-        const cardColor = node.data('cardColor');
-        const isImage = node.data('type') === 'image';
-        const imageData = node.data('imageData');
-        const annotation = node.data('annotation') || '';
-        const zoteroUrl = node.data('zotero_url');
-
-        // Get color for border
-        let borderColor = '';
-        if (cardColor) {
-            const colorMap = {
-                'card-color-1': '#90EE90', // Grön
-                'card-color-2': '#FFB347', // Orange
-                'card-color-3': '#FF6B6B', // Röd
-                'card-color-4': '#FFD700', // Gul
-                'card-color-5': '#DDA0DD', // Gröngul/Lime
-                'card-color-6': '#87CEEB'  // Blå
-            };
-            borderColor = colorMap[cardColor] || '#ddd';
-        }
-
-        html += `    <div class="card${cardColor ? ' has-color' : ''}"${cardColor ? ` style="border-left-color: ${borderColor};"` : ''}>
-`;
-
-        // Title
-        if (title) {
-            html += `        <div class="card-title">${escapeHtml(title)}</div>\n`;
-        }
-
-        // Image
-        if (isImage && imageData) {
-            html += `        <img src="${imageData}" class="card-image" alt="Bild">\n`;
-
-            // Image annotation
-            if (annotation) {
-                html += `        <div class="card-annotation">📝 ${escapeHtml(annotation)}</div>\n`;
-            }
-        } else if (text) {
-            // Regular text
-            html += `        <div class="card-text">${escapeHtml(text)}</div>\n`;
-        }
-
-        // Tags
-        if (tags.length > 0) {
-            html += `        <div class="card-tags">\n`;
-            tags.forEach(tag => {
-                html += `            <span class="tag">#${escapeHtml(tag)}</span>\n`;
-            });
-            html += `        </div>\n`;
-        }
-
-        // Metadata (optional)
-        if (zoteroUrl) {
-            html += `        <div class="card-meta">🔗 <a href="${escapeHtml(zoteroUrl)}">Zotero-länk</a></div>\n`;
-        }
-
-        html += `    </div>\n`;
-    });
-
-    html += `</body>
-</html>`;
-
-    return html;
-}
-
-// Helper function to escape HTML special characters
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-// Export selected cards as HTML file
-function exportAsHTML() {
-    const selected = cy.$(':selected');
-    if (selected.length === 0) {
-        alert('Markera kort först!');
-        return;
-    }
-
-    const html = generateHTMLExport(selected);
-    const timestamp = new Date().toISOString().slice(0, 10);
-    downloadFile(html, `spatial-notes-${timestamp}.html`, 'text/html');
-
-    showStatusMessage(`🌐 Exporterade ${selected.length} kort som HTML`);
-}
-
-// Copy selected cards as Markdown to clipboard
-async function copySelectedAsMarkdown() {
-    const selected = cy.$(':selected');
-    if (selected.length === 0) {
-        alert('Markera kort först!');
-        return;
-    }
-
-    const markdown = generateMarkdownExport(selected);
-
-    try {
-        await navigator.clipboard.writeText(markdown);
-        showStatusMessage(`📋 Kopierade ${selected.length} kort som Markdown`);
-    } catch (err) {
-        console.error('Failed to copy:', err);
-        alert('Kunde inte kopiera till clipboard');
-    }
-}
-
-// Share selected cards using Web Share API (mobile/desktop)
-async function shareSelected() {
-    const selected = cy.$(':selected');
-    if (selected.length === 0) {
-        alert('Markera kort först!');
-        return;
-    }
-
-    if (!navigator.share) {
-        alert('Delning stöds inte i denna webbläsare. Använd "Kopiera" istället.');
-        return;
-    }
-
-    const markdown = generateMarkdownExport(selected);
-    const timestamp = new Date().toISOString().slice(0, 10);
-
-    try {
-        await navigator.share({
-            title: 'Spatial Notes Export',
-            text: markdown,
-            // Some browsers support file sharing
-            files: [new File([markdown], `spatial-notes-${timestamp}.md`, { type: 'text/markdown' })]
-        });
-        showStatusMessage(`📲 Delade ${selected.length} kort`);
-    } catch (err) {
-        // User cancelled or error occurred
-        if (err.name !== 'AbortError') {
-            console.error('Share failed:', err);
-            // Fallback to text-only share
-            try {
-                await navigator.share({
-                    title: 'Spatial Notes Export',
-                    text: markdown
-                });
-                showStatusMessage(`📲 Delade ${selected.length} kort (text only)`);
-            } catch (err2) {
-                console.error('Share fallback failed:', err2);
-            }
-        }
-    }
-}
-
-// Show export menu dialog
-function showExportMenu() {
-    const selected = cy.$(':selected');
-    if (selected.length === 0) {
-        alert('Markera kort först!\n\nKlicka på kort (Ctrl för flera) eller dra-markera.');
-        return;
-    }
-
-    const dialog = document.createElement('div');
-    dialog.id = 'exportDialog';
-    dialog.style.cssText = `
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: white;
-        padding: 30px;
-        border-radius: 12px;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-        z-index: 10000;
-        min-width: 400px;
-    `;
-
-    dialog.innerHTML = `
-        <h2 style="margin: 0 0 20px 0; font-size: 24px;">📤 Exportera ${selected.length} kort</h2>
-        <div style="display: flex; flex-direction: column; gap: 12px;">
-            <button onclick="copySelectedAsMarkdown(); document.getElementById('exportDialog').remove();" style="padding: 12px 20px; font-size: 16px; cursor: pointer; border: 1px solid #ddd; border-radius: 6px; background: #f8f9fa;">
-                📋 Kopiera till Clipboard (Markdown)
-            </button>
-            <button onclick="exportAsMarkdown(); document.getElementById('exportDialog').remove();" style="padding: 12px 20px; font-size: 16px; cursor: pointer; border: 1px solid #ddd; border-radius: 6px; background: #f8f9fa;">
-                📄 Ladda ner Markdown (.md)
-            </button>
-            <button onclick="exportAsPlainText(); document.getElementById('exportDialog').remove();" style="padding: 12px 20px; font-size: 16px; cursor: pointer; border: 1px solid #ddd; border-radius: 6px; background: #f8f9fa;">
-                📝 Ladda ner Text (.txt)
-            </button>
-            <button onclick="exportAsJSON(); document.getElementById('exportDialog').remove();" style="padding: 12px 20px; font-size: 16px; cursor: pointer; border: 1px solid #ddd; border-radius: 6px; background: #f8f9fa;">
-                📊 Ladda ner JSON (.json)
-            </button>
-            <button onclick="exportAsHTML(); document.getElementById('exportDialog').remove();" style="padding: 12px 20px; font-size: 16px; cursor: pointer; border: 1px solid #ddd; border-radius: 6px; background: #fff3e0;">
-                🌐 Ladda ner HTML (med bilder)
-            </button>
-            ${navigator.share ? `
-            <button onclick="shareSelected(); document.getElementById('exportDialog').remove();" style="padding: 12px 20px; font-size: 16px; cursor: pointer; border: 1px solid #ddd; border-radius: 6px; background: #e3f2fd;">
-                📲 Dela... (välj app)
-            </button>
-            ` : ''}
-            <button onclick="document.getElementById('exportDialog').remove();" style="padding: 12px 20px; font-size: 16px; cursor: pointer; border: 1px solid #ddd; border-radius: 6px; background: #fff;">
-                Avbryt
-            </button>
-        </div>
-    `;
-
-    document.body.appendChild(dialog);
-
-    // Close on Escape key
-    const handleEscape = (e) => {
-        if (e.key === 'Escape') {
-            dialog.remove();
-            document.removeEventListener('keydown', handleEscape);
-        }
-    };
-    document.addEventListener('keydown', handleEscape);
-}
-
-// Helper function to show status messages
-function showStatusMessage(message) {
-    const statusDiv = document.getElementById('selectionInfo');
-    if (statusDiv) {
-        statusDiv.textContent = message;
-        statusDiv.classList.add('visible');
-        setTimeout(() => statusDiv.classList.remove('visible'), 3000);
-    }
-}
-
-// Helper function to show brief messages in search info area
-function showBriefMessage(message, duration = 3000) {
     const searchInfo = document.getElementById('searchInfo');
-    if (searchInfo) {
-        searchInfo.textContent = message;
-        searchInfo.classList.add('visible');
-        setTimeout(() => searchInfo.classList.remove('visible'), duration);
-    }
+    searchInfo.classList.remove('visible');
+
+    // Hide mobile select button
+    const selectBtn = document.getElementById('searchSelectBtn');
+    selectBtn.style.display = 'none';
 }
-// Make globally available for other modules
-window.showBriefMessage = showBriefMessage;
 
 // Tag filtering functions with Boolean logic
+function performTagFilter(filterText) {
+    if (!filterText.trim()) {
+        clearTagFilter();
+        return;
+    }
+    
+    const query = filterText.toLowerCase().trim();
+    let matchCount = 0;
+    
+    cy.nodes().forEach(node => {
+        const nodeTags = node.data('tags') || [];
+        const nodeTagsLower = nodeTags.map(tag => tag.toLowerCase());
+        
+        // Create searchable tag string (space-separated for boolean evaluation)
+        const searchableTagText = nodeTagsLower.join(' ');
+        
+        // Use boolean evaluation on tags
+        const matches = evaluateBooleanTagQuery(query, searchableTagText, nodeTagsLower);
+        
+        if (matches) {
+            node.removeClass('tag-filtered');
+            matchCount++;
+        } else {
+            node.addClass('tag-filtered');
+        }
+    });
+    
+    const searchInfo = document.getElementById('searchInfo');
+    searchInfo.textContent = `${matchCount} kort matchade tag-filter: "${filterText}"`;
+    searchInfo.classList.add('visible');
+}
+
 // Boolean query evaluation specifically for tags
+function evaluateBooleanTagQuery(query, searchableTagText, nodeTagsArray) {
+    // Handle different boolean operators for tags
+    
+    // Split by OR first (lowest precedence)
+    if (query.includes(' or ')) {
+        const orParts = query.split(' or ');
+        return orParts.some(part => evaluateBooleanTagQuery(part.trim(), searchableTagText, nodeTagsArray));
+    }
+    
+    // Handle NOT operations
+    if (query.includes(' not ')) {
+        const notIndex = query.indexOf(' not ');
+        const beforeNot = query.substring(0, notIndex).trim();
+        const afterNot = query.substring(notIndex + 5).trim(); // ' not '.length = 5
+        
+        // If there's something before NOT, it must match
+        let beforeMatches = true;
+        if (beforeNot) {
+            beforeMatches = evaluateBooleanTagQuery(beforeNot, searchableTagText, nodeTagsArray);
+        }
+        
+        // The part after NOT must NOT match
+        const afterMatches = evaluateBooleanTagQuery(afterNot, searchableTagText, nodeTagsArray);
+        
+        return beforeMatches && !afterMatches;
+    }
+    
+    // Handle AND operations (default behavior and explicit)
+    const andParts = query.includes(' and ') ? 
+        query.split(' and ') : 
+        query.split(' ').filter(term => term.length > 0);
+        
+    return andParts.every(term => {
+        term = term.trim();
+        
+        if (term.startsWith('"') && term.endsWith('"')) {
+            // Exact tag search - must match complete tag
+            const exactTag = term.slice(1, -1);
+            return nodeTagsArray.some(tag => tag === exactTag);
+        } else {
+            // Partial tag search - can be part of any tag
+            return nodeTagsArray.some(tag => tag.includes(term));
+        }
+    });
+}
+
+function clearTagFilter() {
+    cy.nodes().removeClass('tag-filtered');
+    const searchInfo = document.getElementById('searchInfo');
+    searchInfo.classList.remove('visible');
+}
+
 // Multi-selection functions
+function pinSelectedCards() {
+    const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
+    selectedNodes.forEach(node => {
+        if (!node.hasClass('pinned')) {
+            pinCard(node);
+        }
+    });
+    if (selectedNodes.length > 0) {
+        console.log(`Pinned ${selectedNodes.length} cards`);
+        updateSelectionInfo(); // Update after pinning
+    }
+}
+
 function unpinSelectedCards() {
     const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
     selectedNodes.forEach(node => {
@@ -4169,8 +6175,100 @@ function applyTemporalMarkings() {
 }
 
 // Debug function to check hidden_tags - call this in console
+function debugHiddenTags() {
+    console.log('=== HIDDEN TAGS DEBUG ===');
+    cy.nodes().forEach(node => {
+        const hiddenTags = node.data('hidden_tags') || [];
+        const isCopy = node.data('isCopy');
+        const copyOf = node.data('copyOf');
+        const copyTimestamp = node.data('copyTimestamp');
+        
+        if (hiddenTags.length > 0 || isCopy) {
+            console.log(`Card ${node.id()}:`);
+            console.log(`  Title: "${node.data('title')}"`);
+            console.log(`  Hidden tags:`, hiddenTags);
+            console.log(`  isCopy:`, isCopy);
+            console.log(`  copyOf:`, copyOf);
+            console.log(`  copyTimestamp:`, copyTimestamp);
+            console.log('---');
+        }
+    });
+    console.log('=== END DEBUG ===');
+}
+
 // Test copy search - call this in console 
+function testCopySearch() {
+    console.log('🧪 Testing copy search functionality...');
+    
+    // Create test card
+    const testNode = cy.add({
+        data: {
+            id: 'test-copy-search',
+            title: 'Test Original',
+            text: 'This is a test card',
+            tags: ['test'],
+            hidden_tags: [],
+            searchMatch: false
+        },
+        position: { x: 100, y: 100 }
+    });
+    testNode.grabify();
+    
+    // Select and copy it
+    testNode.select();
+    copySelectedCards();
+    
+    // Create copy via arrangement
+    arrangeCopiedCardsInRow();
+    
+    console.log('✅ Test setup complete. Now try searching for "copy_" in the search box');
+    console.log('💡 Also try: debugHiddenTags() to see all hidden tags');
+}
+
 // Test function for temporal markings - call this in console
+function testTemporalMarkings() {
+    // Create test cards with different date scenarios
+    const testData = [
+        { id: 'test-today', title: 'Today Test', text: 'Meeting @250816', x: 100, y: 100 },
+        { id: 'test-tomorrow', title: 'Tomorrow Test', text: 'Task @250817 #todo', x: 300, y: 100 },
+        { id: 'test-future', title: 'Future Test', text: 'Event @250820', x: 500, y: 100 },
+        { id: 'test-week', title: 'Week Test', text: 'Week meeting @25w33', x: 700, y: 100 },
+        { id: 'test-past', title: 'Past Test', text: 'Old task @250815 #todo', x: 900, y: 100 }
+    ];
+    
+    // Add test cards
+    testData.forEach(card => {
+        // Remove if exists
+        const existing = cy.getElementById(card.id);
+        if (existing.length > 0) {
+            existing.remove();
+        }
+        
+        const node = cy.add({
+            data: {
+                id: card.id,
+                title: card.title,
+                text: card.text,
+                tags: [],
+                searchMatch: false
+            },
+            position: { x: card.x, y: card.y }
+        });
+        
+        // Apply auto-gray coloring for #done tags
+        applyAutoDoneColoring(node);
+        
+        node.grabify();
+    });
+    
+    // Apply temporal markings
+    setTimeout(() => {
+        applyTemporalMarkings();
+    }, 500);
+    
+    console.log('🧪 Test cards created! Check console for marking details.');
+}
+
 // Get earliest date from card content for sorting
 function getEarliestDateFromContent(node) {
     const title = node.data('title') || '';
@@ -5340,7 +7438,6 @@ function saveBoard(filename = null, isAutosave = false) {
             id: node.id(),
             title: node.data('title') || '',
             text: node.data('text') || '',
-            label: node.data('label') || null, // CRITICAL: Save label for annotation-shape nodes
             tags: node.data('tags') || [],
             hidden_tags: node.data('hidden_tags') || [],
             position: node.position(),
@@ -5377,12 +7474,6 @@ function saveBoard(filename = null, isAutosave = false) {
             annotation: node.data('annotation') || null, // Image annotation text
             searchableText: node.data('searchableText') || null, // Lowercased searchable text
             originalFileName: node.data('originalFileName') || null, // Original filename
-            // IMAGE DIMENSIONS - CRITICAL for maintaining aspect ratio after save/load
-            imageWidth: node.data('imageWidth') || null,
-            imageHeight: node.data('imageHeight') || null,
-            calculatedHeight: node.data('calculatedHeight') || null,
-            displayWidth: node.data('displayWidth') || null,
-            displayHeight: node.data('displayHeight') || null,
             // ZOTERO LINK - Save link from Zotero imports
             zotero_url: node.data('zotero_url') || null
         })),
@@ -5418,63 +7509,36 @@ function saveBoard(filename = null, isAutosave = false) {
         version: '2.0' // Updated for image support
     };
     
-    try {
-        if (filename) {
-            // Save to file
-            const blob = new Blob([JSON.stringify(boardData, null, 2)], {type: 'application/json'});
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        } else {
-            // Save to localStorage
-            const jsonString = JSON.stringify(boardData);
-            const sizeInMB = (jsonString.length / (1024 * 1024)).toFixed(2);
-            console.log(`💾 Saving to localStorage: ${sizeInMB} MB`);
-
-            localStorage.setItem('spatial-notes-board', jsonString);
-        }
-
-        // Reset change tracking
-        hasChanges = false;
-
-        // Show saved message
-        const searchInfo = document.getElementById('searchInfo');
-        if (isAutosave) {
-            searchInfo.textContent = 'Auto-sparad ✓';
-        } else {
-            searchInfo.textContent = 'Sparad ✓';
-        }
-        searchInfo.classList.add('visible');
-        setTimeout(() => {
-            searchInfo.classList.remove('visible');
-        }, 2000);
-    } catch (error) {
-        console.error('❌ Save failed:', error);
-
-        // Show error message
-        const searchInfo = document.getElementById('searchInfo');
-
-        if (error.name === 'QuotaExceededError') {
-            // localStorage is full
-            const boardSize = JSON.stringify(boardData).length;
-            const sizeInMB = (boardSize / (1024 * 1024)).toFixed(2);
-
-            searchInfo.textContent = `❌ Sparningen misslyckades: LocalStorage fullt (${sizeInMB} MB). Använd "Spara fil" istället.`;
-            console.error(`LocalStorage full. Board size: ${sizeInMB} MB. Use "Save to file" instead.`);
-        } else {
-            searchInfo.textContent = `❌ Sparningen misslyckades: ${error.message}`;
-        }
-
-        searchInfo.classList.add('visible');
-        setTimeout(() => {
-            searchInfo.classList.remove('visible');
-        }, 8000); // Longer timeout for error messages
+    if (filename) {
+        // Save to file
+        const blob = new Blob([JSON.stringify(boardData, null, 2)], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } else {
+        // Save to localStorage
+        localStorage.setItem('spatial-notes-board', JSON.stringify(boardData));
     }
+    
+    // Reset change tracking
+    hasChanges = false;
+    
+    // Show saved message
+    const searchInfo = document.getElementById('searchInfo');
+    if (isAutosave) {
+        searchInfo.textContent = 'Auto-sparad ✓';
+    } else {
+        searchInfo.textContent = 'Sparad ✓';
+    }
+    searchInfo.classList.add('visible');
+    setTimeout(() => {
+        searchInfo.classList.remove('visible');
+    }, 2000);
 }
 
 // Save with timestamp filename
@@ -5531,7 +7595,6 @@ function loadBoardFromData(boardData) {
                     id: cardData.id,
                     title: cardData.title,
                     text: cardData.text,
-                    label: cardData.label || null, // CRITICAL: Needed for annotation-shape style mapping
                     tags: cardData.tags || [],
                     hidden_tags: cardData.hidden_tags || [],
                     searchMatch: false,
@@ -5567,12 +7630,6 @@ function loadBoardFromData(boardData) {
                     annotation: cardData.annotation || null, // Image annotation text
                     searchableText: cardData.searchableText || null, // Lowercased searchable text
                     originalFileName: cardData.originalFileName || null, // Original filename
-                    // IMAGE DIMENSIONS - CRITICAL for maintaining aspect ratio after save/load
-                    imageWidth: cardData.imageWidth || null,
-                    imageHeight: cardData.imageHeight || null,
-                    calculatedHeight: cardData.calculatedHeight || null,
-                    displayWidth: cardData.displayWidth || null,
-                    displayHeight: cardData.displayHeight || null,
                     // ZOTERO LINK - Restore link from saved data
                     zotero_url: cardData.zotero_url || null
                 },
@@ -5643,7 +7700,7 @@ function loadBoardFromData(boardData) {
                 // Apply image-specific styling (height will be calculated by Cytoscape style function)
                 newNode.style({
                     'background-image': cardData.imageData,
-                    'background-fit': 'contain',
+                    'background-fit': 'cover',
                     'width': '300px' // Same as regular cards
                 });
                 
@@ -6039,7 +8096,6 @@ function importFromJSON() {
                             id: cardData.id,
                             title: cardData.title || '',
                             text: cardData.text || '',
-                            label: cardData.label || null, // CRITICAL: Needed for annotation-shape style mapping
                             tags: cardData.tags || [],
                             hidden_tags: hiddenTags,
                             searchMatch: false,
@@ -6069,13 +8125,7 @@ function importFromJSON() {
                             imageData: cardData.imageData || null,
                             annotation: cardData.annotation || null,
                             searchableText: cardData.searchableText || null,
-                            originalFileName: cardData.originalFileName || null,
-                            // IMAGE DIMENSIONS - CRITICAL for maintaining aspect ratio
-                            imageWidth: cardData.imageWidth || null,
-                            imageHeight: cardData.imageHeight || null,
-                            calculatedHeight: cardData.calculatedHeight || null,
-                            displayWidth: cardData.displayWidth || null,
-                            displayHeight: cardData.displayHeight || null
+                            originalFileName: cardData.originalFileName || null
                         },
                         position: cardData.position || { x: Math.random() * 800 + 100, y: Math.random() * 600 + 100 }
                     });
@@ -6142,7 +8192,7 @@ function importFromJSON() {
                         // Apply image-specific styling
                         newNode.style({
                             'background-image': cardData.imageData,
-                            'background-fit': 'contain',
+                            'background-fit': 'cover',
                             'width': '300px'
                         });
                         
@@ -6599,27 +8649,27 @@ function clusterSelectedCards() {
         arrangeCopiedCardsInCluster();
         return;
     }
-
+    
     const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
     if (selectedNodes.length < 2) return;
-
+    
     // Save state for undo
     saveState();
-
+    
     // Get center position (mouse or screen center)
     const arrangePos = getArrangementPosition();
     const centerX = arrangePos.x;
     const centerY = arrangePos.y;
-
+    
     // Small cluster radius
     const radius = 50;
-
+    
     // Arrange in tight circle
     selectedNodes.forEach((node, index) => {
         const angle = (index / selectedNodes.length) * 2 * Math.PI;
         const x = centerX + Math.cos(angle) * radius;
         const y = centerY + Math.sin(angle) * radius;
-
+        
         node.animate({
             position: { x: x, y: y }
         }, {
@@ -6627,205 +8677,8 @@ function clusterSelectedCards() {
             easing: 'ease-out'
         });
     });
-
+    
     console.log(`Q: Klustrade ${selectedNodes.length} kort`);
-}
-
-// X: Tight circular swarm - organic circular layout like Obsidian graph view
-function arrangeCircularSwarm() {
-    const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
-
-    if (selectedNodes.length < 2) {
-        // Show feedback
-        const searchInfo = document.getElementById('searchInfo');
-        if (searchInfo) {
-            searchInfo.textContent = 'X: Markera minst 2 kort först!';
-            searchInfo.classList.add('visible');
-            setTimeout(() => searchInfo.classList.remove('visible'), 2000);
-        }
-        console.log('X: Behöver minst 2 markerade kort');
-        return;
-    }
-
-    // Save state for undo
-    saveState();
-
-    // Get center position (mouse or screen center)
-    const arrangePos = getArrangementPosition();
-    const centerX = arrangePos.x;
-    const centerY = arrangePos.y;
-
-    // Calculate EXTREMELY tight radius - 25% kortare än förut!
-    // 2-3 kort: 11px, 4-6 kort: 15px, 7-12 kort: 16.5-22.5px, 13+ kort: max 30px
-    let radius;
-    if (selectedNodes.length <= 3) {
-        radius = 11;
-    } else if (selectedNodes.length <= 6) {
-        radius = 15;
-    } else if (selectedNodes.length <= 12) {
-        radius = 16.5 + (selectedNodes.length - 6) * 1; // 16.5-22.5px
-    } else {
-        radius = 22.5 + Math.min(selectedNodes.length - 12, 8) * 1; // Max 30px
-    }
-
-    // Configure circle layout for tight circular swarm
-    // Use sweep that's ALMOST 360° to avoid first/last card overlap
-    const sweep = 2 * Math.PI * (selectedNodes.length - 1) / selectedNodes.length;
-
-    const layoutConfig = {
-        name: 'circle',
-        animate: true,
-        animationDuration: 500,
-        animationEasing: 'ease-out',
-        radius: radius,
-        startAngle: 0, // Start at top
-        sweep: sweep, // Don't complete full circle to avoid overlap
-        clockwise: true,
-        sort: undefined, // Keep current order
-        avoidOverlap: true,
-        nodeDimensionsIncludeLabels: true,
-        // Center the circle at mouse position
-        boundingBox: {
-            x1: centerX - radius - 150,
-            y1: centerY - radius - 150,
-            x2: centerX + radius + 150,
-            y2: centerY + radius + 150
-        }
-    };
-
-    // Apply the layout
-    const layout = selectedNodes.layout(layoutConfig);
-    layout.run();
-
-    console.log(`X: Circular swarm med ${selectedNodes.length} kort vid (${Math.round(centerX)}, ${Math.round(centerY)}), radie: ${radius}px`);
-}
-
-// B: Layout with connections - center selected node and arrange connected nodes around it
-function layoutWithConnections() {
-    const selectedNodes = cy.$('node:selected');
-
-    if (selectedNodes.length === 0) {
-        // Show feedback
-        const searchInfo = document.getElementById('searchInfo');
-        if (searchInfo) {
-            searchInfo.textContent = 'B: Markera ett eller flera kort först!';
-            searchInfo.classList.add('visible');
-            setTimeout(() => searchInfo.classList.remove('visible'), 2000);
-        }
-        console.log('B: Inget kort markerat');
-        return;
-    }
-
-    // If multiple nodes selected, find the one with MOST connections (the hub)
-    let centerNode;
-    if (selectedNodes.length > 1) {
-        let maxConnections = 0;
-        selectedNodes.forEach(node => {
-            const connections = node.connectedEdges().length;
-            if (connections > maxConnections) {
-                maxConnections = connections;
-                centerNode = node;
-            }
-        });
-        console.log(`B: Auto-selected hub node with ${maxConnections} connections:`, centerNode.id());
-    } else {
-        centerNode = selectedNodes[0];
-    }
-
-    // Find all connected nodes (via edges)
-    const connectedEdges = centerNode.connectedEdges();
-    const connectedNodes = connectedEdges.connectedNodes().filter(node => node.id() !== centerNode.id());
-
-    console.log(`B: Found ${connectedEdges.length} edges, ${connectedNodes.length} connected nodes`);
-
-    if (connectedNodes.length === 0) {
-        // Show feedback
-        const searchInfo = document.getElementById('searchInfo');
-        if (searchInfo) {
-            searchInfo.textContent = 'B: Inga pilar/linjer funna! Använd annotation-verktyg (D) för att skapa connectioner.';
-            searchInfo.classList.add('visible');
-            setTimeout(() => searchInfo.classList.remove('visible'), 3000);
-        }
-        console.log('B: Inga connectioner hittades för markerat kort');
-        return;
-    }
-
-    // Warn if too few connections for good force-directed layout
-    if (connectedNodes.length < 3) {
-        const searchInfo = document.getElementById('searchInfo');
-        if (searchInfo) {
-            searchInfo.textContent = `B: Bara ${connectedNodes.length} connection(s). För bäst resultat, markera ett kort med 3+ pilar!`;
-            searchInfo.classList.add('visible');
-            setTimeout(() => searchInfo.classList.remove('visible'), 3000);
-        }
-        console.log(`B: Warning - only ${connectedNodes.length} connection(s), may not look dramatic`);
-    }
-
-    // Save state for undo
-    saveState();
-
-    // Show feedback
-    const searchInfo = document.getElementById('searchInfo');
-    if (searchInfo) {
-        searchInfo.textContent = `B: Arrangerar ${connectedNodes.length + 1} kort organiskt runt centrum`;
-        searchInfo.classList.add('visible');
-        setTimeout(() => searchInfo.classList.remove('visible'), 2000);
-    }
-
-    // Combine center node and connected nodes
-    const allNodes = centerNode.union(connectedNodes);
-
-    // Stop any existing live layout
-    if (window.liveLayout) {
-        window.liveLayout.stop();
-        window.liveLayout = null;
-    }
-
-    // Start CONTINUOUS force-directed physics simulation
-    const layoutConfig = {
-        name: 'cose',
-        animate: true,
-
-        // Make it continuous/infinite
-        infinite: true, // Keep simulating forever!
-
-        // Physics settings
-        nodeRepulsion: function(node) { return 20000; }, // Strong repulsion
-        nodeOverlap: 100, // Avoid overlap
-        idealEdgeLength: function(edge) { return 250; }, // Edge length
-        edgeElasticity: function(edge) { return 150; }, // Spring strength
-
-        // Gravity
-        gravity: 0.3, // Pull towards center
-
-        // Temperature/simulation settings
-        numIter: 1000, // Initial iterations
-        initialTemp: 300,
-        coolingFactor: 0.95,
-        minTemp: 1.0,
-
-        // Allow interaction during simulation
-        ungrabifyWhileSimulating: false, // Can drag nodes during simulation!
-
-        // Start from current positions
-        randomize: false,
-
-        // Fit settings
-        fit: true,
-        padding: 100,
-
-        // Other settings
-        avoidOverlap: true,
-        nodeDimensionsIncludeLabels: true
-    };
-
-    console.log(`B: Starting LIVE force-directed physics with ${allNodes.length} nodes`);
-
-    // Start the layout and keep it running
-    window.liveLayout = allNodes.layout(layoutConfig);
-    window.liveLayout.run();
-
-    console.log(`B: LIVE PHYSICS ACTIVATED! Drag nodes to see them repel each other! Press B again to stop.`);
 }
 
 function executeCommand(command) {
@@ -6846,12 +8699,6 @@ function executeCommand(command) {
             break;
         case 'Q':
             clusterSelectedCards();
-            break;
-        case 'X':
-            arrangeCircularSwarm();
-            break;
-        case 'B':
-            layoutWithConnections();
             break;
         case 'C':
             copySelectedCards();
@@ -6928,30 +8775,310 @@ function executeCommand(command) {
     }
 }
 
-function toggleSepiaTheme() {
-    const body = document.body;
-    const themeBtn = document.getElementById('themeBtn');
-
-    body.classList.remove('dark-theme', 'eink-theme');
-    body.classList.add('sepia-theme');
-    themeBtn.innerHTML = '📄 E-ink';
-    localStorage.setItem('theme', 'sepia');
-    applyCardTheme('sepia');
+function debugDumpPositions() {
+    console.log('\n=== KORT POSITIONER DEBUG ===');
+    cy.nodes().forEach(node => {
+        const pos = node.position();
+        const title = node.data('title') || 'Untitled';
+        console.log(`${node.id()}: x: ${Math.round(pos.x)}, y: ${Math.round(pos.y)} - "${title}"`);
+    });
+    console.log('=== SLUT DEBUG ===\n');
+    
+    const searchInfo = document.getElementById('searchInfo');
+    if (searchInfo) {
+        searchInfo.textContent = 'Kort-positioner dumpade till console (F12)';
+        searchInfo.classList.add('visible');
+        setTimeout(() => {
+            searchInfo.classList.remove('visible');
+        }, 3000);
+    }
 }
 
-function toggleEInkTheme() {
+function toggleDarkTheme() {
     const body = document.body;
     const themeBtn = document.getElementById('themeBtn');
 
-    body.classList.remove('dark-theme', 'sepia-theme');
-    body.classList.add('eink-theme');
-    themeBtn.innerHTML = '☀️ Ljust';
-    localStorage.setItem('theme', 'eink');
-    applyCardTheme('eink');
+    let currentTheme = 'light';
+    if (body.classList.contains('dark-theme')) {
+        currentTheme = 'dark';
+    } else if (body.classList.contains('sepia-theme')) {
+        currentTheme = 'sepia';
+    } else if (body.classList.contains('eink-theme')) {
+        currentTheme = 'eink';
+    }
+
+    // Cycle through themes: light -> dark -> sepia -> eink -> light
+    if (currentTheme === 'light') {
+        body.classList.remove('eink-theme', 'sepia-theme');
+        body.classList.add('dark-theme');
+        themeBtn.innerHTML = '📜 Sepia';
+        localStorage.setItem('theme', 'dark');
+        applyCardTheme('dark');
+    } else if (currentTheme === 'dark') {
+        body.classList.remove('dark-theme', 'eink-theme');
+        body.classList.add('sepia-theme');
+        themeBtn.innerHTML = '📄 E-ink';
+        localStorage.setItem('theme', 'sepia');
+        applyCardTheme('sepia');
+    } else if (currentTheme === 'sepia') {
+        body.classList.remove('dark-theme', 'sepia-theme');
+        body.classList.add('eink-theme');
+        themeBtn.innerHTML = '☀️ Ljust';
+        localStorage.setItem('theme', 'eink');
+        applyCardTheme('eink');
+    } else {
+        body.classList.remove('dark-theme', 'sepia-theme', 'eink-theme');
+        themeBtn.innerHTML = '🌙 Mörkt';
+        localStorage.setItem('theme', 'light');
+        applyCardTheme('light');
+    }
 }
 
 // Get card color value based on theme
+function getCardColorValue(colorId, theme) {
+    const colors = {
+        light: {
+            1: '#d4f2d4', // Grön
+            2: '#ffe4b3', // Orange
+            3: '#ffc1cc', // Röd
+            4: '#fff7b3', // Gul
+            5: '#f3e5f5', // Lila
+            6: '#c7e7ff', // Blå
+            7: '#e0e0e0', // Grå
+            8: '#ffffff'  // Vit
+        },
+        dark: {
+            1: '#3d5a3d', // Mörk Grön
+            2: '#5a4d3a', // Mörk Orange
+            3: '#5a3c3a', // Mörk Röd
+            4: '#5a5a3a', // Mörk Gul
+            5: '#4a3d5a', // Mörk Lila
+            6: '#2e4a6f', // Mörk Blå
+            7: '#555555', // Mörk Grå
+            8: '#8a8a8a'  // Ljusgrå (vit blir för ljus i dark theme)
+        },
+        sepia: {
+            1: '#ded6c7', // Sepia Grön
+            2: '#e6d6c2', // Sepia Orange
+            3: '#ead6c7', // Sepia Röd
+            4: '#ebe2d6', // Sepia Gul
+            5: '#e2d6c7', // Sepia Lila
+            6: '#d6c7b3', // Sepia Blå
+            7: '#c0b8a8', // Sepia Grå
+            8: '#f5f2e8'  // Sepia Vit
+        }
+    };
+    
+    // Extract number from colorId (card-color-1 -> 1)
+    const colorNumber = colorId.toString().replace('card-color-', '');
+    
+    return colors[theme] && colors[theme][colorNumber] ? colors[theme][colorNumber] : null;
+}
+
+function applyCardTheme(theme) {
+    if (cy) {
+        if (theme === 'dark') {
+            // Dark theme styling
+            cy.style()
+                .selector('node').style({
+                    'background-color': function(node) {
+                        const cardColor = node.data('cardColor');
+                        if (cardColor) {
+                            // Color priority: if card has color, use it regardless of theme
+                            return getCardColorValue(cardColor, 'dark');
+                        }
+                        return '#2a2a2a';
+                    },
+                    'color': '#f0f0f0',
+                    'border-color': '#555'
+                })
+                .selector('node:selected').style({
+                    'border-color': '#66b3ff',  // Bright blue for visibility
+                    'border-width': 5,
+                    'box-shadow': '0 0 25px rgba(102, 179, 255, 0.8)'
+                })
+                .selector('node.search-match').style({
+                    'background-color': '#4a3c00',  // Dark yellow background
+                    'border-color': '#ffcc00',     // Bright yellow border
+                    'border-width': 3,
+                    'box-shadow': '0 0 15px rgba(255, 204, 0, 0.6)'
+                })
+                .selector('node.pinned').style({
+                    'border-color': '#4caf50',  // Bright green
+                    'border-width': 4,
+                    'box-shadow': '0 0 15px rgba(76, 175, 80, 0.6)'
+                })
+                .selector('node.temporal-marked').style({
+                    'border-width': function(node) {
+                        return node.data('temporalBorderWidth') || 6;
+                    },
+                    'border-color': function(node) {
+                        return node.data('temporalBorderColor') || '#ff4500';
+                    }
+                })
+                .update();
+        } else if (theme === 'sepia') {
+            // Sepia theme styling
+            cy.style()
+                .selector('node').style({
+                    'background-color': function(node) {
+                        const cardColor = node.data('cardColor');
+                        if (cardColor) {
+                            return getCardColorValue(cardColor, 'sepia');
+                        }
+                        return '#f0e6d2';
+                    },
+                    'color': '#5d4e37',
+                    'border-color': '#c8a882'
+                })
+                .selector('node:selected').style({
+                    'border-color': '#8b7556',  // Dark brown for sepia
+                    'border-width': 4,
+                    'box-shadow': '0 0 20px rgba(139, 117, 86, 0.7)'
+                })
+                .selector('node.search-match').style({
+                    'background-color': '#f4e8d0',  // Light sepia highlight
+                    'border-color': '#d2691e',     // Chocolate border
+                    'border-width': 2,
+                    'box-shadow': '0 0 10px rgba(210, 105, 30, 0.5)'
+                })
+                .selector('node.pinned').style({
+                    'border-color': '#8fbc8f',  // Dark sea green for sepia
+                    'border-width': 4,
+                    'box-shadow': '0 0 15px rgba(143, 188, 143, 0.6)'
+                })
+                .selector('node.temporal-marked').style({
+                    'border-width': function(node) {
+                        return node.data('temporalBorderWidth') || 6;
+                    },
+                    'border-color': function(node) {
+                        return node.data('temporalBorderColor') || '#ff4500';
+                    }
+                })
+                .update();
+        } else if (theme === 'eink') {
+            // E-ink theme styling - no shadows, sharp contrast
+            cy.style()
+                .selector('node').style({
+                    'background-color': function(node) {
+                        const cardColor = node.data('cardColor');
+                        if (cardColor) {
+                            // Keep card colors - user said it's OK
+                            return getCardColorValue(cardColor, 'light');
+                        }
+                        return '#ffffff';
+                    },
+                    'color': '#000000',
+                    'border-color': '#000000',
+                    'border-width': 2
+                })
+                .selector('node:selected').style({
+                    'border-color': '#000000',
+                    'border-width': 4,
+                    'box-shadow': 'none'  // No shadows for e-ink
+                })
+                .selector('node.search-match').style({
+                    'background-color': '#f0f0f0',
+                    'border-color': '#000000',
+                    'border-width': 3,
+                    'box-shadow': 'none'  // No shadows for e-ink
+                })
+                .selector('node.pinned').style({
+                    'border-color': '#000000',
+                    'border-width': 4,
+                    'box-shadow': 'none'  // No shadows for e-ink
+                })
+                .selector('node.temporal-marked').style({
+                    'border-width': function(node) {
+                        return node.data('temporalBorderWidth') || 4;
+                    },
+                    'border-color': '#000000'  // All black for e-ink
+                })
+                .update();
+        } else {
+            // Light theme styling (default)
+            cy.style()
+                .selector('node').style({
+                    'background-color': function(node) {
+                        const cardColor = node.data('cardColor');
+                        if (cardColor) {
+                            return getCardColorValue(cardColor, 'light');
+                        }
+                        return '#ffffff';
+                    },
+                    'color': '#333333',
+                    'border-color': '#ddd'
+                })
+                .selector('node:selected').style({
+                    'border-color': '#1565c0',
+                    'border-width': 4,
+                    'box-shadow': '0 0 20px rgba(21, 101, 192, 0.7)'
+                })
+                .selector('node.search-match').style({
+                    'background-color': '#fff9c4',
+                    'border-color': '#f57f17',
+                    'border-width': 2,
+                    'box-shadow': '0 0 10px rgba(245, 127, 23, 0.4)'
+                })
+                .selector('node.pinned').style({
+                    'border-color': '#2e7d32',
+                    'border-width': 4,
+                    'box-shadow': '0 0 15px rgba(46, 125, 50, 0.6)'
+                })
+                .selector('node.temporal-marked').style({
+                    'border-width': function(node) {
+                        return node.data('temporalBorderWidth') || 6;
+                    },
+                    'border-color': function(node) {
+                        return node.data('temporalBorderColor') || '#ff4500';
+                    }
+                })
+                .update();
+        }
+    }
+}
+
 // Load saved theme on page load
+function loadSavedTheme() {
+    const savedTheme = localStorage.getItem('theme') || localStorage.getItem('darkTheme'); // Backward compatibility
+    const themeBtn = document.getElementById('themeBtn');
+
+    // Handle backward compatibility
+    let theme = 'light';
+    if (savedTheme === 'dark' || savedTheme === 'true') {
+        theme = 'dark';
+    } else if (savedTheme === 'sepia') {
+        theme = 'sepia';
+    } else if (savedTheme === 'eink') {
+        theme = 'eink';
+    }
+
+    if (theme === 'dark') {
+        document.body.classList.add('dark-theme');
+        if (themeBtn) {
+            themeBtn.innerHTML = '📜 Sepia';
+        }
+        setTimeout(() => applyCardTheme('dark'), 100);
+    } else if (theme === 'sepia') {
+        document.body.classList.add('sepia-theme');
+        if (themeBtn) {
+            themeBtn.innerHTML = '📄 E-ink';
+        }
+        setTimeout(() => applyCardTheme('sepia'), 100);
+    } else if (theme === 'eink') {
+        document.body.classList.add('eink-theme');
+        if (themeBtn) {
+            themeBtn.innerHTML = '☀️ Ljust';
+        }
+        setTimeout(() => applyCardTheme('eink'), 100);
+    } else {
+        if (themeBtn) {
+            themeBtn.innerHTML = '🌙 Mörkt';
+        }
+        setTimeout(() => applyCardTheme('light'), 100);
+    }
+}
+
 function clearBoard() {
     if (confirm('Är du säker på att du vill rensa hela brädan och localStorage?\n\nDetta kommer att:\n• Ta bort alla kort från brädan\n• Rensa sparad data i localStorage\n• Återställa till tom bräda\n\nDenna åtgärd kan inte ångras!')) {
         // Clear memoization cache
@@ -7197,14 +9324,6 @@ function createSimplifiedToolbar() {
     sortBtn.style.cssText = 'padding: 8px 12px;';
     sortBtn.onclick = (event) => showSortMenu(event);
 
-    // Keyboard shortcuts button
-    const shortcutsBtn = document.createElement('button');
-    shortcutsBtn.innerHTML = '⌨️';
-    shortcutsBtn.className = 'toolbar-btn';
-    shortcutsBtn.title = 'Visa kortkommandon (Ctrl+Q)';
-    shortcutsBtn.style.cssText = 'padding: 8px 12px;';
-    shortcutsBtn.onclick = showKeyboardShortcutsDialog;
-
     // Toggle to full toolbar button
     const expandBtn = document.createElement('button');
     expandBtn.innerHTML = '⚙️ Meny';
@@ -7217,7 +9336,6 @@ function createSimplifiedToolbar() {
     simplifiedDiv.appendChild(driveImagesBtn);
     simplifiedDiv.appendChild(searchBtn);
     simplifiedDiv.appendChild(sortBtn);
-    simplifiedDiv.appendChild(shortcutsBtn);
     simplifiedDiv.appendChild(expandBtn);
 
     toolbar.appendChild(simplifiedDiv);
@@ -7689,23 +9807,8 @@ function addNewCard() {
 
 // Zoom out to center (mobile function)
 function zoomOutToCenter() {
-    if (!cy) {
-        console.error('Cytoscape not initialized');
-        return;
-    }
-
-    const nodes = cy.nodes();
-    if (nodes.length === 0) {
-        console.log('No nodes to zoom to');
-        return;
-    }
-
-    try {
-        cy.fit(nodes, 50); // Fit all nodes with 50px padding
-        cy.center(); // Center the view
-    } catch (error) {
-        console.error('Error zooming out:', error);
-    }
+    cy.fit(null, 50); // Fit all nodes with 50px padding
+    cy.center(); // Center the view
 }
 
 // Helper function to create node from card data (handles both regular and image nodes)
@@ -7749,7 +9852,7 @@ function createNodeFromCardData(cardData, newId, position) {
     if (cardData.type === 'image' && cardData.imageData) {
         newNode.style({
             'background-image': cardData.imageData,
-            'background-fit': 'contain',
+            'background-fit': 'cover',
             'width': '300px'
         });
         console.log(`📷 Created image copy: ${cardData.originalFileName}`);
@@ -8229,11 +10332,179 @@ function showFormDialog(x, y) {
 }
 
 // Create card from form data
+function createCardFromForm(x, y, selectedColor = '') {
+    const title = document.getElementById('formTitle').value.trim();
+    const text = document.getElementById('formText').value.trim();
+    const tagsInput = document.getElementById('formTags').value.trim();
+    
+    if (!text) return; // Need at least some text
+    
+    const tags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(t => t) : [];
+    
+    const newId = generateCardId();
+    const nodeData = {
+        id: newId,
+        title: title,
+        text: text,
+        tags: tags,
+        searchMatch: false
+    };
+    
+    // Add color if selected
+    if (selectedColor) {
+        nodeData.cardColor = selectedColor;
+    }
+    
+    const newNode = cy.add({
+        data: nodeData,
+        position: { x: x, y: y }
+    });
+    
+    // Apply color styling if selected
+    if (selectedColor) {
+        newNode.style('background-color', getCardColorValue(selectedColor, getCurrentTheme()));
+    }
+    
+    newNode.grabify();
+    console.log(`Created card via form: ${title || 'Untitled'} ${selectedColor ? 'with color ' + selectedColor : ''}`);
+    
+    // Apply temporal markings to newly created card
+    setTimeout(() => {
+        applyTemporalMarkings();
+    }, 100);
+}
 
+// Code syntax dialog for quick card creation
+function showCodeDialog(x, y) {
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.5); z-index: 2000;
+        display: flex; align-items: center; justify-content: center;
+    `;
+    
+    // Create code dialog
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+        background: white; padding: 20px; border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3); width: 500px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    `;
+    
+    dialog.innerHTML = `
+        <h3 style="margin: 0 0 10px 0; color: #333;">Snabbformat</h3>
+        <p style="margin: 0 0 15px 0; color: #666; font-size: 14px;">
+            #Titel<br>Innehåll här (Shift+Enter för ny rad)<br>#tag1 #tag2
+            <br><strong>Enter</strong>=Spara, <strong>Esc</strong>=Avbryt
+        </p>
+        <textarea id="codeInput" placeholder="#Titel här
+Skriv ditt innehåll här...
+#tag1 #tag2" 
+            style="width: 100%; height: 120px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; 
+                   font-family: 'SF Mono', Consolas, monospace; font-size: 14px; resize: vertical;"></textarea>
+    `;
+    
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    
+    const textarea = document.getElementById('codeInput');
+    textarea.focus();
+    
+    // Keyboard shortcuts
+    textarea.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            createCardFromCode(x, y, textarea.value);
+            document.body.removeChild(overlay);
+        }
+        else if (e.key === 'Escape') {
+            e.preventDefault();
+            document.body.removeChild(overlay);
+        }
+        // Shift+Enter allows normal newline (no preventDefault)
+    });
+    
+    // Click outside to cancel
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) {
+            document.body.removeChild(overlay);
+        }
+    });
+}
 
-
-
-
+// Parse code syntax and create card
+function createCardFromCode(x, y, input) {
+    if (!input.trim()) return;
+    
+    const lines = input.trim().split('\n');
+    let title = '';
+    let text = '';
+    let tags = [];
+    
+    let inContent = false;
+    
+    for (let line of lines) {
+        line = line.trim();
+        if (!line) continue;
+        
+        if (line.startsWith('#') && !inContent) {
+            // First # line is title, rest are tags
+            if (!title) {
+                title = line.substring(1).trim();
+                inContent = true;
+            } else {
+                // Tags line - extract all #tag words
+                const tagMatches = line.match(/#\w+/g);
+                if (tagMatches) {
+                    tags.push(...tagMatches.map(t => t.substring(1)));
+                }
+            }
+        } else if (line.startsWith('#') && inContent) {
+            // Tags in content
+            const tagMatches = line.match(/#\w+/g);
+            if (tagMatches) {
+                tags.push(...tagMatches.map(t => t.substring(1)));
+            }
+        } else {
+            // Content line
+            if (text) text += '\n';
+            text += line;
+            inContent = true;
+        }
+    }
+    
+    // If no title found, use first line of text
+    if (!title && text) {
+        const firstLine = text.split('\n')[0];
+        if (firstLine.length < 50) {
+            title = firstLine;
+            text = text.substring(firstLine.length).trim();
+        }
+    }
+    
+    if (!text && !title) return; // Need something
+    
+    const newId = generateCardId();
+    const newNode = cy.add({
+        data: {
+            id: newId,
+            title: title,
+            text: text || title, // Use title as text if no content
+            tags: [...new Set(tags)], // Remove duplicates
+            searchMatch: false
+        },
+        position: { x: x, y: y }
+    });
+    
+    newNode.grabify();
+    console.log(`Created card via code syntax: ${title || 'Untitled'}`);
+    
+    // Apply temporal markings to newly created card
+    setTimeout(() => {
+        applyTemporalMarkings();
+    }, 100);
+}
 
 // G+T: Copy cards in top-aligned grid
 function arrangeCopiedCardsGridTopAligned() {
@@ -8348,12 +10619,405 @@ function arrangeCopiedCardsInCluster() {
     console.log(`Q: Created and clustered ${newNodes.length} copied cards`);
 }
 
-
+// Quick note dialog for Alt+N
+function showQuickNoteDialog() {
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.5); z-index: 2000;
+        display: flex; align-items: center; justify-content: center;
+    `;
+    
+    // Create quick note dialog
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+        background: white; padding: 20px; border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3); width: 500px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    `;
+    
+    dialog.innerHTML = `
+        <h3 style="margin: 0 0 10px 0; color: #333;">Snabb Anteckning</h3>
+        <p style="margin: 0 0 15px 0; color: #666; font-size: 14px;">
+            Första raden = Titel<br>
+            Resten = Innehåll (Shift+Enter för ny rad)<br>
+            #taggar hittas automatiskt överallt<br>
+            <strong>Enter</strong>=Spara, <strong>Esc</strong>=Avbryt
+        </p>
+        <textarea id="quickNoteInput" placeholder="Min titel här
+Här skriver jag mitt innehåll...
+Kan ha #taggar överallt.
+#extra #taggar #här" 
+            style="width: 100%; height: 120px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; 
+                   font-family: 'SF Mono', Consolas, monospace; font-size: 14px; resize: vertical;"></textarea>
+    `;
+    
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    
+    const textarea = document.getElementById('quickNoteInput');
+    textarea.focus();
+    
+    // Keyboard shortcuts - same as code dialog
+    textarea.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            createCardFromQuickNote(textarea.value);
+            document.body.removeChild(overlay);
+        }
+        else if (e.key === 'Escape') {
+            e.preventDefault();
+            document.body.removeChild(overlay);
+        }
+        // Shift+Enter allows normal newline
+    });
+    
+    // Click outside to cancel
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) {
+            document.body.removeChild(overlay);
+        }
+    });
+    
+    // ESC handling for focus issues
+    function handleEscape(e) {
+        if (e.key === 'Escape') {
+            document.body.removeChild(overlay);
+            document.removeEventListener('keydown', handleEscape);
+        }
+    }
+    document.addEventListener('keydown', handleEscape);
+}
 
 // Parse quick note and create card
+function createCardFromQuickNote(input) {
+    if (!input.trim()) return;
+    
+    const lines = input.trim().split('\n');
+    if (lines.length === 0) return;
+    
+    // First line is always title
+    const title = lines[0].trim();
+    
+    // Rest is content (skip first line)
+    let contentLines = lines.slice(1);
+    
+    // Check if last line contains only tags (and has at least one #tag)
+    let extraTags = [];
+    if (contentLines.length > 0) {
+        const lastLine = contentLines[contentLines.length - 1].trim();
+        const hasOnlyTags = /^(#\w+\s*)+$/.test(lastLine); // Only #tags and whitespace
+        
+        if (hasOnlyTags && lastLine.includes('#')) {
+            // Extract tags from last line and remove it from content
+            const tagMatches = lastLine.match(/#\w+/g);
+            if (tagMatches) {
+                extraTags = tagMatches.map(t => t.substring(1));
+            }
+            contentLines = contentLines.slice(0, -1); // Remove last line from content
+        }
+    }
+    
+    // Join remaining content lines
+    const text = contentLines.join('\n').trim();
+    
+    // Find all #tags in title and content
+    let allTags = [...extraTags];
+    const allText = (title + ' ' + text);
+    const tagMatches = allText.match(/#\w+/g);
+    if (tagMatches) {
+        allTags.push(...tagMatches.map(t => t.substring(1)));
+    }
+    
+    // Remove duplicates and filter out empty tags
+    const uniqueTags = [...new Set(allTags)].filter(tag => tag.length > 0);
+    
+    // Use screen center as position (no mouse position for keyboard shortcut)
+    const viewport = cy.extent();
+    const centerX = (viewport.x1 + viewport.x2) / 2;
+    const centerY = (viewport.y1 + viewport.y2) / 2;
+    
+    const newId = generateCardId();
+    const newNode = cy.add({
+        data: {
+            id: newId,
+            title: title,
+            text: text || title, // Use title as text if no content
+            tags: uniqueTags,
+            searchMatch: false
+        },
+        position: { x: centerX, y: centerY }
+    });
+    
+    newNode.grabify();
+    console.log(`Created quick note: "${title}" with ${uniqueTags.length} tags`);
+}
 
+// Edit card - unified for all card types (including images)
+function editCard(node) {
+    // Clear any existing edit dialogs first
+    clearAllEditDialogs();
+    
+    // Handle image nodes differently - use annotation field for text
+    const isImageNode = node.data('type') === 'image';
+    const currentText = isImageNode ? (node.data('annotation') || '') : (node.data('text') || '');
+    const currentTags = node.data('tags') || [];
+    
+    // Create overlay for editing (unified UI without title)
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.7); z-index: 10000;
+        display: flex; justify-content: center; align-items: center;
+    `;
+    
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+        background: white; padding: 20px; border-radius: 10px;
+        max-width: 500px; width: 90%; max-height: 80vh;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        box-sizing: border-box;
+    `;
+    
+    dialog.innerHTML = `
+        <h3 style="margin-top: 0; color: #333; font-size: 18px;">Redigera kort</h3>
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #555;">Text:</label>
+            <textarea id="editCardText" 
+                style="width: 100%; height: 200px; font-family: inherit; font-size: 14px; 
+                       border: 1px solid #ccc; border-radius: 4px; padding: 8px;
+                       box-sizing: border-box; resize: vertical;">${currentText}</textarea>
+        </div>
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #555;">Färg (valfritt):</label>
+            <div id="editCardColorPicker" style="display: flex; gap: 8px; align-items: center;">
+                <div class="color-dot" data-color="" style="width: 24px; height: 24px; border-radius: 50%; 
+                     background: #f5f5f5; border: 2px solid #ddd; cursor: pointer; position: relative;"
+                     title="Ingen färg">
+                    <span style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+                          font-size: 16px; color: #666;">⭘</span>
+                </div>
+                <div class="color-dot" data-color="1" style="width: 24px; height: 24px; border-radius: 50%; 
+                     background: #d4f2d4; border: 2px solid transparent; cursor: pointer;" title="Grön"></div>
+                <div class="color-dot" data-color="2" style="width: 24px; height: 24px; border-radius: 50%; 
+                     background: #ffe4b3; border: 2px solid transparent; cursor: pointer;" title="Orange"></div>
+                <div class="color-dot" data-color="3" style="width: 24px; height: 24px; border-radius: 50%; 
+                     background: #ffc1cc; border: 2px solid transparent; cursor: pointer;" title="Röd"></div>
+                <div class="color-dot" data-color="4" style="width: 24px; height: 24px; border-radius: 50%; 
+                     background: #fff7b3; border: 2px solid transparent; cursor: pointer;" title="Gul"></div>
+                <div class="color-dot" data-color="5" style="width: 24px; height: 24px; border-radius: 50%; 
+                     background: #f3e5f5; border: 2px solid transparent; cursor: pointer;" title="Lila"></div>
+                <div class="color-dot" data-color="6" style="width: 24px; height: 24px; border-radius: 50%; 
+                     background: #c7e7ff; border: 2px solid transparent; cursor: pointer;" title="Blå"></div>
+                <div class="color-dot" data-color="7" style="width: 24px; height: 24px; border-radius: 50%; 
+                     background: #e0e0e0; border: 2px solid transparent; cursor: pointer;" title="Grå"></div>
+                <div class="color-dot" data-color="8" style="width: 24px; height: 24px; border-radius: 50%; 
+                     background: #ffffff; border: 2px solid transparent; cursor: pointer;" title="Vit"></div>
+            </div>
+        </div>
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #555;">Tags (valfritt):</label>
+            <input type="text" id="editCardTags" value="${currentTags.join(', ')}"
+                style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;
+                       box-sizing: border-box; font-size: 14px;">
+        </div>
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #555;">📅 Snabbveckor:</label>
+            <div id="editWeekButtons" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <!-- Week buttons will be populated by JavaScript -->
+            </div>
+        </div>
+        <div style="text-align: right;">
+            <button id="cancelEdit" style="background: #666; color: white; border: none; 
+                                         padding: 10px 20px; border-radius: 4px; margin-right: 10px;
+                                         cursor: pointer; font-size: 14px;">Avbryt</button>
+            <button id="saveEdit" style="background: #007acc; color: white; border: none; 
+                                        padding: 10px 20px; border-radius: 4px; cursor: pointer;
+                                        font-size: 14px;">Spara ändringar</button>
+        </div>
+        <div style="margin-top: 10px; font-size: 12px; color: #666;">
+            <strong>Tips:</strong> Enter = ny rad, Ctrl+Enter = spara, Esc = avbryt
+        </div>
+    `;
+    
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    
+    // Focus on textarea and select all text
+    const textarea = document.getElementById('editCardText');
+    textarea.focus();
+    textarea.select();
+    
+    // Handle color picker selection and show current color
+    let selectedColor = '';
+    const currentCardColor = node.data('cardColor') || '';
+    const currentColorNumber = currentCardColor.replace('card-color-', '') || '';
+    
+    const colorDots = document.querySelectorAll('#editCardColorPicker .color-dot');
+    colorDots.forEach(dot => {
+        // Show current color as selected
+        if (dot.dataset.color === currentColorNumber) {
+            dot.style.border = '2px solid #007acc';
+            selectedColor = currentColorNumber;
+        } else if (!currentColorNumber && dot.dataset.color === '') {
+            dot.style.border = '2px solid #007acc';
+            selectedColor = '';
+        }
+        
+        dot.addEventListener('click', function() {
+            // Remove selection from all dots
+            colorDots.forEach(d => d.style.border = d.dataset.color ? '2px solid transparent' : '2px solid #ddd');
+            
+            // Select this dot
+            this.style.border = '2px solid #007acc';
+            selectedColor = this.dataset.color;
+        });
+    });
+    
+    // Populate week buttons
+    const weekData = getCurrentWeekData();
+    const weekButtonsContainer = document.getElementById('editWeekButtons');
+    const weekButtons = [
+        { text: weekData.thisWeek, label: 'denna vecka', title: 'Denna vecka' },
+        { text: weekData.nextWeek, label: 'nästa vecka', title: 'Nästa vecka' },
+        { text: weekData.weekAfter, label: 'nästnästa vecka', title: 'Veckan efter nästa' }
+    ];
+    
+    weekButtons.forEach(btn => {
+        const weekBtn = document.createElement('button');
+        weekBtn.type = 'button';
+        weekBtn.innerHTML = `<strong>${btn.text}</strong><br><small>${btn.label}</small>`;
+        weekBtn.title = btn.title;
+        weekBtn.style.cssText = `
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 12px;
+            line-height: 1.2;
+            transition: all 0.2s ease;
+            text-align: center;
+            min-width: 70px;
+        `;
+        
+        weekBtn.addEventListener('mouseenter', function() {
+            this.style.background = '#e9ecef';
+            this.style.borderColor = '#007acc';
+        });
+        
+        weekBtn.addEventListener('mouseleave', function() {
+            this.style.background = '#f8f9fa';
+            this.style.borderColor = '#dee2e6';
+        });
+        
+        weekBtn.addEventListener('click', function() {
+            const tagsInput = document.getElementById('editCardTags');
+            const currentTags = tagsInput.value.trim();
+            const weekTag = btn.text;
+            
+            if (currentTags) {
+                // Add to existing tags
+                if (!currentTags.includes(weekTag)) {
+                    tagsInput.value = currentTags + ', ' + weekTag;
+                }
+            } else {
+                // First tag
+                tagsInput.value = weekTag;
+            }
+            
+            // Visual feedback
+            this.style.background = '#d4edda';
+            this.style.borderColor = '#28a745';
+            setTimeout(() => {
+                this.style.background = '#f8f9fa';
+                this.style.borderColor = '#dee2e6';
+            }, 500);
+        });
+        
+        weekButtonsContainer.appendChild(weekBtn);
+    });
+    
+    // Handle keyboard shortcuts with proper cleanup
+    function cleanup() {
+        if (document.body.contains(overlay)) {
+            document.body.removeChild(overlay);
+        }
+        document.removeEventListener('keydown', handleEscape);
+    }
+    
+    function handleEscape(e) {
+        if (e.key === 'Escape') {
+            cleanup();
+        }
+    }
+    
+    // Handle save
+    document.getElementById('saveEdit').onclick = function() {
+        const newText = textarea.value.trim();
+        const tagsInput = document.getElementById('editCardTags').value || '';
+        const newTags = tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag);
+        
+        // Allow saving with just tags (no text required)
+        if (!newText && newTags.length === 0) {
+            alert('Antingen text eller minst en tagg krävs');
+            return;
+        }
+        
+        if (isImageNode) {
+            // For image nodes, save to annotation field and update searchable text
+            node.data('annotation', newText);
+            node.data('searchableText', newText.toLowerCase());
+            
+            // Update title to show annotation indicator
+            // Don't show filename in title, keep title empty for clean image display
+            node.data('title', '');
+        } else {
+            // For regular nodes, save to text field
+            node.data('text', newText);
+        }
+        
+        node.data('tags', newTags);
+        
+        // Apply selected color if any
+        if (selectedColor) {
+            node.data('cardColor', `card-color-${selectedColor}`);
+        } else if (selectedColor === '') {
+            // Remove color if "no color" was selected
+            node.data('cardColor', null);
+        }
+        
+        // Apply auto-gray coloring for #done tags
+        applyAutoDoneColoring(node);
 
+        // Force refresh of node styling
+        cy.style().update();
 
+        refreshSearchAndFilter();
+
+        // Save immediately to prevent data loss from autosave/Drive sync
+        saveBoard();
+
+        cleanup();
+    };
+    
+    // Handle cancel
+    document.getElementById('cancelEdit').onclick = function() {
+        cleanup();
+    };
+    
+    // Handle keyboard shortcuts
+    textarea.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && e.key === 'Enter') {
+            document.getElementById('saveEdit').click();
+        } else if (e.key === 'Escape') {
+            cleanup();
+        }
+    });
+    
+    document.addEventListener('keydown', handleEscape);
+}
 
 // DEPRECATED - Edit manually created cards with textarea popup
 // Now using unified editCard() function instead
@@ -8783,14 +11447,6 @@ function isTokenExpiringSoon() {
 // Show remember me dialog before first login
 function showRememberMeDialog() {
     return new Promise((resolve) => {
-        // DISABLED: Google Drive requires HTTPS (not available on http://127.0.0.1)
-        // Skip dialog and return false (don't remember) to prevent popup spam
-        if (window.location.protocol !== 'https:') {
-            console.warn('⚠️ Google Drive requires HTTPS. Skipping remember-me dialog.');
-            resolve(false);
-            return;
-        }
-
         // Check if user has already made a choice
         const existingPreference = localStorage.getItem('auth_remember_preference');
         if (existingPreference !== null) {
@@ -8948,65 +11604,6 @@ function closeMenuDropdowns() {
     menuDropdowns.forEach(dropdown => {
         dropdown.classList.remove('active');
     });
-    // Close all submenus
-    const submenus = document.querySelectorAll('.submenu');
-    submenus.forEach(submenu => {
-        submenu.style.display = 'none';
-    });
-}
-
-// Initialize submenu interactions
-function initializeSubmenuInteractions() {
-    // Handle submenu clicks on mobile
-    const menuItemsWithSubmenu = document.querySelectorAll('.menu-item-with-submenu > button');
-
-    menuItemsWithSubmenu.forEach(button => {
-        button.addEventListener('click', function(e) {
-            e.stopPropagation();
-
-            const submenu = this.parentElement.querySelector('.submenu');
-            const isCurrentlyOpen = submenu.style.display === 'block';
-
-            // Close all other submenus
-            document.querySelectorAll('.submenu').forEach(s => {
-                if (s !== submenu) {
-                    s.style.display = 'none';
-                }
-            });
-
-            // Toggle this submenu
-            submenu.style.display = isCurrentlyOpen ? 'none' : 'block';
-        });
-    });
-
-    // Close submenus when clicking outside
-    document.addEventListener('click', function(e) {
-        if (!e.target.closest('.menu-dropdown')) {
-            document.querySelectorAll('.submenu').forEach(submenu => {
-                submenu.style.display = 'none';
-            });
-        }
-    });
-
-    // Close submenus when clicking a submenu item (addEventListener approach)
-    const submenuButtons = document.querySelectorAll('.submenu button');
-    submenuButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            // Close all submenus after a short delay to allow the click to process
-            setTimeout(() => {
-                document.querySelectorAll('.submenu').forEach(submenu => {
-                    submenu.style.display = 'none';
-                });
-            }, 100);
-        });
-    });
-}
-
-// Call initialization after DOM is loaded
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeSubmenuInteractions);
-} else {
-    initializeSubmenuInteractions();
 }
 
 // Rename current project
@@ -9095,55 +11692,22 @@ function initializeProjectName() {
 
 // Smart save function - handles Google Drive integration
 async function smartSave() {
-    let localSaveSuccess = false;
-
     try {
-        // Try to save to localStorage first (instant backup)
+        // Always save to localStorage first (instant backup)
         saveBoard();
-        localSaveSuccess = true;
         updateSyncStatus('Sparad lokalt ✓', 'success');
-    } catch (localError) {
-        console.warn('localStorage save failed (likely full), continuing with Google Drive save...', localError);
-        // Don't stop - continue to Google Drive save
-    }
-
-    try {
+        
         // Check if user is signed in to Google Drive
         if (isSignedIn && accessToken) {
             // User is signed in - save to Google Drive with structured filename
             await saveToGoogleDriveWithStructure();
-
-            // If localStorage failed but Google Drive succeeded, show appropriate message
-            if (!localSaveSuccess) {
-                const searchInfo = document.getElementById('searchInfo');
-                searchInfo.textContent = '✅ Sparad till Google Drive (LocalStorage fullt)';
-                searchInfo.classList.add('visible');
-                setTimeout(() => {
-                    searchInfo.classList.remove('visible');
-                }, 5000);
-            }
         } else {
             // User not signed in - offer to sign in
-            if (!localSaveSuccess) {
-                // Both failed - show error
-                const searchInfo = document.getElementById('searchInfo');
-                searchInfo.textContent = '❌ LocalStorage fullt. Logga in på Google Drive eller använd "Spara fil".';
-                searchInfo.classList.add('visible');
-                setTimeout(() => {
-                    searchInfo.classList.remove('visible');
-                }, 8000);
-            } else {
-                // Local save worked, offer Google Drive
-                showGoogleDriveSignInPrompt();
-            }
+            showGoogleDriveSignInPrompt();
         }
-    } catch (driveError) {
-        console.error('Google Drive save error:', driveError);
-        if (!localSaveSuccess) {
-            updateSyncStatus('❌ Båda sparningsmetoderna misslyckades. Använd "Spara fil".', 'error');
-        } else {
-            updateSyncStatus('Sparad lokalt (Google Drive misslyckades)', 'error');
-        }
+    } catch (error) {
+        console.error('Smart save error:', error);
+        updateSyncStatus('Sparning misslyckades', 'error');
     }
 }
 
@@ -10108,7 +12672,7 @@ async function loadFromGoogleDrive() {
 
                         node.style({
                             'background-image': card.imageData,
-                            'background-fit': 'contain',
+                            'background-fit': 'cover',
                             'background-position': 'center',
                             'width': displayWidth + 'px',
                             'height': displayHeight + 'px'
@@ -10426,14 +12990,8 @@ async function deleteProject(projectName) {
 // Auto-sync functionality
 let autoSyncInterval;
 function startAutoSync() {
-    // DISABLED: Google Drive requires HTTPS (not available on http://127.0.0.1)
-    if (window.location.protocol !== 'https:') {
-        console.warn('⚠️ Auto-sync disabled: Google Drive requires HTTPS');
-        return;
-    }
-
     if (!isSignedIn || !accessToken) return;
-
+    
     // Auto-save to Drive every 20 minutes when signed in
     autoSyncInterval = setInterval(async () => {
         if (isSignedIn && accessToken) {
@@ -10691,14 +13249,14 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // (Delete-tangenten hanteras längre ner)
         
-        // S för spara - Smart save with Google Drive integration (NOT in annotation mode)
-        if (e.key === 's' && !e.ctrlKey && !e.altKey && !annotationToolbarVisible) {
+        // S för spara - Smart save with Google Drive integration
+        if (e.key === 's' && !e.ctrlKey && !e.altKey) {
             e.preventDefault();
             smartSave();
         }
-
-        // L för ladda sparad bräda (NOT in annotation mode)
-        if (e.key === 'l' && !e.ctrlKey && !e.altKey && !annotationToolbarVisible) {
+        
+        // L för ladda sparad bräda
+        if (e.key === 'l' && !e.ctrlKey && !e.altKey) {
             e.preventDefault();
             loadBoard();
         }
@@ -10818,25 +13376,7 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             cy.nodes().not('.pinned').select();
         }
-
-        // Ctrl+E för att visa export-meny
-        if (e.ctrlKey && e.key === 'e') {
-            e.preventDefault();
-            showExportMenu();
-        }
-
-        // Ctrl+Q för att visa keyboard shortcuts
-        if (e.ctrlKey && e.key === 'q') {
-            e.preventDefault();
-            showKeyboardShortcutsDialog();
-        }
-
-        // Ctrl+Shift+C för att kopiera markerade kort som Markdown
-        if (e.ctrlKey && e.shiftKey && e.key === 'C') {
-            e.preventDefault();
-            copySelectedAsMarkdown();
-        }
-
+        
         // DEBUG: Ctrl+Shift+D för att dumpa alla kort-positioner
         if (e.ctrlKey && e.shiftKey && e.key === 'D') {
             e.preventDefault();
@@ -10885,66 +13425,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Track keys for combination detection
         window.keysPressed = window.keysPressed || new Set();
-        if (e.key) {
-            window.keysPressed.add(e.key.toLowerCase());
-        }
-
-        // ========== ANNOTATION MODE SHORTCUTS (ONLY when annotation toolbar is active) ==========
-        if (annotationToolbarVisible && !e.ctrlKey && !e.altKey) {
-            // Color shortcuts: Y, R, G, B, P
-            if (e.key === 'y') {
-                e.preventDefault();
-                setAnnotationColor('#f9ca24'); // Yellow
-                showBriefMessage('🎨 Färg: Gul');
-                return;
-            }
-            if (e.key === 'r') {
-                e.preventDefault();
-                setAnnotationColor('#ff6b6b'); // Red
-                showBriefMessage('🎨 Färg: Röd');
-                return;
-            }
-            if (e.key === 'g') {
-                e.preventDefault();
-                setAnnotationColor('#45b7d1'); // Green (actually blue according to user)
-                showBriefMessage('🎨 Färg: Blå');
-                return;
-            }
-            if (e.key === 'b') {
-                e.preventDefault();
-                setAnnotationColor('#4ecdc4'); // Blue (actually turkos according to user)
-                showBriefMessage('🎨 Färg: Turkos');
-                return;
-            }
-            if (e.key === 'p') {
-                e.preventDefault();
-                setAnnotationColor('#a55eea'); // Purple
-                showBriefMessage('🎨 Färg: Lila');
-                return;
-            }
-
-            // Size shortcuts: S, M, L (for textboxes)
-            if (e.key === 's') {
-                e.preventDefault();
-                pendingAnnotationSize = 'text-small';
-                showBriefMessage('📏 Storlek: Small (100x50, font 20)');
-                return;
-            }
-            if (e.key === 'm') {
-                e.preventDefault();
-                pendingAnnotationSize = 'text-medium';
-                showBriefMessage('📏 Storlek: Medium (200x75, font 30)');
-                return;
-            }
-            if (e.key === 'l') {
-                e.preventDefault();
-                pendingAnnotationSize = 'text-large';
-                showBriefMessage('📏 Storlek: Large (300x100, font 50)');
-                return;
-            }
-        }
-        // ========== END ANNOTATION MODE SHORTCUTS ==========
-
+        window.keysPressed.add(e.key.toLowerCase());
+        
         // Handle G+V, G+H, G+T combinations (grid variants for selected cards)
         if (window.keysPressed.has('g') && window.keysPressed.has('v')) {
             e.preventDefault();
@@ -11043,9 +13525,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (e.key === 'q' && !e.ctrlKey && !e.altKey) {
             const now = Date.now();
             const lastQTime = window.lastQPress || 0;
-
+            
             e.preventDefault();
-
+            
             if (now - lastQTime < 500) {
                 // Recent Q press - toggle to the other arrangement
                 const wasCluster = window.lastQWasCluster || true;
@@ -11067,19 +13549,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 window.lastQPress = now;
             }
         }
-
-        // X för circular swarm - organic circular layout (Obsidian-style)
-        if (e.key === 'x' && !e.ctrlKey && !e.altKey) {
-            e.preventDefault();
-            arrangeCircularSwarm();
-        }
-
-        // B för layout with connections - center selected node and arrange connected nodes
-        if (e.key === 'b' && !e.ctrlKey && !e.altKey) {
-            e.preventDefault();
-            layoutWithConnections();
-        }
-
+        
         // Alt+S för neat stack (samma som N)
         if (e.key === 's' && e.altKey && !e.ctrlKey) {
             e.preventDefault();
@@ -11102,8 +13572,8 @@ document.addEventListener('DOMContentLoaded', function() {
             setColumnViewSort('background-color');
         }
         
-        // M för multi-card paste (öppna dialog) (NOT in annotation mode)
-        if (e.key === 'm' && !e.ctrlKey && !e.altKey && !annotationToolbarVisible) {
+        // M för multi-card paste (öppna dialog)
+        if (e.key === 'm' && !e.ctrlKey && !e.altKey) {
             e.preventDefault();
             showMultiCardPasteDialog();
         }
@@ -11118,7 +13588,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Clear pressed keys on keyup for combination detection
     document.addEventListener('keyup', function(e) {
-        if (window.keysPressed && e.key) {
+        if (window.keysPressed) {
             window.keysPressed.delete(e.key.toLowerCase());
         }
     });
@@ -11167,33 +13637,28 @@ document.addEventListener('DOMContentLoaded', function() {
 // Column View Implementation
 let isColumnView = false;
 let columnCardStates = new Map(); // Track which cards show text vs image
-let columnCardEditStates = new Map(); // Track which cards are being edited inline
 
 function toggleView() {
     isColumnView = !isColumnView;
     const btn = document.getElementById('viewToggleBtn');
     const cyContainer = document.getElementById('cy');
     const columnContainer = document.getElementById('columnView');
-
+    
     if (isColumnView) {
         // Switch to column view
-        if (btn) {
-            btn.innerHTML = '🗺️ Brädvy';
-            btn.title = 'Växla tillbaka till brädvy';
-        }
+        btn.innerHTML = '🗺️ Brädvy';
+        btn.title = 'Växla tillbaka till brädvy';
         cyContainer.style.display = 'none';
         columnContainer.style.display = 'block';
         renderColumnViewDebounced();
     } else {
         // Switch to board view
-        if (btn) {
-            btn.innerHTML = '📋 Kolumnvy';
-            btn.title = 'Växla till kolumnvy';
-        }
+        btn.innerHTML = '📋 Kolumnvy';
+        btn.title = 'Växla till kolumnvy';
         cyContainer.style.display = 'block';
         columnContainer.style.display = 'none';
     }
-
+    
     // Save view state to localStorage
     localStorage.setItem('spatial-notes-view', isColumnView ? 'column' : 'board');
 }
@@ -11302,60 +13767,26 @@ let renderColumnViewTimeout = null;
 function renderColumnView() {
     const container = document.getElementById('columnContainer');
     container.innerHTML = '';
-
-
+    
+    
     // Setup background handlers once
     setupColumnBackgroundHandlers();
-
+    
     if (!cy) return;
-
+    
     // Apply temporal markings before rendering
     if (typeof applyTemporalMarkings === 'function') {
         applyTemporalMarkings();
     }
-
-    // Determine if we should filter (search active, selected cards, or tag filter)
-    // BUT: Don't filter if any card is being edited (to keep context visible)
-    const hasSearchMatches = searchActive && cy.$('.search-match').length > 0;
-    const hasSelectedCards = cy.$('node:selected').length > 0;
-    const isEditingAnyCard = columnCardEditStates.size > 0;
-    const showFilteredOnly = (hasSearchMatches || hasSelectedCards) && !isEditingAnyCard;
-
-    // Get nodes - either filtered or all
-    let nodes;
-    if (showFilteredOnly) {
-        if (hasSearchMatches) {
-            // Show only search matches
-            nodes = cy.$('.search-match').stdFilter(function(node) {
-                return !node.data('isAnnotation');
-            });
-        } else {
-            // Show only selected cards
-            nodes = cy.$('node:selected').stdFilter(function(node) {
-                return !node.data('isAnnotation');
-            });
-        }
-    } else {
-        // Show all nodes
-        nodes = cy.nodes().stdFilter(function(node) {
-            return !node.data('isAnnotation'); // Exclude annotation nodes
-        });
-    }
-
+    
+    // Get all nodes and apply automatic sorting
+    let nodes = cy.nodes().stdFilter(function(node) {
+        return !node.data('isAnnotation'); // Exclude annotation nodes
+    });
+    
     // Apply sorting based on current sort preference
     nodes = sortColumnViewNodes(nodes);
-
-    // Show filter indicator if filtered
-    if (showFilteredOnly) {
-        const totalCards = cy.nodes().stdFilter(function(node) {
-            return !node.data('isAnnotation');
-        }).length;
-        const filterInfo = document.createElement('div');
-        filterInfo.style.cssText = 'padding: 12px; background: #e3f2fd; border-left: 4px solid #2196f3; margin-bottom: 16px; font-size: 14px; color: #1976d2;';
-        filterInfo.innerHTML = `📌 Visar <strong>${nodes.length}</strong> av ${totalCards} kort <span style="margin-left: 12px; cursor: pointer; text-decoration: underline;" onclick="clearSearch(); renderColumnView();">Visa alla</span>`;
-        container.appendChild(filterInfo);
-    }
-
+    
     // Use document fragment for better performance
     const fragment = document.createDocumentFragment();
     nodes.forEach(node => {
@@ -11363,7 +13794,7 @@ function renderColumnView() {
         fragment.appendChild(cardDiv);
     });
     container.appendChild(fragment);
-
+    
     // Apply current search highlighting
     updateColumnViewSearch();
 }
@@ -11583,236 +14014,6 @@ function setColumnViewSort(sortType) {
     closeSortMenu();
 }
 
-// Create inline edit area for column view cards
-function createInlineEditArea(node, cardDiv) {
-    const nodeId = node.id();
-    const isImageNode = node.data('type') === 'image';
-    const currentText = isImageNode ? (node.data('annotation') || '') : (node.data('text') || '');
-    const currentTags = node.data('tags') || [];
-    const currentCardColor = node.data('cardColor') || '';
-    const currentColorNumber = currentCardColor.replace('card-color-', '') || '';
-
-    // HTML escape function
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    // Create inline edit container
-    const editArea = document.createElement('div');
-    editArea.className = 'column-card-inline-edit';
-    editArea.dataset.nodeId = nodeId;
-
-    // Build edit interface (similar to editCard but inline)
-    editArea.innerHTML = `
-        <div style="background: #f8f9fa; padding: 15px; border-top: 2px solid #dee2e6; border-radius: 0 0 8px 8px;">
-            <div style="margin-bottom: 12px;">
-                <label style="display: block; margin-bottom: 5px; font-weight: bold; font-size: 12px; color: #555;">Text:</label>
-                <textarea class="inline-edit-textarea"
-                    style="width: 100%; height: 150px; font-family: inherit; font-size: 14px;
-                           border: 1px solid #ccc; border-radius: 4px; padding: 8px;
-                           box-sizing: border-box; resize: vertical;">${escapeHtml(currentText)}</textarea>
-            </div>
-            <div style="margin-bottom: 12px;">
-                <label style="display: block; margin-bottom: 6px; font-weight: bold; font-size: 12px; color: #555;">Färg:</label>
-                <div class="inline-edit-color-picker" style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
-                    <div class="color-dot" data-color="" style="width: 22px; height: 22px; border-radius: 50%;
-                         background: #f5f5f5; border: 2px solid ${currentColorNumber === '' ? '#007acc' : '#ddd'}; cursor: pointer; position: relative;"
-                         title="Ingen färg">
-                        <span style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-                              font-size: 14px; color: #666;">⭘</span>
-                    </div>
-                    <div class="color-dot" data-color="1" style="width: 22px; height: 22px; border-radius: 50%;
-                         background: #d4f2d4; border: 2px solid ${currentColorNumber === '1' ? '#007acc' : 'transparent'}; cursor: pointer;" title="Grön"></div>
-                    <div class="color-dot" data-color="2" style="width: 22px; height: 22px; border-radius: 50%;
-                         background: #ffe4b3; border: 2px solid ${currentColorNumber === '2' ? '#007acc' : 'transparent'}; cursor: pointer;" title="Orange"></div>
-                    <div class="color-dot" data-color="3" style="width: 22px; height: 22px; border-radius: 50%;
-                         background: #ffc1cc; border: 2px solid ${currentColorNumber === '3' ? '#007acc' : 'transparent'}; cursor: pointer;" title="Röd"></div>
-                    <div class="color-dot" data-color="4" style="width: 22px; height: 22px; border-radius: 50%;
-                         background: #fff7b3; border: 2px solid ${currentColorNumber === '4' ? '#007acc' : 'transparent'}; cursor: pointer;" title="Gul"></div>
-                    <div class="color-dot" data-color="5" style="width: 22px; height: 22px; border-radius: 50%;
-                         background: #f3e5f5; border: 2px solid ${currentColorNumber === '5' ? '#007acc' : 'transparent'}; cursor: pointer;" title="Lila"></div>
-                    <div class="color-dot" data-color="6" style="width: 22px; height: 22px; border-radius: 50%;
-                         background: #c7e7ff; border: 2px solid ${currentColorNumber === '6' ? '#007acc' : 'transparent'}; cursor: pointer;" title="Blå"></div>
-                    <div class="color-dot" data-color="7" style="width: 22px; height: 22px; border-radius: 50%;
-                         background: #e0e0e0; border: 2px solid ${currentColorNumber === '7' ? '#007acc' : 'transparent'}; cursor: pointer;" title="Grå"></div>
-                    <div class="color-dot" data-color="8" style="width: 22px; height: 22px; border-radius: 50%;
-                         background: #ffffff; border: 2px solid ${currentColorNumber === '8' ? '#007acc' : 'transparent'}; cursor: pointer;" title="Vit"></div>
-                </div>
-            </div>
-            <div style="margin-bottom: 12px;">
-                <label style="display: block; margin-bottom: 5px; font-weight: bold; font-size: 12px; color: #555;">Tags:</label>
-                <input type="text" class="inline-edit-tags" value="${escapeHtml(currentTags.join(', '))}"
-                    style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;
-                           box-sizing: border-box; font-size: 13px;">
-            </div>
-            <div style="margin-bottom: 12px;">
-                <label style="display: block; margin-bottom: 6px; font-weight: bold; font-size: 12px; color: #555;">📅 Snabbveckor:</label>
-                <div class="inline-edit-week-buttons" style="display: flex; gap: 6px; flex-wrap: wrap;">
-                    <!-- Week buttons will be populated -->
-                </div>
-            </div>
-            <div style="display: flex; justify-content: flex-end; gap: 8px;">
-                <button class="inline-edit-cancel" style="background: #666; color: white; border: none;
-                                     padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 13px;">Avbryt</button>
-                <button class="inline-edit-save" style="background: #007acc; color: white; border: none;
-                                    padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 13px;">Spara</button>
-            </div>
-            <div style="margin-top: 8px; font-size: 11px; color: #666;">
-                <strong>Tips:</strong> Ctrl+Enter = spara, Esc = avbryt
-            </div>
-        </div>
-    `;
-
-    // Get elements
-    const textarea = editArea.querySelector('.inline-edit-textarea');
-    const tagsInput = editArea.querySelector('.inline-edit-tags');
-    const saveBtn = editArea.querySelector('.inline-edit-save');
-    const cancelBtn = editArea.querySelector('.inline-edit-cancel');
-    const colorDots = editArea.querySelectorAll('.color-dot');
-    const weekButtonsContainer = editArea.querySelector('.inline-edit-week-buttons');
-
-    // Track selected color
-    let selectedColor = currentColorNumber;
-
-    // Color picker handler
-    colorDots.forEach(dot => {
-        dot.addEventListener('click', function() {
-            // Remove selection from all dots
-            colorDots.forEach(d => d.style.border = d.dataset.color ? '2px solid transparent' : '2px solid #ddd');
-
-            // Select this dot
-            this.style.border = '2px solid #007acc';
-            selectedColor = this.dataset.color;
-        });
-    });
-
-    // Populate week buttons
-    const weekData = getCurrentWeekData();
-    const weekButtons = [
-        { text: weekData.thisWeek, label: 'denna vecka', title: 'Denna vecka' },
-        { text: weekData.nextWeek, label: 'nästa vecka', title: 'Nästa vecka' },
-        { text: weekData.weekAfter, label: 'nästnästa vecka', title: 'Veckan efter nästa' }
-    ];
-
-    weekButtons.forEach(btn => {
-        const weekBtn = document.createElement('button');
-        weekBtn.type = 'button';
-        weekBtn.innerHTML = `<strong style="font-size: 11px;">${btn.text}</strong><br><small style="font-size: 9px;">${btn.label}</small>`;
-        weekBtn.title = btn.title;
-        weekBtn.style.cssText = `
-            background: #fff;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
-            padding: 6px 10px;
-            cursor: pointer;
-            font-size: 10px;
-            line-height: 1.2;
-            transition: all 0.2s ease;
-            text-align: center;
-            min-width: 60px;
-        `;
-
-        weekBtn.addEventListener('click', function() {
-            const currentTagsValue = tagsInput.value.trim();
-            const weekTag = btn.text;
-
-            if (currentTagsValue) {
-                if (!currentTagsValue.includes(weekTag)) {
-                    tagsInput.value = currentTagsValue + ', ' + weekTag;
-                }
-            } else {
-                tagsInput.value = weekTag;
-            }
-
-            // Visual feedback
-            this.style.background = '#d4edda';
-            this.style.borderColor = '#28a745';
-            setTimeout(() => {
-                this.style.background = '#fff';
-                this.style.borderColor = '#dee2e6';
-            }, 400);
-        });
-
-        weekButtonsContainer.appendChild(weekBtn);
-    });
-
-    // Save handler
-    const saveHandler = () => {
-        const newText = textarea.value.trim();
-        const tagsInputValue = tagsInput.value || '';
-        const newTags = tagsInputValue.split(',').map(tag => tag.trim()).filter(tag => tag);
-
-        if (!newText && newTags.length === 0) {
-            alert('Antingen text eller minst en tagg krävs');
-            return;
-        }
-
-        if (isImageNode) {
-            node.data('annotation', newText);
-            node.data('searchableText', newText.toLowerCase());
-            node.data('title', '');
-        } else {
-            node.data('text', newText);
-        }
-
-        node.data('tags', newTags);
-
-        if (selectedColor) {
-            node.data('cardColor', `card-color-${selectedColor}`);
-        } else if (selectedColor === '') {
-            node.data('cardColor', null);
-        }
-
-        applyAutoDoneColoring(node);
-        cy.style().update();
-        refreshSearchAndFilter();
-        saveBoard();
-
-        // Close inline edit and refresh card
-        columnCardEditStates.delete(nodeId);
-        renderColumnView();
-    };
-
-    // Cancel handler
-    const cancelHandler = () => {
-        columnCardEditStates.delete(nodeId);
-        renderColumnView();
-    };
-
-    // Keyboard handlers
-    const keyHandler = (e) => {
-        // Stop propagation to prevent global shortcuts from interfering
-        e.stopPropagation();
-
-        if (e.key === 'Escape') {
-            e.preventDefault();
-            cancelHandler();
-        } else if (e.ctrlKey && e.key === 'Enter') {
-            e.preventDefault();
-            saveHandler();
-        }
-    };
-
-    // Prevent global shortcuts from interfering with tags input
-    tagsInput.addEventListener('keydown', (e) => {
-        e.stopPropagation();
-    });
-
-    saveBtn.addEventListener('click', saveHandler);
-    cancelBtn.addEventListener('click', cancelHandler);
-    textarea.addEventListener('keydown', keyHandler);
-
-    // Focus textarea
-    setTimeout(() => {
-        textarea.focus();
-        textarea.select();
-    }, 100);
-
-    return editArea;
-}
-
 function createColumnCard(node) {
     const cardDiv = document.createElement('div');
     cardDiv.className = 'column-card';
@@ -11847,30 +14048,38 @@ function createColumnCard(node) {
     
     const contentDiv = document.createElement('div');
     contentDiv.className = 'column-card-content';
-
-    // Display card content - always show images for image cards, text for text cards
+    
+    // Check if card should show image or text
     const nodeId = node.id();
+    const showText = columnCardStates.get(nodeId) || false;
     const hasImage = node.data('imageData');
-
-    if (hasImage) {
-        // For image cards: ALWAYS show the image
+    
+    if (hasImage && !showText) {
+        // Show image ONLY - no text/annotation in image mode
         const img = document.createElement('img');
         img.src = node.data('imageData');
         img.className = 'column-card-image';
         img.alt = node.data('originalFileName') || 'Bild';
         contentDiv.appendChild(img);
+    } else if (hasImage && showText) {
+        // Show text/annotation ONLY - no image in text mode
+        const annotation = node.data('annotation');
+        if (annotation) {
+            const displayText = convertMarkdownToHtml(annotation);
+            contentDiv.innerHTML = displayText;
+        }
     } else {
-        // For text cards: Show text content
+        // Show text content
         const title = node.data('title') || '';
         const text = node.data('text') || '';
         const isManualCard = node.data('isManualCard') || false;
-
+        
         let displayText = '';
         if (title && !isManualCard) {
             displayText = `<strong>${title}</strong><br><br>`;
         }
         displayText += convertMarkdownToHtml(text);
-
+        
         contentDiv.innerHTML = displayText;
     }
     
@@ -11981,6 +14190,14 @@ function createColumnCard(node) {
                 // Ctrl+click for multi-select (desktop)
                 console.log('DEBUG ctrl+click -> toggleColumnCardSelection');
                 toggleColumnCardSelection(node.id(), cardDiv);
+            } else if (hasImage) {
+                // Desktop: Toggle between image and text for image cards
+                const currentState = columnCardStates.get(nodeId) || false;
+                columnCardStates.set(nodeId, !currentState);
+                
+                // Re-render just this card
+                const newCard = createColumnCard(node);
+                cardDiv.parentNode.replaceChild(newCard, cardDiv);
             } else {
                 // Desktop: Select single card
                 selectColumnCard(node.id(), cardDiv);
@@ -11988,30 +14205,11 @@ function createColumnCard(node) {
         }
         // On mobile, content area clicks do nothing (avoid text selection conflicts)
     });
-
-    // Add double-click handler for inline editing
+    
+    // Add double-click handler for editing
     cardDiv.addEventListener('dblclick', (e) => {
         e.preventDefault();
-        // Open inline edit in column view, modal in board view
-        if (isColumnView) {
-            // Toggle inline edit state
-            const currentlyEditing = columnCardEditStates.get(nodeId);
-            if (currentlyEditing) {
-                // Close inline edit
-                columnCardEditStates.delete(nodeId);
-            } else {
-                // Open inline edit
-                columnCardEditStates.set(nodeId, true);
-
-                // Deselect all cards to prevent filtered view after edit closes
-                cy.nodes().unselect();
-            }
-            // Re-render to show/hide inline edit area
-            renderColumnView();
-        } else {
-            // Board view: use modal dialog
-            editCard(node);
-        }
+        editCard(node); // Reuse existing edit function
     });
 
     // Add right-click context menu
@@ -12020,17 +14218,16 @@ function createColumnCard(node) {
         showColumnContextMenu(e, node.id());
     });
     
-    // Add iPad/mobile touch functionality
+    // Add iPad/mobile long-press functionality for tagging and color change
     let longPressTimer = null;
     let touchStartTime = 0;
     let touchMoved = false;
-    let lastTapTime = 0;
-
+    
     cardDiv.addEventListener('touchstart', (e) => {
         console.log('DEBUG column touchstart:', node.id(), 'touches:', e.touches?.length);
         touchStartTime = Date.now();
         touchMoved = false;
-
+        
         // Set up long press detection (800ms)
         longPressTimer = setTimeout(() => {
             console.log('DEBUG column long press timeout fired, touchMoved:', touchMoved);
@@ -12042,7 +14239,7 @@ function createColumnCard(node) {
             }
         }, 800);
     }, { passive: false });
-
+    
     cardDiv.addEventListener('touchmove', () => {
         touchMoved = true;
         if (longPressTimer) {
@@ -12050,59 +14247,26 @@ function createColumnCard(node) {
             longPressTimer = null;
         }
     });
-
+    
     cardDiv.addEventListener('touchend', (e) => {
         if (longPressTimer) {
             clearTimeout(longPressTimer);
             longPressTimer = null;
         }
-
-        // If it was a quick tap (< 200ms) and didn't move
+        
+        // If it was a quick tap (< 200ms) and didn't move, treat as normal click
         if (!touchMoved && (Date.now() - touchStartTime) < 200) {
-            const currentTime = Date.now();
-            const timeSinceLastTap = currentTime - lastTapTime;
-
-            // Double-tap detection (< 500ms between taps)
-            if (timeSinceLastTap < 500 && timeSinceLastTap > 0) {
-                e.preventDefault();
-                console.log('DEBUG double-tap detected, opening inline edit');
-
-                // Open inline edit in column view
-                if (isColumnView) {
-                    const currentlyEditing = columnCardEditStates.get(nodeId);
-                    if (currentlyEditing) {
-                        columnCardEditStates.delete(nodeId);
-                    } else {
-                        columnCardEditStates.set(nodeId, true);
-                    }
-                    renderColumnView();
-                } else {
-                    editCard(node);
-                }
-
-                // Reset to prevent triple-tap
-                lastTapTime = 0;
-            } else {
-                // Single tap - just select/deselect
-                const clickEvent = new MouseEvent('click', {
-                    bubbles: true,
-                    cancelable: true,
-                    clientX: e.changedTouches[0].clientX,
-                    clientY: e.changedTouches[0].clientY
-                });
-                cardDiv.dispatchEvent(clickEvent);
-                lastTapTime = currentTime;
-            }
+            // Trigger normal click behavior
+            const clickEvent = new MouseEvent('click', {
+                bubbles: true,
+                cancelable: true,
+                clientX: e.changedTouches[0].clientX,
+                clientY: e.changedTouches[0].clientY
+            });
+            cardDiv.dispatchEvent(clickEvent);
         }
     });
-
-    // Add inline edit area if this card is being edited
-    const isEditing = columnCardEditStates.get(nodeId);
-    if (isEditing) {
-        const editArea = createInlineEditArea(node, cardDiv);
-        cardDiv.appendChild(editArea);
-    }
-
+    
     return cardDiv;
 }
 
@@ -12382,6 +14546,13 @@ function updateColumnViewSearch() {
     });
 }
 
+function getCurrentTheme() {
+    if (document.body.classList.contains('dark-theme')) return 'dark';
+    if (document.body.classList.contains('sepia-theme')) return 'sepia';
+    if (document.body.classList.contains('eink-theme')) return 'eink';
+    return 'light';
+}
+
 // Hook into existing search functions to update column view
 const originalPerformSearch = performSearch;
 performSearch = function(query) {
@@ -12533,9 +14704,15 @@ function watchEditDialogs() {
                         const nodeId = node.dataset?.nodeId || getEditingNodeId();
                         
                         if (textarea && nodeId && isColumnView) {
-                            // DISABLED: This was breaking inline edit by re-rendering on every keystroke
-                            // The inline edit system now handles updates properly on save
-                            // DO NOT add input listener that updates node data and triggers re-render
+                            // Add input listener to textarea
+                            textarea.addEventListener('input', function() {
+                                // Update node data temporarily for preview
+                                const cyNode = cy.getElementById(nodeId);
+                                if (cyNode) {
+                                    cyNode.data('text', this.value);
+                                    setTimeout(() => updateColumnViewCard(nodeId), 10);
+                                }
+                            });
                         }
                     }
                 });
@@ -13130,8 +15307,6 @@ window.testZoteroLinkBadge = function() {
     console.log('✅ Test kort skapat! Leta efter 🔗-ikonen i övre högra hörnet.');
     return testCard;
 };
-
-
 
 // Initialize badge system after Cytoscape is ready
 document.addEventListener('DOMContentLoaded', function() {

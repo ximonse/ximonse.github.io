@@ -1,0 +1,312 @@
+        /* ===== AI ASSISTANT PANEL STYLES ===== */
+        .ai-assistant-panel {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: min(380px, 90vw);
+            max-height: 80vh;
+            background: rgba(255, 255, 255, 0.97);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+            border-radius: 14px;
+            border: 1px solid rgba(0, 0, 0, 0.12);
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+
+        .ai-assistant-panel.hidden {
+            display: none;
+        }
+
+        .ai-assistant-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 16px 18px 0 18px;
+            gap: 12px;
+        }
+
+        .ai-assistant-header h3 {
+            margin: 0;
+            font-size: 18px;
+            color: #1a202c;
+        }
+
+        .ai-assistant-header p {
+            margin: 4px 0 0 0;
+            font-size: 13px;
+            color: #4a5568;
+        }
+
+        .ai-assistant-close {
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            color: #718096;
+            padding: 4px 6px;
+            border-radius: 6px;
+            transition: background 0.2s ease;
+        }
+
+        .ai-assistant-close:hover {
+            background: rgba(113, 128, 150, 0.1);
+            color: #2d3748;
+        }
+
+        .ai-assistant-body {
+            padding: 12px 18px 18px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            overflow-y: auto;
+        }
+
+        .ai-assistant-textarea {
+            width: 100%;
+            min-height: 110px;
+            resize: vertical;
+            border-radius: 10px;
+            border: 1px solid #cbd5e0;
+            padding: 12px;
+            font-size: 14px;
+            font-family: inherit;
+            box-sizing: border-box;
+            background: rgba(247, 250, 252, 0.85);
+        }
+
+        .ai-assistant-textarea:focus {
+            outline: none;
+            border-color: #3182ce;
+            box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.2);
+            background: rgba(255, 255, 255, 0.95);
+        }
+
+        .ai-assistant-controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .ai-assistant-controls button {
+            flex: 1;
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            box-shadow: 0 4px 14px rgba(49, 130, 206, 0.2);
+            background: linear-gradient(145deg, #3182ce 0%, #2b6cb0 100%);
+            color: white;
+        }
+
+        .ai-assistant-controls button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 18px rgba(49, 130, 206, 0.25);
+        }
+
+        .ai-assistant-controls button:disabled {
+            cursor: not-allowed;
+            opacity: 0.7;
+            box-shadow: none;
+        }
+
+        .ai-assistant-voice-btn {
+            background: linear-gradient(145deg, #805ad5 0%, #6b46c1 100%);
+            box-shadow: 0 4px 14px rgba(128, 90, 213, 0.2);
+        }
+
+        .ai-assistant-voice-btn.active {
+            background: linear-gradient(145deg, #9f7aea 0%, #805ad5 100%);
+            box-shadow: 0 8px 18px rgba(128, 90, 213, 0.35);
+        }
+
+        .ai-api-key-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .ai-api-key-row input {
+            flex: 1;
+            padding: 9px 12px;
+            border-radius: 8px;
+            border: 1px solid #cbd5e0;
+            font-size: 13px;
+            background: rgba(247, 250, 252, 0.85);
+        }
+
+        .ai-api-key-row button {
+            padding: 9px 14px;
+            border-radius: 8px;
+            border: none;
+            background: linear-gradient(145deg, #4fd1c5 0%, #38b2ac 100%);
+            color: #fff;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            box-shadow: 0 4px 14px rgba(56, 178, 172, 0.2);
+        }
+
+        .ai-api-key-row button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 18px rgba(56, 178, 172, 0.3);
+        }
+
+        .ai-assistant-info {
+            margin-top: 8px;
+            font-size: 13px;
+            line-height: 1.45;
+            color: #495057;
+            background: rgba(248, 249, 250, 0.8);
+            border-radius: 6px;
+            padding: 8px 10px;
+        }
+
+        .ai-assistant-info strong {
+            font-weight: 600;
+        }
+
+        .ai-assistant-status {
+            font-size: 13px;
+            border-radius: 8px;
+            padding: 10px 12px;
+            background: rgba(226, 232, 240, 0.7);
+            color: #2d3748;
+        }
+
+        .ai-assistant-status.success {
+            background: rgba(198, 246, 213, 0.8);
+            color: #22543d;
+        }
+
+        .ai-assistant-status.error {
+            background: rgba(254, 215, 215, 0.8);
+            color: #742a2a;
+        }
+
+        .ai-assistant-status.loading {
+            background: rgba(190, 227, 248, 0.85);
+            color: #2a4365;
+        }
+
+        .ai-assistant-groups {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .ai-group-preview {
+            padding: 10px 12px;
+            border-radius: 10px;
+            background: rgba(247, 250, 252, 0.9);
+            border: 1px solid rgba(203, 213, 224, 0.7);
+        }
+
+        .ai-group-preview h4 {
+            margin: 0 0 6px 0;
+            font-size: 14px;
+            color: #1a202c;
+        }
+
+        .ai-group-preview ul {
+            margin: 0;
+            padding-left: 18px;
+            font-size: 13px;
+            color: #4a5568;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+
+        .ai-group-preview li {
+            margin-bottom: 3px;
+        }
+
+        .ai-assistant-summary {
+            font-size: 13px;
+            color: #2d3748;
+            margin-bottom: 4px;
+        }
+
+        /* Dark theme AI Assistant styles */
+        .dark-theme .ai-assistant-panel {
+            background: rgba(32, 41, 58, 0.95);
+            border-color: rgba(148, 163, 184, 0.2);
+            color: #e2e8f0;
+        }
+
+        .dark-theme .ai-assistant-textarea,
+        .dark-theme .ai-api-key-row input {
+            background: rgba(26, 32, 44, 0.85);
+            border-color: rgba(113, 128, 150, 0.6);
+            color: #e2e8f0;
+        }
+
+        .dark-theme .ai-assistant-status {
+            background: rgba(45, 55, 72, 0.8);
+            color: #e2e8f0;
+        }
+
+        .dark-theme .ai-assistant-status.success {
+            background: rgba(47, 133, 90, 0.55);
+            color: #f0fff4;
+        }
+
+        .dark-theme .ai-assistant-status.error {
+            background: rgba(197, 48, 48, 0.45);
+            color: #fed7d7;
+        }
+
+        .dark-theme .ai-assistant-status.loading {
+            background: rgba(49, 130, 206, 0.4);
+            color: #ebf8ff;
+        }
+
+        .dark-theme .ai-assistant-info {
+            background: rgba(45, 55, 72, 0.85);
+            color: #e2e8f0;
+        }
+
+        /* Sepia theme AI Assistant styles */
+        .sepia-theme .ai-assistant-panel {
+            background: rgba(244, 238, 224, 0.95);
+            border-color: rgba(167, 140, 99, 0.3);
+            color: #5d4e37;
+        }
+
+        .sepia-theme .ai-assistant-textarea,
+        .sepia-theme .ai-api-key-row input {
+            background: rgba(249, 244, 232, 0.85);
+            border-color: rgba(193, 167, 120, 0.5);
+            color: #5d4e37;
+        }
+
+        .sepia-theme .ai-assistant-status {
+            background: rgba(237, 224, 200, 0.85);
+            color: #5d4e37;
+        }
+
+        .sepia-theme .ai-assistant-status.success {
+            background: rgba(206, 231, 206, 0.7);
+            color: #31543f;
+        }
+
+        .sepia-theme .ai-assistant-status.error {
+            background: rgba(247, 209, 209, 0.75);
+            color: #7b3f3f;
+        }
+
+        .sepia-theme .ai-assistant-status.loading {
+            background: rgba(217, 229, 242, 0.75);
+            color: #3b4a63;
+        }
+
+        .sepia-theme .ai-assistant-info {
+            background: rgba(247, 232, 211, 0.9);
+            color: #5b3421;
+        }

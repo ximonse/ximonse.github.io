@@ -13,7 +13,488 @@ let resizeMode = false;
 // Mouse position tracking
 let lastMousePosition = { x: null, y: null };
 
+// IMAGE HANDLING SYSTEM - Integration with existing architecture
 
+// Detect if user is on mobile/tablet device
+function isMobileDevice() {
+    const result = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+           (navigator.maxTouchPoints && navigator.maxTouchPoints > 1);
+    console.log('DEBUG isMobileDevice:', result, 'userAgent:', navigator.userAgent, 'maxTouchPoints:', navigator.maxTouchPoints);
+    return result;
+}
+
+// Direct image upload - use the three-choice function directly
+function triggerImageUpload() {
+    document.getElementById('hiddenGalleryInput').click();
+}
+
+// Show image source menu at specific position (for iPad/mobile)
+function showImageSourceMenu(clientX, clientY) {
+    // Remove any existing menu
+    const existingMenu = document.getElementById('imageSourceMenu');
+    if (existingMenu) {
+        document.body.removeChild(existingMenu);
+    }
+
+    // Create menu
+    const menu = document.createElement('div');
+    menu.id = 'imageSourceMenu';
+    menu.style.cssText = `
+        position: fixed;
+        left: ${Math.min(clientX, window.innerWidth - 200)}px;
+        top: ${Math.min(clientY, window.innerHeight - 200)}px;
+        background: white;
+        border: 1px solid #ccc;
+        border-radius: 12px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        z-index: 10000;
+        min-width: 180px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 16px;
+        padding: 8px 0;
+    `;
+
+    menu.innerHTML = `
+        <div class="image-menu-item" data-action="clipboard" style="padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #eee;">
+            📋 Klistra in
+        </div>
+        <div class="image-menu-item" data-action="camera" style="padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #eee;">
+            📷 Ta foto
+        </div>
+        <div class="image-menu-item" data-action="gallery" style="padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #eee;">
+            🖼️ Välj från galleri
+        </div>
+        <div class="image-menu-item" data-action="file" style="padding: 12px 16px; cursor: pointer;">
+            📁 Välj fil
+        </div>
+    `;
+
+    document.body.appendChild(menu);
+
+    // Handle menu item clicks
+    menu.querySelectorAll('.image-menu-item').forEach(item => {
+        item.addEventListener('click', async () => {
+            const action = item.dataset.action;
+            if (action === 'clipboard') {
+                // Paste from clipboard - call the existing paste function
+                try {
+                    await pasteClipboardContent(clientX, clientY);
+                } catch (err) {
+                    console.error('Clipboard paste failed:', err);
+                    alert('Kunde inte klistra in från clipboard. Kontrollera behörigheter.');
+                }
+            } else if (action === 'camera') {
+                document.getElementById('hiddenCameraInput').click();
+            } else if (action === 'gallery') {
+                document.getElementById('hiddenGalleryInput').click();
+            } else if (action === 'file') {
+                document.getElementById('hiddenGalleryInput').click();
+            }
+            document.body.removeChild(menu);
+        });
+
+        // Add hover effect
+        item.addEventListener('mouseenter', function() {
+            this.style.background = '#f0f0f0';
+        });
+        item.addEventListener('mouseleave', function() {
+            this.style.background = 'white';
+        });
+    });
+
+    // Close menu when clicking outside
+    setTimeout(() => {
+        const closeHandler = (e) => {
+            if (!menu.contains(e.target)) {
+                if (document.body.contains(menu)) {
+                    document.body.removeChild(menu);
+                }
+                document.removeEventListener('click', closeHandler);
+                document.removeEventListener('touchstart', closeHandler);
+            }
+        };
+        document.addEventListener('click', closeHandler);
+        document.addEventListener('touchstart', closeHandler);
+    }, 100);
+}
+
+// Process uploaded images and PDFs
+function handleImageFiles(files) {
+    Array.from(files).forEach(file => {
+        if (file && file.type.startsWith('image/')) {
+            processImage(file).then(imageData => {
+                createImageNode(imageData, file.name);
+            }).catch(err => {
+                console.error('Image processing failed:', err);
+            });
+        } else if (file && file.type === 'application/pdf') {
+            processPdfFile(file).catch(err => {
+                console.error('PDF processing failed:', err);
+            });
+        }
+    });
+}
+
+// Process image to 800px width with S-curve + strong light-gray whitening for handwritten notes (~35-90 KB)
+function processImage(file) {
+    return new Promise((resolve, reject) => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+        
+        img.onload = () => {
+            // Scale to 800px width for better quality, maintain aspect ratio
+            const ratio = 800 / img.width;
+            canvas.width = 800;
+            canvas.height = Math.round(img.height * ratio);
+            
+            // Draw image to canvas
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            
+            // Enhance for handwritten notes - moderate contrast improvement
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            
+            for (let i = 0; i < data.length; i += 4) {
+                // Simple contrast enhancement without aggressive processing
+                let r = data[i];
+                let g = data[i + 1];
+                let b = data[i + 2];
+                
+                // Calculate grayscale value for contrast enhancement
+                const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+                
+                // Gentle contrast curve - improve readability without artifacts
+                let enhanced;
+                if (gray < 128) {
+                    // Darken text slightly
+                    enhanced = gray * 0.8;
+                } else {
+                    // Lighten background slightly
+                    enhanced = gray + (255 - gray) * 0.3;
+                }
+                
+                // Apply enhancement proportionally to preserve color balance
+                const factor = enhanced / Math.max(gray, 1);
+                
+                data[i] = Math.min(255, Math.max(0, r * factor));
+                data[i + 1] = Math.min(255, Math.max(0, g * factor));
+                data[i + 2] = Math.min(255, Math.max(0, b * factor));
+                // Alpha channel (data[i + 3]) remains unchanged
+            }
+            
+            // Apply the enhanced image data back to canvas
+            ctx.putImageData(imageData, 0, 0);
+            
+            // Try WebP for best quality/size ratio, fallback to PNG, then JPEG
+            let base64;
+            let format = 'unknown';
+            
+            try {
+                // Try WebP first (best compression + quality)
+                base64 = canvas.toDataURL('image/webp', 0.95);
+                if (base64.startsWith('data:image/webp')) {
+                    format = 'WebP 95%';
+                } else {
+                    throw new Error('WebP not supported');
+                }
+            } catch {
+                try {
+                    // Fallback to PNG
+                    base64 = canvas.toDataURL('image/png');
+                    format = 'PNG (lossless)';
+                    
+                    // If PNG too large, use max JPEG
+                    if (base64.length > 300000) { // ~225KB in base64
+                        base64 = canvas.toDataURL('image/jpeg', 1.0);
+                        format = 'JPEG 100%';
+                    }
+                } catch {
+                    // Final fallback
+                    base64 = canvas.toDataURL('image/jpeg', 1.0);
+                    format = 'JPEG 100%';
+                }
+            }
+            
+            console.log(`📷 Using ${format} (${Math.round(base64.length/1024)} KB)`);
+            
+            resolve({
+                data: base64,
+                width: canvas.width,
+                height: canvas.height,
+                originalName: file.name
+            });
+        };
+        
+        img.onerror = () => reject('Image loading failed');
+        img.src = URL.createObjectURL(file);
+    });
+}
+
+// Create image node integrated with existing system
+function createImageNode(imageData, filename) {
+    const position = getArrangementPosition();
+    const nodeId = generateCardId();
+
+    // Calculate proper aspect ratio height
+    const displayWidth = 300;
+    const ratio = imageData.height / imageData.width;
+    const displayHeight = Math.round(displayWidth * ratio);
+    const calculatedHeight = displayHeight; // Keep for backwards compatibility
+
+    cy.add({
+        group: 'nodes',
+        data: {
+            id: nodeId,
+            type: 'image', // New node type
+            imageData: imageData.data,
+            imageWidth: imageData.width,  // Store original dimensions
+            imageHeight: imageData.height, // Store original dimensions
+            displayWidth: displayWidth,    // Display width (can be changed by user)
+            displayHeight: displayHeight,  // Display height (maintains aspect ratio)
+            calculatedHeight: calculatedHeight, // Pre-calculated height for arrangement
+            annotation: '',
+            searchableText: '',
+            originalFileName: filename,
+            title: '', // No visible title for images
+            text: '', // Keep consistent with existing structure
+            tags: [],
+            isManualCard: true // Integrate with existing categorization
+        },
+        position: position
+    });
+
+    console.log(`📷 Created image node: ${filename} (${Math.round(imageData.data.length/1024)} KB) - ${imageData.width}x${imageData.height} → ${displayWidth}x${displayHeight}`);
+}
+
+// Process PDF file and convert all pages to image nodes
+async function processPdfFile(file) {
+    // Configure PDF.js worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    const searchInfo = document.getElementById('searchInfo');
+    if (searchInfo) {
+        searchInfo.textContent = `📄 Bearbetar PDF: ${file.name}...`;
+        searchInfo.classList.add('visible');
+    }
+
+    try {
+        // Load the PDF file
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
+        const numPages = pdf.numPages;
+
+        if (searchInfo) {
+            searchInfo.textContent = `📄 Konverterar ${numPages} sidor från ${file.name}...`;
+            searchInfo.classList.add('visible');
+        }
+
+        // Process each page
+        for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+            const page = await pdf.getPage(pageNum);
+
+            // Get viewport with scale for good quality (2x for retina)
+            const viewport = page.getViewport({scale: 2.0});
+
+            // Create canvas for rendering
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+
+            // Render PDF page to canvas
+            await page.render({
+                canvasContext: ctx,
+                viewport: viewport
+            }).promise;
+
+            // Scale down to 800px width (same as images)
+            const finalCanvas = document.createElement('canvas');
+            const finalCtx = finalCanvas.getContext('2d');
+            const ratio = 800 / canvas.width;
+            finalCanvas.width = 800;
+            finalCanvas.height = Math.round(canvas.height * ratio);
+
+            finalCtx.drawImage(canvas, 0, 0, finalCanvas.width, finalCanvas.height);
+
+            // Convert to base64 (WebP or PNG)
+            let base64;
+            let format = 'unknown';
+
+            try {
+                base64 = finalCanvas.toDataURL('image/webp', 0.95);
+                if (base64.startsWith('data:image/webp')) {
+                    format = 'WebP 95%';
+                } else {
+                    throw new Error('WebP not supported');
+                }
+            } catch {
+                base64 = finalCanvas.toDataURL('image/png');
+                format = 'PNG';
+            }
+
+            // Create image node for this page
+            const imageData = {
+                data: base64,
+                width: finalCanvas.width,
+                height: finalCanvas.height,
+                originalName: `${file.name} - Sida ${pageNum}`
+            };
+
+            createImageNode(imageData, `${file.name} - Sida ${pageNum}/${numPages}`);
+
+            console.log(`📄 Page ${pageNum}/${numPages} converted: ${format} (${Math.round(base64.length/1024)} KB)`);
+        }
+
+        if (searchInfo) {
+            searchInfo.textContent = `✅ ${numPages} sidor importerade från ${file.name}`;
+            searchInfo.classList.add('visible');
+            setTimeout(() => {
+                searchInfo.classList.remove('visible');
+            }, 3000);
+        }
+
+    } catch (error) {
+        console.error('PDF processing error:', error);
+        if (searchInfo) {
+            searchInfo.textContent = `❌ PDF-import misslyckades: ${error.message}`;
+            searchInfo.classList.add('visible');
+            setTimeout(() => {
+                searchInfo.classList.remove('visible');
+            }, 5000);
+        }
+        throw error;
+    }
+}
+
+// Handle paste events (Ctrl+V) for images
+function handlePasteImage(event) {
+    const items = event.clipboardData?.items;
+    if (!items) return;
+
+    for (let item of items) {
+        if (item.type.startsWith('image/')) {
+            event.preventDefault();
+            const file = item.getAsFile();
+            if (file) {
+                processImage(file).then(imageData => {
+                    createImageNode(imageData, 'pasted-image-' + Date.now() + '.jpg');
+                }).catch(err => {
+                    console.error('Paste image processing failed:', err);
+                });
+            }
+            break;
+        }
+    }
+}
+
+// Handle canvas long press - different behavior for mobile vs desktop
+function handleCanvasLongPress(clientX, clientY) {
+    if (isMobileDevice()) {
+        // Mobile/tablet: Show image source menu at touch position
+        showImageSourceMenu(clientX, clientY);
+    } else {
+        // Desktop: Paste clipboard content
+        pasteClipboardContent(clientX, clientY);
+    }
+}
+
+// Paste clipboard content (text or image) at specific position
+async function pasteClipboardContent(clientX, clientY) {
+    try {
+        const clipboardItems = await navigator.clipboard.read();
+        for (let item of clipboardItems) {
+            // Check for image first
+            for (let type of item.types) {
+                if (type.startsWith('image/')) {
+                    const blob = await item.getAsType(type);
+                    const position = getCanvasPosition(clientX, clientY);
+                    processImage(blob).then(imageData => {
+                        createImageNodeAtPosition(imageData, 'pasted-' + Date.now() + '.jpg', position);
+                    }).catch(err => {
+                        console.error('Image paste processing failed:', err);
+                    });
+                    return;
+                }
+            }
+        }
+        
+        // If no image, try text
+        const text = await navigator.clipboard.readText();
+        if (text && text.trim()) {
+            const position = getCanvasPosition(clientX, clientY);
+            createTextNodeAtPosition(text.trim(), position);
+        }
+    } catch (err) {
+        console.error('Kunde inte komma åt urklipp:', err);
+    }
+}
+
+// Get canvas position from client coordinates
+function getCanvasPosition(clientX, clientY) {
+    const cyContainer = document.getElementById('cy');
+    const rect = cyContainer.getBoundingClientRect();
+    const relativeX = clientX - rect.left;
+    const relativeY = clientY - rect.top;
+    
+    // Convert to Cytoscape coordinates
+    const pan = cy.pan();
+    const zoom = cy.zoom();
+    
+    return {
+        x: (relativeX - pan.x) / zoom,
+        y: (relativeY - pan.y) / zoom
+    };
+}
+
+// Create text node at specific position
+function createTextNodeAtPosition(text, position) {
+    const cardId = generateCardId();
+    cy.add({
+        group: 'nodes',
+        data: {
+            id: cardId,
+            label: text,
+            isManualCard: true,
+            tags: [],
+            annotation: '',
+            searchableText: text
+        },
+        position: position
+    });
+}
+
+// Create image node at specific position
+function createImageNodeAtPosition(imageData, filename, position) {
+    const displayWidth = 300;
+    const ratio = imageData.height / imageData.width;
+    const displayHeight = Math.round(displayWidth * ratio);
+    const calculatedHeight = displayHeight; // Keep for backwards compatibility
+    const cardId = generateCardId();
+
+    cy.add({
+        group: 'nodes',
+        data: {
+            id: cardId,
+            label: '📝',
+            type: 'image',
+            imageData: imageData.data,
+            imageWidth: imageData.width,
+            imageHeight: imageData.height,
+            displayWidth: displayWidth,
+            displayHeight: displayHeight,
+            calculatedHeight: calculatedHeight,
+            annotation: '',
+            searchableText: '',
+            originalFileName: filename,
+            title: '',
+            text: '',
+            tags: [],
+            isManualCard: true
+        },
+        position: position
+    });
+}
 
 
 // Generate unique timestamp-based card ID
@@ -47,7 +528,369 @@ function generateCardId() {
     return uniqueId;
 }
 
+// ====================================================================================================
+// 🔧 FALLBACK RESIZE FUNCTIONALITY
+// ====================================================================================================
 
+function setupFallbackResize() {
+    console.log('🛠️ Setting up simple resize with Ctrl+click...');
+    
+    // Add Ctrl+click OR right-click resize for annotation nodes
+    cy.on('cxttap', 'node', function(evt) {
+        const node = evt.target;
+        console.log('🖱️ Right-click on node:', node.id(), 'isAnnotation:', node.data('isAnnotation'), 'resizeMode:', resizeMode, 'classes:', node.classes());
+        
+        if (node.data('isAnnotation') && resizeMode) {
+            console.log('🎯 Processing right-click resize for annotation node...');
+            evt.stopPropagation();
+            evt.preventDefault();
+            
+            const currentWidth = node.data('customWidth') || 120;
+            const currentHeight = node.data('customHeight') || 120;
+            
+            console.log('📐 Current size:', currentWidth, 'x', currentHeight);
+            
+            // Simple resize: cycle through 4 sizes
+            let newWidth, newHeight;
+            
+            if (currentWidth <= 80) {
+                newWidth = 120;
+                newHeight = 120;
+            } else if (currentWidth <= 120) {
+                newWidth = 160;
+                newHeight = 160;
+            } else if (currentWidth <= 160) {
+                newWidth = 200;
+                newHeight = 200;
+            } else {
+                newWidth = 80;
+                newHeight = 80;
+            }
+            
+            console.log('📏 Resizing to:', newWidth, 'x', newHeight);
+            
+            // Update the data properties and force style refresh
+            node.data('customWidth', newWidth);
+            node.data('customHeight', newHeight);
+            
+            // Force Cytoscape to recalculate styles by triggering style refresh
+            node.removeStyle('width height');
+            node.trigger('data');
+            cy.style().update();
+            
+            console.log(`✅ Resized annotation ${node.id()} to ${newWidth}x${newHeight}`);
+            return false;
+        }
+    });
+    
+    // Backup: Also try Ctrl+click 
+    cy.on('click', 'node', function(evt) {
+        const node = evt.target;
+        console.log('🖱️ Node clicked:', node.id(), 'isAnnotation:', node.data('isAnnotation'), 'resizeMode:', resizeMode, 'ctrlKey:', evt.originalEvent?.ctrlKey);
+        
+        if (node.data('isAnnotation') && resizeMode && evt.originalEvent?.ctrlKey) {
+            console.log('🎯 Processing Ctrl+click resize for annotation node...');
+            evt.stopPropagation();
+            evt.preventDefault();
+            
+            const currentWidth = node.data('customWidth') || 120;
+            const currentHeight = node.data('customHeight') || 120;
+            
+            console.log('📐 Current size:', currentWidth, 'x', currentHeight);
+            
+            // Simple resize: cycle through 4 sizes
+            let newWidth, newHeight;
+            
+            if (currentWidth <= 80) {
+                newWidth = 120;
+                newHeight = 120;
+            } else if (currentWidth <= 120) {
+                newWidth = 160;
+                newHeight = 160;
+            } else if (currentWidth <= 160) {
+                newWidth = 200;
+                newHeight = 200;
+            } else {
+                newWidth = 80;
+                newHeight = 80;
+            }
+            
+            console.log('📏 Resizing to:', newWidth, 'x', newHeight);
+            
+            // Update the data properties and force style refresh
+            node.data('customWidth', newWidth);
+            node.data('customHeight', newHeight);
+            
+            // Force Cytoscape to recalculate styles by triggering style refresh
+            node.removeStyle('width height');
+            node.trigger('data');
+            cy.style().update();
+            
+            console.log(`✅ Resized annotation ${node.id()} to ${newWidth}x${newHeight}`);
+            return false; // Prevent further event handling
+        }
+    });
+    
+    console.log('✅ Fallback resize setup complete - Ctrl+click annotations in resize mode');
+}
+
+// ====================================================================================================
+// 🎨 ANNOTATION SYSTEM FUNCTIONS
+// ====================================================================================================
+
+// Toggle annotation toolbar visibility
+function toggleAnnotationToolbar() {
+    annotationToolbarVisible = !annotationToolbarVisible;
+    const toolbar = document.getElementById('annotationToolbar');
+    const toggleBtn = document.getElementById('annotationToggleBtn');
+
+    if (annotationToolbarVisible) {
+        toolbar.classList.add('active');
+        if (toggleBtn) toggleBtn.style.background = '#28a745';
+        console.log('🎨 Annotation toolbar activated');
+    } else {
+        toolbar.classList.remove('active');
+        if (toggleBtn) toggleBtn.style.background = '';
+        setAnnotationMode('select');
+        console.log('📐 Annotation toolbar deactivated');
+    }
+}
+
+// Set annotation mode and update UI
+function setAnnotationMode(mode) {
+    annotationMode = mode;
+    connectionStartNode = null;
+    
+    // Update tool buttons
+    document.querySelectorAll('.annotation-tool').forEach(tool => {
+        tool.classList.remove('active');
+    });
+    
+    const activeTool = document.querySelector(`[data-tool="${mode}"]`);
+    if (activeTool) {
+        activeTool.classList.add('active');
+    }
+    
+    console.log('🎯 Annotation mode set to:', mode);
+}
+
+// Set annotation color
+function setAnnotationColor(color) {
+    annotationColor = color;
+    console.log('🎨 Annotation color set to:', color);
+}
+
+// Toggle resize mode for annotations
+function toggleResizeMode() {
+    resizeMode = !resizeMode;
+    
+    console.log('↗️ Resize mode:', resizeMode ? 'enabled' : 'disabled');
+    
+    // Show user-friendly status message
+    if (window.showBriefMessage) {
+        if (resizeMode) {
+            window.showBriefMessage('↗️ Storleksändring aktiverad - Högerklicka på annotations för att ändra storlek');
+        } else {
+            window.showBriefMessage('📐 Storleksändring avstängd');
+        }
+    }
+}
+
+// Create geometric shape annotation
+function createShapeAnnotation(shape, position) {
+    const id = generateCardId();
+    const shapes = {
+        'rect': { shape: 'rectangle', label: '', width: 120, height: 120 },
+        'circle': { shape: 'ellipse', label: '', width: 120, height: 120 },
+        'triangle': { shape: 'triangle', label: '', width: 120, height: 120 },
+        'diamond': { shape: 'diamond', label: '', width: 120, height: 120 },
+        'star': { shape: 'star', label: '', width: 120, height: 120 },
+        'hexagon': { shape: 'hexagon', label: '', width: 120, height: 120 }
+    };
+
+    const shapeInfo = shapes[shape] || shapes.rect;
+
+    cy.add({
+        data: {
+            id: id,
+            label: shapeInfo.label,
+            text: shapeInfo.label, // Also store in 'text' for consistency
+            isAnnotation: true,
+            annotationType: 'shape',
+            shape: shape,
+            customWidth: shapeInfo.width,
+            customHeight: shapeInfo.height,
+            customZIndex: 0, // Normal layer
+            annotationColor: annotationColor // Store color in data for saving
+        },
+        position: position,
+        classes: 'annotation-shape'
+    });
+
+    // Apply color immediately
+    const node = cy.getElementById(id);
+    node.style('background-color', annotationColor);
+
+    console.log(`🔷 Created ${shape} annotation at`, position, 'with size', shapeInfo.width, 'x', shapeInfo.height);
+    return node;
+}
+
+// Create text annotation
+function createTextAnnotation(size, position) {
+    const id = generateCardId();
+    const sizes = {
+        'text-small': { fontSize: 20, label: 'Text', width: 100, height: 50 },  // S: 100x50, font 20
+        'text-medium': { fontSize: 30, label: 'Text', width: 200, height: 75 }, // M: 200x75, font 30
+        'text-large': { fontSize: 50, label: 'Text', width: 300, height: 100 }  // L: 300x100, font 50
+    };
+
+    const sizeInfo = sizes[size] || sizes['text-medium'];
+
+    cy.add({
+        data: {
+            id: id,
+            label: sizeInfo.label,
+            text: sizeInfo.label, // Also store in 'text' for consistency
+            isAnnotation: true,
+            annotationType: 'text',
+            textSize: size,
+            customWidth: sizeInfo.width,
+            customHeight: sizeInfo.height,
+            customFontSize: sizeInfo.fontSize,
+            customZIndex: 0, // Normal layer
+            annotationColor: annotationColor, // Store color in data for saving
+            hidden_tags: [] // Empty array for potential tagging later
+        },
+        position: position,
+        classes: 'annotation-text'
+    });
+
+    const node = cy.getElementById(id);
+    node.style({
+        'font-size': sizeInfo.fontSize + 'px',
+        'background-color': annotationColor,
+        'shape': 'rectangle'
+    });
+
+    console.log(`📝 Created ${size} text annotation at`, position, 'with size', sizeInfo.width, 'x', sizeInfo.height, 'font', sizeInfo.fontSize);
+    return node;
+}
+
+// Create connection (arrow or line) between nodes
+function createConnection(sourceNode, targetNode, type) {
+    const id = generateCardId();
+    const isArrow = type === 'arrow';
+    
+    cy.add({
+        data: {
+            id: id,
+            source: sourceNode.id(),
+            target: targetNode.id(),
+            isAnnotation: true,
+            annotationType: 'connection',
+            connectionType: type
+        },
+        classes: 'annotation-connection'
+    });
+    
+    const edge = cy.getElementById(id);
+    edge.style({
+        'line-color': annotationColor,
+        'target-arrow-color': annotationColor,
+        'target-arrow-shape': isArrow ? 'triangle' : 'none',
+        'curve-style': 'bezier',
+        'width': 5,
+        'arrow-scale': 1.8
+    });
+    
+    console.log(`🔗 Created ${type} connection between`, sourceNode.id(), 'and', targetNode.id());
+    return edge;
+}
+
+// Edit annotation text function
+function editAnnotationText(node) {
+    const currentText = node.data('label') || 'Text';
+    
+    // Create overlay for editing
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.7); z-index: 10000;
+        display: flex; justify-content: center; align-items: center;
+    `;
+    
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+        background: white; padding: 20px; border-radius: 10px;
+        max-width: 400px; width: 90%; max-height: 80vh;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        box-sizing: border-box;
+    `;
+    
+    dialog.innerHTML = `
+        <h3 style="margin-top: 0; color: #333; font-size: 18px;">Redigera annotation text</h3>
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #555;">Text:</label>
+            <textarea id="editAnnotationText" 
+                style="width: 100%; height: 120px; font-family: inherit; font-size: 14px; 
+                       border: 1px solid #ccc; border-radius: 4px; padding: 8px;
+                       box-sizing: border-box; resize: vertical;">${currentText}</textarea>
+        </div>
+        <div style="text-align: right;">
+            <button id="cancelAnnotationEdit" style="margin-right: 10px; padding: 8px 16px; 
+                   background: #ccc; border: none; border-radius: 4px; cursor: pointer;">Avbryt</button>
+            <button id="saveAnnotationEdit" style="padding: 8px 16px; 
+                   background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Spara</button>
+        </div>
+    `;
+    
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    
+    // Focus on text area and select all
+    const textArea = document.getElementById('editAnnotationText');
+    textArea.focus();
+    textArea.select();
+    
+    // Event listeners
+    document.getElementById('saveAnnotationEdit').addEventListener('click', function() {
+        const newText = textArea.value.trim();
+        if (newText) {
+            node.data('label', newText);
+            console.log('✅ Updated annotation text to:', newText);
+        }
+
+        // Save immediately to prevent data loss from autosave/Drive sync
+        saveBoard();
+
+        document.body.removeChild(overlay);
+    });
+    
+    document.getElementById('cancelAnnotationEdit').addEventListener('click', function() {
+        document.body.removeChild(overlay);
+    });
+    
+    // Close on ESC key
+    overlay.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            document.body.removeChild(overlay);
+        }
+    });
+    
+    // Close on overlay click (outside dialog)
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) {
+            document.body.removeChild(overlay);
+        }
+    });
+}
+
+// MINIMAL UNDO/REDO SYSTEM - Define early so functions can use it
+let undoStack = [];
+let redoStack = [];
+const MAX_UNDO_STEPS = 20;
+
+// Generate unique timestamp-based ID for new cards
 function generateUniqueId() {
     const now = new Date();
     const timestamp = now.getFullYear().toString() +
@@ -176,8 +1019,163 @@ function getArrangementPosition() {
 // Text measurement using invisible ruler
 let textRuler = null;
 
+function initTextRuler() {
+    textRuler = document.getElementById('text-ruler');
+}
+
 // Memoization cache for getMeasuredTextHeight
 const heightCache = new Map();
+
+// Generate content hash for memoization
+function getContentHash(node) {
+    const title = node.data('title') || '';
+    const text = node.data('text') || '';
+    const tags = node.data('tags') || [];
+    const isImported = node.data('export_source') === 'pdf_extractor' || 
+                     node.data('source_file') || 
+                     node.data('matched_terms');
+    const isWelcomeCard = node.id().startsWith('welcome-');
+    
+    // Create hash from content and styling factors
+    return `${title}|${text}|${tags.join(',')}|${isImported}|${isWelcomeCard}`;
+}
+
+// Clear cache for a specific node (when content changes)
+function clearNodeCache(node) {
+    // Remove all cached entries that might match this node
+    // We need to remove by pattern since content might have changed
+    const nodeId = node.id();
+    const keysToDelete = [];
+    for (const key of heightCache.keys()) {
+        // Simple heuristic: if cache gets too large, clear it periodically
+        if (heightCache.size > 500) {
+            heightCache.clear();
+            break;
+        }
+    }
+}
+
+/**
+ * Measures the actual rendered height of a node's text using the invisible ruler (with memoization).
+ * @param {object} node The Cytoscape node.
+ * @returns {number} The measured height of the text in pixels.
+ */
+function getMeasuredTextHeight(node) {
+    // SPECIAL HANDLING FOR IMAGE NODES
+    if (node.data('type') === 'image' && node.data('imageData')) {
+        // Use pre-calculated height if available (for new images)
+        const preCalculated = node.data('calculatedHeight');
+        if (preCalculated) {
+            return preCalculated;
+        }
+        
+        // For imported images, calculate from stored dimensions
+        const imageWidth = node.data('imageWidth');
+        const imageHeight = node.data('imageHeight');
+        if (imageWidth && imageHeight) {
+            const ratio = imageHeight / imageWidth;
+            return Math.round(300 * ratio); // 300px width, maintain aspect ratio
+        }
+        
+        // Last resort: Use a reasonable default to avoid creating Image objects
+        // which can be expensive and cause performance issues
+        return 260; // Safe default for images - avoid creating Image objects
+    }
+    
+    // NORMAL TEXT NODE PROCESSING
+    // Check cache first
+    const hash = getContentHash(node);
+    if (heightCache.has(hash)) {
+        return heightCache.get(hash);
+    }
+    
+    if (!textRuler) initTextRuler();
+    
+    const title = node.data('title') || '';
+    const text = node.data('text') || '';
+    const tags = node.data('tags') || [];
+    
+    // Get the final text content without custom wrapping
+    let rawText = text.replace(/\*\*|`|\*|\[|\]/g, '').replace(/^- /gm, '• ');
+    
+    // Add tags to the measurement
+    let tagDisplay = '';
+    if (tags.length > 0) {
+        tagDisplay = '\n\n' + tags.map(tag => `#${tag}`).join(' ');
+    }
+    
+    const mainText = title ? `${title.toUpperCase()}\n\n${rawText}` : rawText;
+    const fullLabel = mainText + tagDisplay;
+
+    // Use EXACT same text-max-width calculation as Cytoscape will use
+    const nodeWidth = 300; // Fixed width for all cards
+    const textMaxWidth = nodeWidth - 15;
+
+    // Style the ruler to match the node's text properties EXACTLY
+    textRuler.style.width = `${textMaxWidth}px`;
+    textRuler.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    
+    // Use same font-size logic as the Cytoscape style
+    const isImported = node.data('export_source') === 'pdf_extractor' || 
+                     node.data('source_file') || 
+                     node.data('matched_terms');
+    const isWelcomeCard = node.id().startsWith('welcome-');
+    
+    // Imported cards and welcome cards get 18px, all others get 23px
+    textRuler.style.fontSize = (isImported || isWelcomeCard) ? '18px' : '23px';
+    textRuler.style.lineHeight = '1.2';
+    textRuler.style.padding = '0';
+    textRuler.style.margin = '0';
+    textRuler.style.border = 'none';
+    textRuler.style.textAlign = 'center'; // Match Cytoscape text alignment
+    textRuler.style.wordWrap = 'break-word';
+    
+    // Set the text and measure
+    textRuler.textContent = fullLabel;
+    const measuredTextHeight = textRuler.offsetHeight;
+    
+    // Add padding that Cytoscape applies to cards
+    // Cards need minimum padding for visual breathing room
+    const minCardHeight = 140; // 140px minimum height
+    
+    // Dynamic padding: less padding for longer text, more for short text
+    let paddingBuffer;
+    if (measuredTextHeight <= 50) {
+        paddingBuffer = 25; // Short text needs more padding
+    } else if (measuredTextHeight <= 100) {
+        paddingBuffer = 20; // Medium text gets normal padding
+    } else if (measuredTextHeight <= 200) {
+        paddingBuffer = 15; // Long text needs less extra padding
+    } else {
+        paddingBuffer = 10; // Very long text needs minimal padding
+    }
+    
+    const totalHeight = Math.max(minCardHeight, measuredTextHeight + paddingBuffer);
+    
+    // Cache the result
+    heightCache.set(hash, totalHeight);
+    
+    return totalHeight;
+}
+
+// Subtle orphan prevention - use non-breaking spaces to keep last 2-3 words together
+function preventOrphansSubtly(text) {
+    const words = text.split(' ');
+    
+    // If text is short, don't modify
+    if (words.length <= 4) return text;
+    
+    // Join last 2-3 words with non-breaking spaces to prevent orphan words
+    const lastWords = words.slice(-3); // Last 3 words
+    const beforeWords = words.slice(0, -3); // Everything before last 3 words
+    
+    // Use non-breaking space (Unicode 00A0) to keep last words together
+    const joinedLastWords = lastWords.join('\u00A0');
+    
+    return beforeWords.length > 0 ? 
+        beforeWords.join(' ') + ' ' + joinedLastWords : 
+        joinedLastWords;
+}
 
 // Sample data - strukturerade kort med titel och text (arrangerade med G+V layout)
 const initialCards = [
@@ -224,11 +1222,930 @@ const initialCards = [
 ];
 
 
+// Initialize Cytoscape
+function initCytoscape() {
+    cy = cytoscape({
+        container: document.getElementById('cy'),
+        
+        elements: initialCards.map((card, index) => ({
+            data: {
+                id: card.id,
+                title: card.title || '',
+                text: card.text || '', 
+                tags: card.tags || [],
+                searchMatch: false,
+                // Hidden metadata for advanced analysis
+                export_timestamp: card.export_timestamp || null,
+                export_session: card.export_session || null,
+                export_source: card.export_source || null,
+                source_file: card.source_file || null,
+                page_number: card.page_number || null,
+                matched_terms: card.matched_terms || null,
+                card_index: card.card_index || null
+            },
+            position: {
+                x: card.x !== undefined ? card.x : (200 + (index % 3) * 300),
+                y: card.y !== undefined ? card.y : (200 + Math.floor(index / 3) * 200)
+            }
+        })),
+        
+        style: [
+            {
+                selector: 'node',
+                style: {
+                    'background-color': '#ffffff',
+                    'border-width': 2,
+                    'border-color': '#ddd',
+                    'width': function(node) {
+                        // Skip width override for annotation nodes (they have their own sizing)
+                        if (node.data('isAnnotation')) {
+                            return node.data('customWidth') || 120;
+                        }
+                        // Fixed width for all cards to ensure consistency
+                        return 300;
+                    },
+                    'height': function(node) {
+                        // Skip height override for annotation nodes (they have their own sizing)
+                        if (node.data('isAnnotation')) {
+                            return node.data('customHeight') || 120;
+                        }
+                        
+                        const isManualCard = node.data('isManualCard') || false;
+                        
+                        if (isManualCard) {
+                            // Same padding logic as other cards, but with double padding
+                            const measuredHeight = getMeasuredTextHeight(node);
+                            return Math.max(140, measuredHeight + 40); // Double padding for larger text
+                        }
+                        
+                        // Use the ruler to get exact height for other cards
+                        const measuredHeight = getMeasuredTextHeight(node);
+                        return Math.max(140, measuredHeight + 10); // Standard padding, 140px minimum
+                    },
+                    'shape': 'round-rectangle',
+                    'label': function(node) {
+                        const title = node.data('title') || '';
+                        const text = node.data('text') || '';
+                        const tags = node.data('tags') || [];
+                        const isManualCard = node.data('isManualCard') || false;
+                        
+                        
+                        // Simple markdown conversion for display
+                        let displayText = text;
+                        displayText = displayText.replace(/\*\*(.*?)\*\*/g, '$1'); // Remove **bold**
+                        displayText = displayText.replace(/\*(.*?)\*/g, '$1'); // Remove *italic*
+                        displayText = displayText.replace(/`(.*?)`/g, '$1'); // Remove `code`
+                        displayText = displayText.replace(/^- /gm, '• '); // Convert - to bullets
+                        
+                        // Apply subtle orphan prevention using non-breaking spaces
+                        displayText = preventOrphansSubtly(displayText);
+                        
+                        // Add tags at the bottom if they exist (filter out PDF filename tags)
+                        let tagDisplay = '';
+                        if (tags.length > 0) {
+                            // Filter out tags that look like PDF filenames (author-year-title format)
+                            const visibleTags = tags.filter(tag => {
+                                // Hide tags that match PDF filename pattern: Author-YYYY-title-words
+                                const pdfPattern = /^[A-Za-z\-]+\-\d{4}\-[a-z\-]+$/;
+                                return !pdfPattern.test(tag);
+                            });
+                            
+                            if (visibleTags.length > 0) {
+                                tagDisplay = '\n\n' + visibleTags.map(tag => `#${tag}`).join(' ');
+                            }
+                        }
+                        
+                        // For manually created cards, show ONLY text (no title processing)
+                        // For imported cards, show title in caps + text
+                        const mainText = (isManualCard || !title) ? displayText : `${title.toUpperCase()}\n\n${displayText}`;
+                        return mainText + tagDisplay;
+                    },
+                    'text-wrap': 'wrap',
+                    'text-max-width': 285, // Fixed 285px for all cards to match getMeasuredTextHeight ruler
+                    'text-valign': 'center',
+                    'text-halign': 'center',
+                    'font-size': function(node) {
+                        const isImported = node.data('export_source') === 'pdf_extractor' || 
+                                         node.data('source_file') || 
+                                         node.data('matched_terms');
+                        const isWelcomeCard = node.id().startsWith('welcome-');
+                        
+                        // Imported cards and welcome cards get 18px
+                        if (isImported || isWelcomeCard) {
+                            return 18;
+                        }
+                        
+                        // ALL other cards (manual) get 23px
+                        return 23;
+                    },
+                    'font-family': '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                    'color': '#333'
+                }
+            },
+            {
+                selector: 'node.search-match',
+                style: {
+                    'background-color': '#fff9c4',
+                    'border-color': '#f57f17',
+                    'border-width': 2
+                }
+            },
+            {
+                selector: 'node.tag-filtered',
+                style: {
+                    'background-color': '#f0f0f0',
+                    'border-color': '#ddd',
+                    'opacity': 0.3
+                }
+            },
+            {
+                selector: 'node.search-non-match',
+                style: {
+                    'opacity': 0.3
+                }
+            },
+            {
+                selector: 'node:selected',
+                style: {
+                    'border-color': '#1565c0',
+                    'border-width': 4
+                }
+            },
+            {
+                selector: 'node.pinned',
+                style: {
+                    'border-color': '#2e7d32',
+                    'border-width': 4,
+                    'background-color': '#c8e6c9'
+                }
+            },
+            // ====================================================================================================
+            // 📷 IMAGE NODE STYLES - Post-it feel (~10cm) with image background
+            // ====================================================================================================
+            {
+                selector: 'node[type="image"]',
+                style: {
+                    'width': 300, // Same as regular cards
+                    'height': function(node) {
+                        // Use the same logic as getMeasuredTextHeight for consistency
+                        return getMeasuredTextHeight(node);
+                    },
+                    'background-image': 'data(imageData)',
+                    'background-fit': 'contain', // Changed from 'cover' to preserve aspect ratio and show full image
+                    'background-color': function(node) {
+                        // Support color styling for image cards
+                        const cardColor = node.data('cardColor');
+                        if (cardColor) {
+                            const colorValue = getCardColorValue(cardColor, getCurrentTheme());
+                            return colorValue;
+                        }
+                        return '#ffffff'; // Default white background
+                    },
+                    'border-width': function(node) {
+                        // Thicker border when colored to show the color better
+                        const cardColor = node.data('cardColor');
+                        return cardColor ? 6 : 3;
+                    },
+                    'border-color': function(node) {
+                        // Use the card color for border, or default gray
+                        const cardColor = node.data('cardColor');
+                        if (cardColor) {
+                            const colorValue = getCardColorValue(cardColor, getCurrentTheme());
+                            return colorValue;
+                        }
+                        return '#ddd';
+                    },
+                    'shape': 'round-rectangle',
+                    'label': function(node) {
+                        // Only show annotation icon if present, no filename
+                        const hasAnnotation = (node.data('annotation') || '').length > 0;
+                        return hasAnnotation ? '📝' : '';
+                    },
+                    'text-valign': 'bottom',
+                    'text-halign': 'center',
+                    'text-background-color': 'rgba(255, 255, 255, 0.9)',
+                    'text-background-padding': '4px',
+                    'text-background-shape': 'round-rectangle',
+                    'font-size': '14px',
+                    'font-weight': 'bold',
+                    'color': '#333',
+                    'text-wrap': 'wrap',
+                    'text-max-width': 280
+                }
+            },
+            {
+                selector: 'node[type="image"]:selected',
+                style: {
+                    'border-color': '#1565c0',
+                    'border-width': 5
+                }
+            },
+            {
+                selector: 'node[type="image"].search-match',
+                style: {
+                    'border-color': '#f57f17',
+                    'border-width': 4
+                }
+            },
+            // ====================================================================================================
+            // 🎨 ANNOTATION STYLES
+            // ====================================================================================================
+            {
+                selector: 'node.annotation-shape',
+                style: {
+                    'width': function(node) {
+                        // Allow dynamic width for annotation shapes
+                        return node.data('customWidth') || 120;
+                    },
+                    'height': function(node) {
+                        // Allow dynamic height for annotation shapes
+                        return node.data('customHeight') || 120;
+                    },
+                    'background-color': '#ff6b6b',
+                    'border-width': 3,
+                    'border-color': '#444',
+                    'label': 'data(label)',
+                    'text-valign': 'center',
+                    'text-halign': 'center',
+                    'font-size': '32px',
+                    'color': '#333',
+                    'text-wrap': 'none',
+                    'z-index': function(node) {
+                        // Cytoscape z-index must be non-negative integers
+                        // 0 = background, 1 = normal, 2 = foreground
+                        const zIndex = node.data('customZIndex');
+                        if (zIndex === -1) return 0; // Background
+                        if (zIndex === 0) return 1;  // Normal
+                        if (zIndex === 1) return 2;  // Foreground
+                        return 1; // Default to normal
+                    },
+                    'shape': function(node) {
+                        const shape = node.data('shape') || 'rectangle';
+                        const shapeMap = {
+                            'rect': 'rectangle',
+                            'circle': 'ellipse',
+                            'triangle': 'triangle',
+                            'diamond': 'diamond',
+                            'star': 'star',
+                            'hexagon': 'hexagon'
+                        };
+                        return shapeMap[shape] || 'rectangle';
+                    }
+                }
+            },
+            {
+                selector: 'node.annotation-text',
+                style: {
+                    'width': function(node) {
+                        // Allow dynamic width for annotation text
+                        return node.data('customWidth') || 180;
+                    },
+                    'height': function(node) {
+                        // Allow dynamic height for annotation text
+                        return node.data('customHeight') || 90;
+                    },
+                    'background-color': '#fff',
+                    'border-width': 2,
+                    'border-color': '#ccc',
+                    'label': 'data(label)',
+                    'text-valign': 'center',
+                    'text-halign': 'center',
+                    'font-size': function(node) {
+                        // Use custom font size if set, otherwise default
+                        return (node.data('customFontSize') || 18) + 'px';
+                    },
+                    'color': '#333',
+                    'text-wrap': 'none', // NO line breaks - expand width instead
+                    'text-max-width': 10000, // Effectively unlimited - let box expand
+                    'shape': 'rectangle'
+                }
+            },
+            {
+                selector: 'edge.annotation-connection',
+                style: {
+                    'width': 5,
+                    'line-color': '#ff6b6b',
+                    'target-arrow-color': '#ff6b6b',
+                    'arrow-scale': 1.8,
+                    'curve-style': 'bezier',
+                    'control-point-step-size': 40
+                }
+            }
+        ],
+        
+        layout: {
+            name: 'preset'
+        },
+        
+        // Enable panning and zooming
+        zoomingEnabled: true,
+        userZoomingEnabled: true,
+        wheelSensitivity: 0.3,
+        minZoom: 0.1,
+        maxZoom: 3,
+        panningEnabled: false,  // Start with panning disabled
+        userPanningEnabled: true,  // Keep user controls available
+        boxSelectionEnabled: true,
+        selectionType: 'additive',  // Allow multiple selection
+        
+        // Configure user interaction
+        autoungrabify: false,
+        autounselectify: false
+    });
+    
+    // Make nodes draggable
+    cy.nodes().grabify();
+    
+    // Save state before dragging starts (for undo support)
+    cy.on('grab', 'node', function(evt) {
+        saveState();
+    });
+    
+    // Double-click to edit card
+    cy.on('dblclick', 'node', function(evt) {
+        const node = evt.target;
+        console.log('🖱️ Double-click on node:', node.id(), 'isAnnotation:', node.data('isAnnotation'), 'classes:', node.classes());
+        
+        if (node.data('isAnnotation') && node.hasClass('annotation-text')) {
+            console.log('📝 Opening text editor for annotation text...');
+            editAnnotationText(node);
+        } else {
+            console.log('📝 Opening card editor for regular node...');
+            editCard(node);
+        }
+    });
+    
+    // Right-click context menu
+    cy.on('cxttap', 'node', function(evt) {
+        evt.preventDefault();
+        const node = evt.target;
+        showContextMenu(evt.originalEvent || evt, node);
+    });
+    
+    // Touch and hold to edit card on mobile
+    let touchTimer = null;
+    let touchedNode = null;
+    
+    cy.on('touchstart', 'node', function(evt) {
+        touchedNode = evt.target;
+        touchTimer = setTimeout(() => {
+            if (touchedNode) {
+                editCard(touchedNode);
+                touchedNode = null;
+            }
+        }, 1000); // 1 second hold
+    });
+    
+    cy.on('touchend touchmove', 'node', function(evt) {
+        if (touchTimer) {
+            clearTimeout(touchTimer);
+            touchTimer = null;
+        }
+        if (evt.type === 'touchend') {
+            touchedNode = null;
+        }
+    });
+    
+    // Update selection info when selection changes
+    cy.on('select unselect', 'node', function(evt) {
+        updateSelectionInfo();
+    });
+    
+    // ====================================================================================================
+    // 🎨 ANNOTATION EVENT HANDLERS
+    // ====================================================================================================
+    
+    // Canvas click for creating annotations
+    cy.on('tap', function(evt) {
+        if (!annotationToolbarVisible) return;
 
+        // Only create on background, not on nodes
+        // Use isNode() check for better mobile compatibility
+        const isBackgroundTap = (evt.target === cy) || (!evt.target.isNode || !evt.target.isNode());
+
+        if (isBackgroundTap) {
+            const position = evt.position || evt.cyPosition;
+
+            console.log('📍 Annotation tap on background at:', position, 'mode:', annotationMode);
+
+            // Check if user has selected a size via keyboard shortcut (S/M/L)
+            if (pendingAnnotationSize) {
+                console.log('🎯 Creating text annotation with pending size:', pendingAnnotationSize);
+                createTextAnnotation(pendingAnnotationSize, position);
+                pendingAnnotationSize = null; // Reset after creating
+                showBriefMessage('✅ Textbox skapad!');
+                return;
+            }
+
+            // Otherwise use normal annotation mode from toolbar
+            if (annotationMode === 'select') {
+                console.log('⏸️ Annotation mode is "select", skipping creation');
+                return;
+            }
+
+            if (['rect', 'circle', 'triangle', 'diamond', 'star', 'hexagon'].includes(annotationMode)) {
+                console.log('🎨 Creating shape annotation:', annotationMode);
+                createShapeAnnotation(annotationMode, position);
+                showBriefMessage(`✅ ${annotationMode} skapad!`);
+            } else if (['text-small', 'text-medium', 'text-large'].includes(annotationMode)) {
+                console.log('📝 Creating text annotation:', annotationMode);
+                createTextAnnotation(annotationMode, position);
+                showBriefMessage('✅ Textbox skapad!');
+            }
+        } else {
+            console.log('⛔ Tap was on a node, not creating annotation');
+        }
+    });
+    
+    // Node click for connections
+    cy.on('tap', 'node', function(evt) {
+        if (!annotationToolbarVisible) return;
+        
+        const node = evt.target;
+        
+        if (annotationMode === 'arrow' || annotationMode === 'line') {
+            if (!connectionStartNode) {
+                // First click - select start node
+                connectionStartNode = node;
+                node.style('border-color', '#ff0000');
+                node.style('border-width', '4px');
+                console.log('🎯 Connection start node selected:', node.id());
+            } else if (connectionStartNode !== node) {
+                // Second click - create connection
+                createConnection(connectionStartNode, node, annotationMode);
+                
+                // Reset start node styling
+                connectionStartNode.style('border-color', '');
+                connectionStartNode.style('border-width', '');
+                connectionStartNode = null;
+                
+                console.log('✅ Connection created');
+            }
+        }
+    });
+    
+    // Track mouse position for arrangement positioning
+    cy.on('mousemove', function(evt) {
+        lastMousePosition.x = evt.originalEvent.clientX;
+        lastMousePosition.y = evt.originalEvent.clientY;
+    });
+    
+    // Also track mouse on the container directly
+    document.addEventListener('mousemove', function(evt) {
+        lastMousePosition.x = evt.clientX;
+        lastMousePosition.y = evt.clientY;
+        // Debug: uncomment to see if mouse tracking works
+        // console.log('Mouse moved to:', evt.clientX, evt.clientY);
+    });
+    
+    // ====================================================================================================
+    // 🎨 ANNOTATION TOOLBAR EVENT LISTENERS
+    // ====================================================================================================
+    
+    // Add click listeners to annotation tools
+    document.querySelectorAll('.annotation-tool').forEach(tool => {
+        tool.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const toolType = tool.dataset.tool;
+            
+            if (toolType.startsWith('color-')) {
+                // Color selection
+                const colors = {
+                    'color-red': '#ff6b6b',
+                    'color-blue': '#4ecdc4', 
+                    'color-green': '#45b7d1',
+                    'color-yellow': '#f9ca24',
+                    'color-purple': '#a55eea'
+                };
+                setAnnotationColor(colors[toolType]);
+            } else if (toolType === 'resize') {
+                // Toggle resize mode
+                toggleResizeMode();
+                tool.classList.toggle('active', resizeMode);
+            } else {
+                // Tool selection
+                setAnnotationMode(toolType);
+            }
+        });
+    });
+    
+    // Starta med panorering på, så att zoom fungerar direkt
+    cy.panningEnabled(true);
+    
+    // Auto-center on mobile devices after initial load
+    if (window.matchMedia && window.matchMedia("(max-width: 768px)").matches) {
+        setTimeout(() => {
+            cy.fit(null, 50); // Fit all nodes with 50px padding
+            cy.center(); // Center the view
+            console.log('Mobile auto-center applied');
+        }, 500); // Small delay to ensure nodes are rendered
+    }
+    
+    // Re-center when orientation changes on mobile
+    window.addEventListener('orientationchange', function() {
+        if (window.matchMedia && window.matchMedia("(max-width: 768px)").matches) {
+            setTimeout(() => {
+                cy.fit(null, 50);
+                cy.center();
+                console.log('Mobile orientation-change auto-center applied');
+            }, 300);
+        }
+    });
+
+    // Hantera Ctrl+drag för att växla mellan panorering och markeringsruta
+    cy.on('mousedown', function(evt) {
+        if (evt.originalEvent.ctrlKey) {
+            // Med Ctrl nedtryckt: aktivera panorering, inaktivera markeringsruta
+            cy.boxSelectionEnabled(false);
+            cy.panningEnabled(true);
+        } else {
+            // Utan Ctrl: inaktivera panorering, aktivera markeringsruta
+            cy.boxSelectionEnabled(true);
+            cy.panningEnabled(false);
+        }
+    });
+
+    cy.on('mouseup', function(evt) {
+        // Återställ alltid till att panorering är på, så att zoom fungerar igen
+        cy.panningEnabled(true);
+        cy.boxSelectionEnabled(true);
+    });
+
+    // ====================================================================================================
+    // 📷 IMAGE SYSTEM EVENT LISTENERS - Integration with existing architecture
+    // ====================================================================================================
+    
+    // File input change handlers
+    document.getElementById('hiddenCameraInput').addEventListener('change', function(e) {
+        if (e.target.files.length > 0) {
+            handleImageFiles(e.target.files);
+            // Reset input to allow same file again
+            e.target.value = '';
+        }
+    });
+    
+    document.getElementById('hiddenGalleryInput').addEventListener('change', function(e) {
+        if (e.target.files.length > 0) {
+            handleImageFiles(e.target.files);
+            // Reset input to allow same file again
+            e.target.value = '';
+        }
+    });
+
+    // Zotero HTML import file input handler
+    document.getElementById('zoteroHtmlInput').addEventListener('change', function(e) {
+        if (e.target.files.length > 0) {
+            importFromZoteroHTML(e.target.files[0]);
+            // Reset input to allow same file again
+            e.target.value = '';
+        }
+    });
+
+    // Paste event listener for Ctrl+V images
+    document.addEventListener('paste', handlePasteImage);
+    
+    // Long press on canvas to paste clipboard content (text or image)
+    let canvasPressTimer = null;
+    const cyContainer = document.getElementById('cy');
+    
+    // Canvas background long press using Cytoscape events
+    let backgroundTouchTimer = null;
+    let backgroundTouchPos = null;
+    
+    // Touch handling on canvas background (not on nodes)
+    cy.on('touchstart', function(evt) {
+        console.log('DEBUG touchstart:', evt.target, 'target===cy:', evt.target === cy, 'touches:', evt.originalEvent?.touches?.length);
+        if (!evt.target || evt.target === cy) { // Background touch
+            const touch = evt.originalEvent.touches[0];
+            backgroundTouchPos = { clientX: touch.clientX, clientY: touch.clientY };
+            let backgroundTouchStartTime = Date.now();
+            console.log('DEBUG background touchstart, pos:', backgroundTouchPos);
+            
+            backgroundTouchTimer = setTimeout(() => {
+                console.log('DEBUG LONG PRESS timeout fired, isMobileDevice():', isMobileDevice(), 'backgroundTouchPos:', backgroundTouchPos);
+                if (isMobileDevice() && backgroundTouchPos) {
+                    // Check if we have selected cards
+                    const selectedNodes = cy.$('node:selected');
+                    console.log('DEBUG selectedNodes.length:', selectedNodes.length);
+                    if (selectedNodes.length > 0) {
+                        // Show mobile card menu for selected cards
+                        console.log('DEBUG calling showMobileCardMenu with pos:', backgroundTouchPos, 'nodeId:', selectedNodes[0].id());
+                        showMobileCardMenu(backgroundTouchPos, selectedNodes[0].id());
+                    } else {
+                        // Show image source menu if no cards selected
+                        console.log('DEBUG calling showImageSourceMenu');
+                        showImageSourceMenu(backgroundTouchPos.clientX, backgroundTouchPos.clientY);
+                    }
+                }
+                backgroundTouchStartTime = null; // Mark as long press handled
+            }, 1000);
+            
+            // Store start time for short tap detection
+            evt._boardTouchStartTime = backgroundTouchStartTime;
+        }
+    });
+    
+    cy.on('touchend', function(evt) {
+        if (backgroundTouchTimer) {
+            clearTimeout(backgroundTouchTimer);
+            backgroundTouchTimer = null;
+        }
+        
+        if (backgroundTouchPos && evt._boardTouchStartTime && (!evt.target || evt.target === cy)) {
+            const tapDuration = Date.now() - evt._boardTouchStartTime;
+            console.log('DEBUG board background touch end, duration:', tapDuration);
+            
+            if (tapDuration < 300) { // Short tap
+                console.log('DEBUG board background short tap - deselecting all cards');
+                cy.nodes().unselect();
+            }
+        }
+        
+        backgroundTouchPos = null;
+    });
+    
+    cy.on('touchmove', function(evt) {
+        if (backgroundTouchTimer) {
+            clearTimeout(backgroundTouchTimer);
+            backgroundTouchTimer = null;
+            backgroundTouchPos = null;
+        }
+    });
+    
+    // Desktop mouse handling on background
+    cy.on('mousedown', function(evt) {
+        if (!evt.target || evt.target === cy) { // Background click
+            const mouseEvent = evt.originalEvent;
+            let mouseDownTime = Date.now();
+            
+            canvasPressTimer = setTimeout(() => {
+                if (!isMobileDevice()) {
+                    pasteClipboardContent(mouseEvent.clientX, mouseEvent.clientY);
+                }
+                mouseDownTime = null; // Mark as long press handled
+            }, 1000);
+            
+            evt._mouseDownTime = mouseDownTime;
+        }
+    });
+    
+    cy.on('mouseup', function(evt) {
+        if (canvasPressTimer) {
+            clearTimeout(canvasPressTimer);
+            canvasPressTimer = null;
+        }
+        
+        if (evt._mouseDownTime && (!evt.target || evt.target === cy)) {
+            const clickDuration = Date.now() - evt._mouseDownTime;
+            console.log('DEBUG board background click end, duration:', clickDuration);
+            
+            if (clickDuration < 300) { // Short click
+                console.log('DEBUG board background short click - deselecting all cards');
+                cy.nodes().unselect();
+            }
+        }
+    });
+    
+    cy.on('mousemove', function(evt) {
+        if (canvasPressTimer) {
+            clearTimeout(canvasPressTimer);
+            canvasPressTimer = null;
+        }
+    });
+    
+    // Drag and drop support (bonus functionality)
+    // cyContainer already declared above
+    cyContainer.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    });
+    
+    cyContainer.addEventListener('drop', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const files = Array.from(e.dataTransfer.files).filter(file => 
+            file.type.startsWith('image/')
+        );
+        
+        if (files.length > 0) {
+            handleImageFiles(files);
+            console.log(`📷 ${files.length} bild(er) droppade`);
+        }
+    });
+    
+    // Background click events temporarily disabled to test zoom
+    // TODO: Re-enable with zoom preservation
+    
+    // Disable context menu on right click
+    cy.container().addEventListener('contextmenu', function(evt) {
+        evt.preventDefault();
+    });
+    
+    // ====================================================================================================
+    // 🎯 SIMPLE RESIZE SYSTEM
+    // ====================================================================================================
+    
+    // Setup simple resize functionality using mouse events
+    console.log('🔄 Setting up simple resize functionality...');
+    setupFallbackResize();
+    
+    
+}
 
 // Boolean search functionality
+function performSearch(query) {
+    if (!query.trim()) {
+        clearSearch();
+        return;
+    }
+
+    searchActive = true;
+    let matchCount = 0;
+
+    // Check if we should search only in selected cards
+    const searchInSelectedOnly = document.getElementById('searchInSelectedOnly')?.checked;
+    const nodesToSearch = searchInSelectedOnly ? cy.$(':selected') : cy.nodes();
+
+    // Clear previous search matches if searching in all nodes
+    if (!searchInSelectedOnly) {
+        cy.nodes().removeClass('search-match search-non-match');
+    }
+
+    nodesToSearch.forEach(node => {
+        const title = (node.data('title') || '').toLowerCase();
+        const text = (node.data('text') || '').toLowerCase();
+        const tags = (node.data('tags') || []).join(' ').toLowerCase();
+        const hiddenTags = (node.data('hidden_tags') || []).join(' ').toLowerCase();
+        
+        // IMAGE SEARCH INTEGRATION - Add image annotation and filename to searchable text
+        const imageAnnotation = (node.data('annotation') || '').toLowerCase();
+        const originalFileName = (node.data('originalFileName') || '').toLowerCase();
+        const searchableImageText = imageAnnotation + ' ' + originalFileName;
+        
+        const searchableText = title + ' ' + text + ' ' + tags + ' ' + hiddenTags + ' ' + searchableImageText;
+        
+        const matches = evaluateBooleanQuery(query.toLowerCase(), searchableText);
+        
+        if (matches) {
+            node.addClass('search-match');
+            node.removeClass('search-non-match'); // Remove blur if it was there
+            node.data('searchMatch', true);
+            // Don't select directly - let ESC convert to selected
+            matchCount++;
+        } else {
+            node.removeClass('search-match');
+            node.addClass('search-non-match'); // Add blur for non-matches
+            node.data('searchMatch', false);
+            node.unselect(); // Avmarkera kortet
+        }
+    });
+    
+    // Show search results info
+    const searchInfo = document.getElementById('searchInfo');
+    searchInfo.textContent = `${matchCount} kort hittade`;
+    searchInfo.classList.add('visible');
+    
+    // Show/hide mobile select button
+    const selectBtn = document.getElementById('searchSelectBtn');
+    if (matchCount > 0) {
+        selectBtn.style.display = 'inline-block';
+    } else {
+        selectBtn.style.display = 'none';
+    }
+    
+    // Apply smart sorting to search results if in column view
+    if (isColumnView && matchCount > 0) {
+        applySmartSearchSorting();
+    }
+}
+
 // Smart search sorting: week+todo priorities, then color order
+function applySmartSearchSorting() {
+    // Get all search-matched nodes
+    const matchedNodes = cy.nodes('.search-match').toArray();
+    
+    // Sort with complex priority system
+    const sortedNodes = matchedNodes.sort((a, b) => {
+        // Priority 1: Week tags + todo tags (oldest week first)
+        const aWeekTodo = getWeekTodoPriority(a);
+        const bWeekTodo = getWeekTodoPriority(b);
+        if (aWeekTodo !== bWeekTodo) {
+            return aWeekTodo - bWeekTodo; // Lower number = higher priority
+        }
+        
+        // Priority 2: Color order (röd, orange, vit, gul, lila, blå, grön, grå)
+        const aColor = getColorPriority(a);
+        const bColor = getColorPriority(b);
+        return aColor - bColor;
+    });
+    
+    // Apply visual order in column view
+    if (isColumnView) {
+        setTimeout(() => {
+            renderColumnView(); // This will use the sorted order
+        }, 50);
+    }
+}
+
+function getWeekTodoPriority(node) {
+    const tags = (node.data('tags') || []).map(tag => tag.toLowerCase());
+    const hasTodo = tags.some(tag => tag.includes('todo'));
+    
+    if (!hasTodo) return 1000; // No todo = lowest priority
+    
+    // Find week tags (format: 25v40, 24v52, etc.)
+    const weekTags = tags.filter(tag => /\d{2}v\d{1,2}/.test(tag));
+    if (weekTags.length === 0) return 500; // Todo but no week = medium priority
+    
+    // Get earliest week number for sorting
+    let earliestWeek = 9999;
+    weekTags.forEach(weekTag => {
+        const match = weekTag.match(/(\d{2})v(\d{1,2})/);
+        if (match) {
+            const year = parseInt(match[1]);
+            const week = parseInt(match[2]);
+            const sortValue = year * 100 + week; // 2540 for 25v40
+            earliestWeek = Math.min(earliestWeek, sortValue);
+        }
+    });
+    
+    return earliestWeek; // Lower week number = higher priority
+}
+
+function getColorPriority(node) {
+    const cardColor = node.data('cardColor');
+    if (!cardColor) return 8; // No color = lowest color priority
+    
+    // Extract color number (card-color-3 -> 3)
+    const colorMatch = cardColor.match(/card-color-(\d)/);
+    if (!colorMatch) return 8;
+    
+    const colorNum = parseInt(colorMatch[1]);
+    
+    // Color priority order: röd(3), orange(2), vit(8), gul(4), lila(5), blå(6), grön(1), grå(7)
+    const colorOrder = {
+        3: 1, // röd
+        2: 2, // orange  
+        8: 3, // vit
+        4: 4, // gul
+        5: 5, // lila
+        6: 6, // blå
+        1: 7, // grön
+        7: 8  // grå
+    };
+    
+    return colorOrder[colorNum] || 9;
+}
+
 // Boolean query evaluation
+function evaluateBooleanQuery(query, searchableText) {
+    // Handle different boolean operators
+    
+    // Split by OR first (lowest precedence)
+    if (query.includes(' or ')) {
+        const orParts = query.split(' or ');
+        return orParts.some(part => evaluateBooleanQuery(part.trim(), searchableText));
+    }
+    
+    // Handle NOT operations - improved logic
+    if (query.includes(' not ')) {
+        const notIndex = query.indexOf(' not ');
+        const beforeNot = query.substring(0, notIndex).trim();
+        const afterNot = query.substring(notIndex + 5).trim(); // ' not '.length = 5
+        
+        // If there's something before NOT, it must match
+        let beforeMatches = true;
+        if (beforeNot) {
+            beforeMatches = evaluateBooleanQuery(beforeNot, searchableText);
+        }
+        
+        // The part after NOT must NOT match
+        const afterMatches = evaluateBooleanQuery(afterNot, searchableText);
+        
+        return beforeMatches && !afterMatches;
+    }
+    
+    // Handle AND operations (default behavior and explicit)
+    const andParts = query.includes(' and ') ? 
+        query.split(' and ') : 
+        query.split(' ').filter(term => term.length > 0);
+        
+    return andParts.every(term => {
+        term = term.trim();
+        if (term.startsWith('"') && term.endsWith('"')) {
+            // Exact phrase search
+            const phrase = term.slice(1, -1);
+            return searchableText.includes(phrase);
+        } else {
+            // Regular word search
+            return searchableText.includes(term);
+        }
+    });
+}
+
 // Pin/unpin functionality
 function pinCard(node) {
     node.addClass('pinned');
@@ -243,13 +2160,401 @@ function unpinCard(node) {
 }
 
 // Context Menu System
+function showContextMenu(event, node) {
+    // Remove any existing context menu
+    hideContextMenu();
+    
+    // Get mouse position
+    const x = event.clientX || event.pageX;
+    const y = event.clientY || event.pageY;
+    
+    // Create context menu
+    const menu = document.createElement('div');
+    menu.className = 'context-menu';
+    menu.style.position = 'fixed';
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+    menu.style.zIndex = '3000';
+    
+    // Pin/Unpin option
+    const isPinned = node.hasClass('pinned');
+    const pinOption = document.createElement('div');
+    pinOption.className = 'context-menu-item';
+    pinOption.innerHTML = isPinned ? '📌 Ta bort pinning' : '📌 Pinna kort';
+    pinOption.onclick = () => {
+        if (isPinned) {
+            unpinCard(node);
+        } else {
+            pinCard(node);
+        }
+        hideContextMenu();
+    };
+    menu.appendChild(pinOption);
+    
+    // Color option
+    const colorOption = document.createElement('div');
+    colorOption.className = 'context-menu-item';
+    colorOption.innerHTML = '🎨 Färga kort';
+    colorOption.onclick = () => {
+        hideContextMenu();
+        // If the right-clicked node is selected, color all selected nodes
+        // Otherwise, color just the right-clicked node
+        const selectedNodes = cy.$('node:selected');
+        const nodesToColor = node.selected() && selectedNodes.length > 1 ? selectedNodes : [node];
+        showColorPicker(event, nodesToColor);
+    };
+    menu.appendChild(colorOption);
+    
+    // Remove color option (if card has color)
+    if (node.data('cardColor')) {
+        const removeColorOption = document.createElement('div');
+        removeColorOption.className = 'context-menu-item';
+        removeColorOption.innerHTML = '❌ Ta bort färg';
+        removeColorOption.onclick = () => {
+            // If the right-clicked node is selected, remove color from all selected nodes
+            // Otherwise, remove color from just the right-clicked node
+            const selectedNodes = cy.$('node:selected');
+            const nodesToProcess = node.selected() && selectedNodes.length > 1 ? selectedNodes : [node];
+            nodesToProcess.forEach(n => removeCardColor(n));
 
+            // Save immediately to prevent data loss from autosave/Drive sync
+            saveBoard();
 
+            hideContextMenu();
+        };
+        menu.appendChild(removeColorOption);
+    }
 
+    // Resize option for image nodes
+    if (node.data('type') === 'image' || node.data('isImageCard')) {
+        const resizeOption = document.createElement('div');
+        resizeOption.className = 'context-menu-item';
+        resizeOption.innerHTML = '↗️ Ändra storlek';
+        resizeOption.onclick = () => {
+            hideContextMenu();
+            showImageResizeDialog(node);
+        };
+        menu.appendChild(resizeOption);
+    }
 
+    // Resize option for annotation/geometric shapes
+    if (node.data('isAnnotation') && node.data('annotationType') !== 'connection') {
+        const resizeOption = document.createElement('div');
+        resizeOption.className = 'context-menu-item';
+        resizeOption.innerHTML = '↗️ Ändra storlek';
+        resizeOption.onclick = () => {
+            hideContextMenu();
+            showResizeDialog(node);
+        };
+        menu.appendChild(resizeOption);
+        
+        // Font size option for geometric shapes
+        const fontSizeOption = document.createElement('div');
+        fontSizeOption.className = 'context-menu-item';
+        fontSizeOption.innerHTML = '🔤 Ändra fontstorlek';
+        fontSizeOption.onclick = () => {
+            hideContextMenu();
+            showFontSizeDialog(node);
+        };
+        menu.appendChild(fontSizeOption);
+    }
+    
+    // Arrow visibility toggle (global option)
+    const arrowToggleOption = document.createElement('div');
+    arrowToggleOption.className = 'context-menu-item';
+    const arrowsVisible = !window.arrowsHidden;
+    arrowToggleOption.innerHTML = arrowsVisible ? '👁️ Dölj pilar' : '👁️ Visa pilar';
+    arrowToggleOption.onclick = () => {
+        hideContextMenu();
+        toggleArrowVisibility();
+    };
+    menu.appendChild(arrowToggleOption);
+    
+    // Remove arrows between selected cards (if multiple cards selected)
+    const selectedNodes = cy.$('node:selected');
+    if (selectedNodes.length > 1) {
+        const removeArrowsOption = document.createElement('div');
+        removeArrowsOption.className = 'context-menu-item';
+        removeArrowsOption.innerHTML = '🗑️ Ta bort pilar mellan markerade';
+        removeArrowsOption.onclick = () => {
+            hideContextMenu();
+            removeArrowsBetweenSelected();
+        };
+        menu.appendChild(removeArrowsOption);
+        
+        // Bulk tag option for multiple selected cards
+        const bulkTagOption = document.createElement('div');
+        bulkTagOption.className = 'context-menu-item';
+        bulkTagOption.innerHTML = '🏷️ Lägg till tagg på alla markerade';
+        bulkTagOption.onclick = () => {
+            hideContextMenu();
+            showBulkTagDialog(selectedNodes);
+        };
+        menu.appendChild(bulkTagOption);
+    }
+    
+    document.body.appendChild(menu);
+    
+    // Close menu on click elsewhere
+    setTimeout(() => {
+        document.addEventListener('click', hideContextMenu, { once: true });
+    }, 0);
+}
 
+function hideContextMenu() {
+    const existingMenu = document.querySelector('.context-menu');
+    if (existingMenu) {
+        existingMenu.remove();
+    }
+}
 
+// Resize dialog for geometric shapes
+function showResizeDialog(node) {
+    // Get current size or defaults
+    const currentWidth = node.data('customWidth') || 120;
+    const currentHeight = node.data('customHeight') || 120;
+    const currentZIndex = node.data('customZIndex') || -1;
+    
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+    
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+        background: white;
+        padding: 30px;
+        border-radius: 15px;
+        max-width: 400px;
+        width: 90%;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    `;
+    
+    dialog.innerHTML = `
+        <h3 style="margin-top: 0; text-align: center;">↗️ Ändra storlek & lager</h3>
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Bredd (px):</label>
+            <input type="number" id="resizeWidth" value="${currentWidth}" min="20" max="500" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Höjd (px):</label>
+            <input type="number" id="resizeHeight" value="${currentHeight}" min="20" max="500" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Lagerhöjd:</label>
+            <select id="layerSelect" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <option value="-1" ${currentZIndex === -1 ? 'selected' : ''}>🔻 Bakgrund (under kort)</option>
+                <option value="0" ${currentZIndex === 0 ? 'selected' : ''}>📄 Normal nivå</option>
+                <option value="1" ${currentZIndex === 1 ? 'selected' : ''}>🔺 Förgrund (över kort)</option>
+            </select>
+            <small style="color: #666; display: block; margin-top: 5px;">Bakgrund: figurerna hamnar under korten som underlägg</small>
+        </div>
+        <div style="margin-bottom: 20px;">
+            <label style="display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" id="keepAspectRatio" checked>
+                <span>Behåll proportioner</span>
+            </label>
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <button id="cancelResize" style="padding: 10px 20px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">Avbryt</button>
+            <button id="applyResize" style="padding: 10px 20px; border: none; background: #007acc; color: white; border-radius: 4px; cursor: pointer;">Tillämpa</button>
+        </div>
+    `;
+    
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    
+    // Focus first input
+    const widthInput = document.getElementById('resizeWidth');
+    const heightInput = document.getElementById('resizeHeight');
+    const aspectCheckbox = document.getElementById('keepAspectRatio');
+    widthInput.focus();
+    
+    // Keep aspect ratio functionality
+    const originalAspectRatio = currentWidth / currentHeight;
+    
+    widthInput.addEventListener('input', () => {
+        if (aspectCheckbox.checked) {
+            heightInput.value = Math.round(widthInput.value / originalAspectRatio);
+        }
+    });
+    
+    heightInput.addEventListener('input', () => {
+        if (aspectCheckbox.checked) {
+            widthInput.value = Math.round(heightInput.value * originalAspectRatio);
+        }
+    });
+    
+    // Handle buttons
+    document.getElementById('cancelResize').onclick = () => {
+        document.body.removeChild(overlay);
+    };
+    
+    document.getElementById('applyResize').onclick = () => {
+        const newWidth = parseInt(widthInput.value) || currentWidth;
+        const newHeight = parseInt(heightInput.value) || currentHeight;
+        const newZIndex = parseInt(document.getElementById('layerSelect').value);
+        
+        // Apply resize and layer change
+        resizeAnnotationNode(node, newWidth, newHeight, newZIndex);
+        
+        document.body.removeChild(overlay);
+    };
+    
+    // ESC to close
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            document.body.removeChild(overlay);
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
+    
+    // Enter to apply
+    const handleEnter = (e) => {
+        if (e.key === 'Enter') {
+            document.getElementById('applyResize').click();
+            document.removeEventListener('keydown', handleEnter);
+        }
+    };
+    document.addEventListener('keydown', handleEnter);
+}
 
+// Show resize dialog for image nodes (maintains aspect ratio)
+function showImageResizeDialog(node) {
+    // Get current and original dimensions
+    const currentWidth = node.data('displayWidth') || 300;
+    const imageWidth = node.data('imageWidth');
+    const imageHeight = node.data('imageHeight');
+    const aspectRatio = imageHeight / imageWidth;
+    const currentHeight = Math.round(currentWidth * aspectRatio);
+
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+        background: white;
+        padding: 30px;
+        border-radius: 15px;
+        max-width: 400px;
+        width: 90%;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    `;
+
+    dialog.innerHTML = `
+        <h3 style="margin-top: 0; text-align: center;">📏 Ändra bildstorlek</h3>
+        <p style="color: #666; font-size: 13px; margin-bottom: 15px;">Original: ${imageWidth}×${imageHeight}px</p>
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Bredd (px):</label>
+            <input type="range" id="imageWidthSlider" min="100" max="800" value="${currentWidth}" step="10"
+                   style="width: 100%; margin-bottom: 5px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <input type="number" id="imageWidthInput" value="${currentWidth}" min="100" max="800"
+                       style="width: 80px; padding: 5px; border: 1px solid #ddd; border-radius: 4px;">
+                <span id="imageDimensions" style="color: #666; font-size: 13px;">${currentWidth}×${currentHeight}px</span>
+            </div>
+        </div>
+        <div style="margin-bottom: 20px;">
+            <p style="color: #888; font-size: 12px; margin: 0;">
+                ℹ️ Proportionerna bevaras automatiskt
+            </p>
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <button id="cancelImageResize" style="padding: 10px 20px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">Avbryt</button>
+            <button id="applyImageResize" style="padding: 10px 20px; border: none; background: #007acc; color: white; border-radius: 4px; cursor: pointer;">Tillämpa</button>
+        </div>
+    `;
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    // Get elements
+    const widthSlider = document.getElementById('imageWidthSlider');
+    const widthInput = document.getElementById('imageWidthInput');
+    const dimensionsDisplay = document.getElementById('imageDimensions');
+
+    // Update display when slider or input changes
+    const updateDimensions = () => {
+        const width = parseInt(widthSlider.value);
+        const height = Math.round(width * aspectRatio);
+        widthInput.value = width;
+        dimensionsDisplay.textContent = `${width}×${height}px`;
+    };
+
+    widthSlider.addEventListener('input', updateDimensions);
+    widthInput.addEventListener('input', () => {
+        widthSlider.value = widthInput.value;
+        updateDimensions();
+    });
+
+    // Handle buttons
+    document.getElementById('cancelImageResize').onclick = () => {
+        document.body.removeChild(overlay);
+    };
+
+    document.getElementById('applyImageResize').onclick = () => {
+        const newWidth = parseInt(widthSlider.value);
+        const newHeight = Math.round(newWidth * aspectRatio);
+
+        // Update node data and styling
+        node.data('displayWidth', newWidth);
+        node.data('displayHeight', newHeight);
+        node.style({
+            'width': newWidth + 'px',
+            'height': newHeight + 'px'
+        });
+
+        console.log(`📏 Resized image to ${newWidth}×${newHeight}px`);
+        saveBoard(); // Save changes
+
+        document.body.removeChild(overlay);
+    };
+
+    // ESC to close
+    const handleEscape = (e) => {
+        if (e.key === 'Escape' && document.body.contains(overlay)) {
+            document.body.removeChild(overlay);
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
+
+    // Enter to apply
+    const handleEnter = (e) => {
+        if (e.key === 'Enter' && document.body.contains(overlay)) {
+            document.getElementById('applyImageResize').click();
+            document.removeEventListener('keydown', handleEnter);
+        }
+    };
+    document.addEventListener('keydown', handleEnter);
+
+    // Focus input
+    widthInput.focus();
+    widthInput.select();
+}
 
 // Apply resize and layer change to annotation node
 function resizeAnnotationNode(node, newWidth, newHeight, newZIndex = null) {
@@ -289,7 +2594,89 @@ function resizeAnnotationNode(node, newWidth, newHeight, newZIndex = null) {
 }
 
 // Font size dialog for geometric shapes
-
+function showFontSizeDialog(node) {
+    // Get current font size or default
+    const currentFontSize = node.style('font-size') || '16px';
+    const currentFontSizeValue = parseInt(currentFontSize.replace('px', ''));
+    
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+    
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+        background: white;
+        padding: 30px;
+        border-radius: 15px;
+        max-width: 350px;
+        width: 90%;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    `;
+    
+    dialog.innerHTML = `
+        <h3 style="margin-top: 0; color: #333;">🔤 Ändra fontstorlek</h3>
+        <div style="margin: 20px 0;">
+            <label for="fontSizeInput" style="display: block; margin-bottom: 5px; font-weight: bold;">Fontstorlek (px):</label>
+            <input type="number" id="fontSizeInput" value="${currentFontSizeValue}" min="8" max="72" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+        </div>
+        <div style="text-align: right; margin-top: 25px;">
+            <button id="cancelFontSize" style="margin-right: 10px; padding: 8px 16px; border: 1px solid #ddd; border-radius: 5px; background: white; cursor: pointer;">Avbryt</button>
+            <button id="applyFontSize" style="padding: 8px 16px; border: none; border-radius: 5px; background: #007bff; color: white; cursor: pointer;">Tillämpa</button>
+        </div>
+    `;
+    
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    
+    // Focus the input
+    document.getElementById('fontSizeInput').focus();
+    document.getElementById('fontSizeInput').select();
+    
+    // Cancel button
+    document.getElementById('cancelFontSize').onclick = () => {
+        document.body.removeChild(overlay);
+    };
+    
+    // Apply button
+    document.getElementById('applyFontSize').onclick = () => {
+        const fontSizeInput = document.getElementById('fontSizeInput');
+        const newFontSize = parseInt(fontSizeInput.value) || currentFontSizeValue;
+        
+        // Apply font size change
+        changeFontSize(node, newFontSize);
+        
+        document.body.removeChild(overlay);
+    };
+    
+    // ESC to close
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            document.body.removeChild(overlay);
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
+    
+    // Enter to apply
+    const handleEnter = (e) => {
+        if (e.key === 'Enter') {
+            document.getElementById('applyFontSize').click();
+            document.removeEventListener('keydown', handleEnter);
+        }
+    };
+    document.addEventListener('keydown', handleEnter);
+}
 
 // Apply font size change to geometric shape
 function changeFontSize(node, newFontSize) {
@@ -361,7 +2748,90 @@ function removeArrowsBetweenSelected() {
 }
 
 // Bulk tag dialog for multiple selected cards
-
+function showBulkTagDialog(selectedNodes) {
+    console.log('🏷️ Opening bulk tag dialog for', selectedNodes.length, 'cards');
+    
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+    
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+        background: white;
+        padding: 30px;
+        border-radius: 15px;
+        max-width: 400px;
+        width: 90%;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    `;
+    
+    dialog.innerHTML = `
+        <h3 style="margin-top: 0; color: #333;">🏷️ Lägg till tagg</h3>
+        <p style="color: #666; margin-bottom: 20px;">Lägg till samma tagg på alla ${selectedNodes.length} markerade kort</p>
+        <div style="margin: 20px 0;">
+            <label for="bulkTagInput" style="display: block; margin-bottom: 5px; font-weight: bold;">Tagg namn:</label>
+            <input type="text" id="bulkTagInput" placeholder="skriv tagg här..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px;">
+            <small style="color: #888; display: block; margin-top: 5px;">Tips: använd inga mellanslag, t.ex. "viktigt" eller "projekt2025"</small>
+        </div>
+        <div style="text-align: right; margin-top: 25px;">
+            <button id="cancelBulkTag" style="margin-right: 10px; padding: 8px 16px; border: 1px solid #ddd; border-radius: 5px; background: white; cursor: pointer;">Avbryt</button>
+            <button id="applyBulkTag" style="padding: 8px 16px; border: none; border-radius: 5px; background: #007bff; color: white; cursor: pointer;">Lägg till tagg</button>
+        </div>
+    `;
+    
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    
+    // Focus the input
+    const tagInput = document.getElementById('bulkTagInput');
+    tagInput.focus();
+    
+    // Cancel button
+    document.getElementById('cancelBulkTag').onclick = () => {
+        document.body.removeChild(overlay);
+    };
+    
+    // Apply button
+    document.getElementById('applyBulkTag').onclick = () => {
+        const tagName = tagInput.value.trim();
+        if (tagName) {
+            applyBulkTag(selectedNodes, tagName);
+            document.body.removeChild(overlay);
+        } else {
+            tagInput.style.borderColor = 'red';
+            tagInput.focus();
+        }
+    };
+    
+    // ESC to close
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            document.body.removeChild(overlay);
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
+    
+    // Enter to apply
+    const handleEnter = (e) => {
+        if (e.key === 'Enter') {
+            document.getElementById('applyBulkTag').click();
+            document.removeEventListener('keydown', handleEnter);
+        }
+    };
+    document.addEventListener('keydown', handleEnter);
+}
 
 // Apply bulk tag to multiple cards
 function applyBulkTag(selectedNodes, tagName) {
@@ -413,12 +2883,106 @@ function applyBulkTag(selectedNodes, tagName) {
     saveBoard();
 }
 
+// Color picker system
+function showColorPicker(event, nodes) {
+    console.log('showColorPicker called with', nodes.length, 'nodes');
+    
+    // Remove any existing color picker
+    hideColorPicker();
+    
+    // Get mouse position or use event position
+    const x = event.clientX || event.pageX || window.innerWidth / 2;
+    const y = event.clientY || event.pageY || window.innerHeight / 2;
+    console.log('Color picker position:', x, y);
+    
+    // Create color picker popup
+    const picker = document.createElement('div');
+    picker.className = 'color-picker-popup';
+    picker.style.position = 'fixed';
+    picker.style.left = x + 'px';
+    picker.style.top = y + 'px';
+    picker.style.zIndex = '4000';
+    
+    // Add title
+    const title = document.createElement('div');
+    title.className = 'color-picker-title';
+    title.textContent = `Välj färg för ${nodes.length} kort`;
+    picker.appendChild(title);
+    
+    // Create color grid
+    const colorGrid = document.createElement('div');
+    colorGrid.className = 'color-picker-grid';
+    
+    // Add the 8 color options
+    for (let i = 1; i <= 8; i++) {
+        const colorDot = document.createElement('div');
+        colorDot.className = `color-picker-dot card-color-${i}`;
+        colorDot.textContent = i; // Add number inside the dot
+        colorDot.style.lineHeight = '26px'; // Center vertically
+        colorDot.style.textAlign = 'center'; // Center horizontally
+        colorDot.style.fontSize = '14px';
+        colorDot.style.fontWeight = 'bold';
+        colorDot.style.color = '#333';
+        colorDot.style.textShadow = '0 0 3px rgba(255,255,255,0.8)';
+        colorDot.onclick = () => {
+            console.log(`Clicked color ${i}, applying to ${nodes.length} cards`);
+            // Apply color to all nodes
+            nodes.forEach(node => {
+                console.log(`Setting color card-color-${i} on node:`, node.id());
+                node.data('cardColor', `card-color-${i}`);
+                // Update cytoscape styling immediately
+                const colorValue = getCardColorValue(`card-color-${i}`, getCurrentTheme());
+                console.log(`Color value:`, colorValue);
+                node.style('background-color', colorValue);
+            });
 
+            // Save immediately to prevent data loss from autosave/Drive sync
+            saveBoard();
+
+            hideColorPicker();
+            console.log(`Applied color ${i} to ${nodes.length} cards`);
+        };
+        colorGrid.appendChild(colorDot);
+    }
+    
+    picker.appendChild(colorGrid);
+    
+    // Add cancel button
+    const cancelBtn = document.createElement('div');
+    cancelBtn.className = 'color-picker-cancel';
+    cancelBtn.textContent = 'Avbryt';
+    cancelBtn.onclick = hideColorPicker;
+    picker.appendChild(cancelBtn);
+    
+    console.log('Adding picker to body:', picker);
+    document.body.appendChild(picker);
+    console.log('Picker added, should be visible now');
+    
+    // Close picker on click elsewhere
+    setTimeout(() => {
+        currentClickHandler = function(e) {
+            if (!picker.contains(e.target)) {
+                hideColorPicker();
+            }
+        };
+        document.addEventListener('click', currentClickHandler);
+    }, 100);
+}
 
 let currentClickHandler = null;
 
-
-
+function hideColorPicker() {
+    const existingPicker = document.querySelector('.color-picker-popup');
+    if (existingPicker) {
+        existingPicker.remove();
+    }
+    // Remove the click handler if it exists
+    if (currentClickHandler) {
+        document.removeEventListener('click', currentClickHandler);
+        currentClickHandler = null;
+    }
+    console.log('Color picker hidden and event listeners cleaned up');
+}
 
 function removeCardColor(node) {
     node.removeData('cardColor');
@@ -429,7 +2993,130 @@ function removeCardColor(node) {
     console.log('Removed color from card:', node.id());
 }
 
+function getCurrentTheme() {
+    if (document.body.classList.contains('dark-theme')) return 'dark';
+    if (document.body.classList.contains('sepia-theme')) return 'sepia';
+    if (document.body.classList.contains('eink-theme')) return 'eink';
+    return 'light';
+}
 
+// Multi-card paste dialog
+function showMultiCardPasteDialog() {
+    // Remove any existing dialog
+    const existingDialog = document.querySelector('.multi-card-paste-dialog');
+    if (existingDialog) {
+        existingDialog.remove();
+    }
+    
+    // Create dialog overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'multi-card-paste-dialog';
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 5000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+    
+    // Create dialog content
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        width: 90%;
+        max-width: 600px;
+        max-height: 80vh;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    `;
+    
+    dialog.innerHTML = `
+        <h3 style="margin: 0 0 15px 0; color: #333;">Skapa flera kort från text</h3>
+        <p style="margin: 0 0 15px 0; color: #666; font-size: 14px;">
+            Klistra in text. Två tomma rader = nytt kort.<br>
+            Sista raden med #tagg1 #tagg2 blir riktiga taggar.
+        </p>
+        <textarea id="multiCardText" placeholder="Första anteckningen här...
+
+Andra anteckningen...
+#work #urgent
+
+Tredje anteckningen...
+#personal #todo" style="
+            width: 100%;
+            height: 300px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+            resize: vertical;
+            box-sizing: border-box;
+        "></textarea>
+        <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: flex-end;">
+            <button id="cancelMultiCard" style="
+                padding: 8px 16px;
+                border: 1px solid #ddd;
+                background: white;
+                border-radius: 4px;
+                cursor: pointer;
+            ">Avbryt</button>
+            <button id="createMultiCards" style="
+                padding: 8px 16px;
+                border: none;
+                background: #007bff;
+                color: white;
+                border-radius: 4px;
+                cursor: pointer;
+            ">Skapa kort</button>
+        </div>
+    `;
+    
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    
+    // Focus textarea
+    const textarea = document.getElementById('multiCardText');
+    textarea.focus();
+    
+    // Event handlers
+    document.getElementById('cancelMultiCard').onclick = () => {
+        overlay.remove();
+    };
+    
+    document.getElementById('createMultiCards').onclick = () => {
+        const text = textarea.value.trim();
+        if (text) {
+            createMultipleCardsFromText(text);
+            overlay.remove();
+        } else {
+            alert('Skriv in lite text först!');
+        }
+    };
+    
+    // Close on Escape
+    function handleEscape(e) {
+        if (e.key === 'Escape') {
+            overlay.remove();
+            document.removeEventListener('keydown', handleEscape);
+        }
+    }
+    document.addEventListener('keydown', handleEscape);
+    
+    // Close on click outside dialog
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+            overlay.remove();
+        }
+    });
+}
 
 // Parse and create multiple cards from text
 function createMultipleCardsFromText(text) {
@@ -2924,6 +5611,25 @@ function showAllCards() {
 }
 
 // Clear search
+function clearSearch() {
+    searchActive = false;
+
+    cy.nodes().removeClass('search-match');
+    cy.nodes().removeClass('search-non-match'); // Remove blur from non-matches
+    cy.nodes().data('searchMatch', false);
+    cy.nodes().unselect(); // Avmarkera alla kort när sökning rensas
+
+    // Show all cards (reset display from AI filter)
+    cy.nodes().style('display', 'element');
+
+    const searchInfo = document.getElementById('searchInfo');
+    searchInfo.classList.remove('visible');
+
+    // Hide mobile select button
+    const selectBtn = document.getElementById('searchSelectBtn');
+    selectBtn.style.display = 'none';
+}
+
 // ============================================================================
 // EXPORT FUNCTIONS - Export selected cards in various formats
 // ============================================================================
@@ -3472,8 +6178,105 @@ function showBriefMessage(message, duration = 3000) {
 window.showBriefMessage = showBriefMessage;
 
 // Tag filtering functions with Boolean logic
+function performTagFilter(filterText) {
+    if (!filterText.trim()) {
+        clearTagFilter();
+        return;
+    }
+    
+    const query = filterText.toLowerCase().trim();
+    let matchCount = 0;
+    
+    cy.nodes().forEach(node => {
+        const nodeTags = node.data('tags') || [];
+        const nodeTagsLower = nodeTags.map(tag => tag.toLowerCase());
+        
+        // Create searchable tag string (space-separated for boolean evaluation)
+        const searchableTagText = nodeTagsLower.join(' ');
+        
+        // Use boolean evaluation on tags
+        const matches = evaluateBooleanTagQuery(query, searchableTagText, nodeTagsLower);
+        
+        if (matches) {
+            node.removeClass('tag-filtered');
+            matchCount++;
+        } else {
+            node.addClass('tag-filtered');
+        }
+    });
+    
+    const searchInfo = document.getElementById('searchInfo');
+    searchInfo.textContent = `${matchCount} kort matchade tag-filter: "${filterText}"`;
+    searchInfo.classList.add('visible');
+}
+
 // Boolean query evaluation specifically for tags
+function evaluateBooleanTagQuery(query, searchableTagText, nodeTagsArray) {
+    // Handle different boolean operators for tags
+    
+    // Split by OR first (lowest precedence)
+    if (query.includes(' or ')) {
+        const orParts = query.split(' or ');
+        return orParts.some(part => evaluateBooleanTagQuery(part.trim(), searchableTagText, nodeTagsArray));
+    }
+    
+    // Handle NOT operations
+    if (query.includes(' not ')) {
+        const notIndex = query.indexOf(' not ');
+        const beforeNot = query.substring(0, notIndex).trim();
+        const afterNot = query.substring(notIndex + 5).trim(); // ' not '.length = 5
+        
+        // If there's something before NOT, it must match
+        let beforeMatches = true;
+        if (beforeNot) {
+            beforeMatches = evaluateBooleanTagQuery(beforeNot, searchableTagText, nodeTagsArray);
+        }
+        
+        // The part after NOT must NOT match
+        const afterMatches = evaluateBooleanTagQuery(afterNot, searchableTagText, nodeTagsArray);
+        
+        return beforeMatches && !afterMatches;
+    }
+    
+    // Handle AND operations (default behavior and explicit)
+    const andParts = query.includes(' and ') ? 
+        query.split(' and ') : 
+        query.split(' ').filter(term => term.length > 0);
+        
+    return andParts.every(term => {
+        term = term.trim();
+        
+        if (term.startsWith('"') && term.endsWith('"')) {
+            // Exact tag search - must match complete tag
+            const exactTag = term.slice(1, -1);
+            return nodeTagsArray.some(tag => tag === exactTag);
+        } else {
+            // Partial tag search - can be part of any tag
+            return nodeTagsArray.some(tag => tag.includes(term));
+        }
+    });
+}
+
+function clearTagFilter() {
+    cy.nodes().removeClass('tag-filtered');
+    const searchInfo = document.getElementById('searchInfo');
+    searchInfo.classList.remove('visible');
+}
+
 // Multi-selection functions
+function pinSelectedCards() {
+    const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
+    selectedNodes.forEach(node => {
+        if (!node.hasClass('pinned')) {
+            pinCard(node);
+        }
+    });
+    if (selectedNodes.length > 0) {
+        console.log(`Pinned ${selectedNodes.length} cards`);
+        updateSelectionInfo(); // Update after pinning
+    }
+}
+
 function unpinSelectedCards() {
     const selectedNodes = cy.$('node:selected, node[searchMatch="true"]');
     selectedNodes.forEach(node => {
@@ -4169,8 +6972,100 @@ function applyTemporalMarkings() {
 }
 
 // Debug function to check hidden_tags - call this in console
+function debugHiddenTags() {
+    console.log('=== HIDDEN TAGS DEBUG ===');
+    cy.nodes().forEach(node => {
+        const hiddenTags = node.data('hidden_tags') || [];
+        const isCopy = node.data('isCopy');
+        const copyOf = node.data('copyOf');
+        const copyTimestamp = node.data('copyTimestamp');
+        
+        if (hiddenTags.length > 0 || isCopy) {
+            console.log(`Card ${node.id()}:`);
+            console.log(`  Title: "${node.data('title')}"`);
+            console.log(`  Hidden tags:`, hiddenTags);
+            console.log(`  isCopy:`, isCopy);
+            console.log(`  copyOf:`, copyOf);
+            console.log(`  copyTimestamp:`, copyTimestamp);
+            console.log('---');
+        }
+    });
+    console.log('=== END DEBUG ===');
+}
+
 // Test copy search - call this in console 
+function testCopySearch() {
+    console.log('🧪 Testing copy search functionality...');
+    
+    // Create test card
+    const testNode = cy.add({
+        data: {
+            id: 'test-copy-search',
+            title: 'Test Original',
+            text: 'This is a test card',
+            tags: ['test'],
+            hidden_tags: [],
+            searchMatch: false
+        },
+        position: { x: 100, y: 100 }
+    });
+    testNode.grabify();
+    
+    // Select and copy it
+    testNode.select();
+    copySelectedCards();
+    
+    // Create copy via arrangement
+    arrangeCopiedCardsInRow();
+    
+    console.log('✅ Test setup complete. Now try searching for "copy_" in the search box');
+    console.log('💡 Also try: debugHiddenTags() to see all hidden tags');
+}
+
 // Test function for temporal markings - call this in console
+function testTemporalMarkings() {
+    // Create test cards with different date scenarios
+    const testData = [
+        { id: 'test-today', title: 'Today Test', text: 'Meeting @250816', x: 100, y: 100 },
+        { id: 'test-tomorrow', title: 'Tomorrow Test', text: 'Task @250817 #todo', x: 300, y: 100 },
+        { id: 'test-future', title: 'Future Test', text: 'Event @250820', x: 500, y: 100 },
+        { id: 'test-week', title: 'Week Test', text: 'Week meeting @25w33', x: 700, y: 100 },
+        { id: 'test-past', title: 'Past Test', text: 'Old task @250815 #todo', x: 900, y: 100 }
+    ];
+    
+    // Add test cards
+    testData.forEach(card => {
+        // Remove if exists
+        const existing = cy.getElementById(card.id);
+        if (existing.length > 0) {
+            existing.remove();
+        }
+        
+        const node = cy.add({
+            data: {
+                id: card.id,
+                title: card.title,
+                text: card.text,
+                tags: [],
+                searchMatch: false
+            },
+            position: { x: card.x, y: card.y }
+        });
+        
+        // Apply auto-gray coloring for #done tags
+        applyAutoDoneColoring(node);
+        
+        node.grabify();
+    });
+    
+    // Apply temporal markings
+    setTimeout(() => {
+        applyTemporalMarkings();
+    }, 500);
+    
+    console.log('🧪 Test cards created! Check console for marking details.');
+}
+
 // Get earliest date from card content for sorting
 function getEarliestDateFromContent(node) {
     const title = node.data('title') || '';
@@ -6928,6 +9823,65 @@ function executeCommand(command) {
     }
 }
 
+function debugDumpPositions() {
+    console.log('\n=== KORT POSITIONER DEBUG ===');
+    cy.nodes().forEach(node => {
+        const pos = node.position();
+        const title = node.data('title') || 'Untitled';
+        console.log(`${node.id()}: x: ${Math.round(pos.x)}, y: ${Math.round(pos.y)} - "${title}"`);
+    });
+    console.log('=== SLUT DEBUG ===\n');
+    
+    const searchInfo = document.getElementById('searchInfo');
+    if (searchInfo) {
+        searchInfo.textContent = 'Kort-positioner dumpade till console (F12)';
+        searchInfo.classList.add('visible');
+        setTimeout(() => {
+            searchInfo.classList.remove('visible');
+        }, 3000);
+    }
+}
+
+function toggleDarkTheme() {
+    const body = document.body;
+    const themeBtn = document.getElementById('themeBtn');
+
+    let currentTheme = 'light';
+    if (body.classList.contains('dark-theme')) {
+        currentTheme = 'dark';
+    } else if (body.classList.contains('sepia-theme')) {
+        currentTheme = 'sepia';
+    } else if (body.classList.contains('eink-theme')) {
+        currentTheme = 'eink';
+    }
+
+    // Cycle through themes: light -> dark -> sepia -> eink -> light
+    if (currentTheme === 'light') {
+        body.classList.remove('eink-theme', 'sepia-theme');
+        body.classList.add('dark-theme');
+        themeBtn.innerHTML = '📜 Sepia';
+        localStorage.setItem('theme', 'dark');
+        applyCardTheme('dark');
+    } else if (currentTheme === 'dark') {
+        body.classList.remove('dark-theme', 'eink-theme');
+        body.classList.add('sepia-theme');
+        themeBtn.innerHTML = '📄 E-ink';
+        localStorage.setItem('theme', 'sepia');
+        applyCardTheme('sepia');
+    } else if (currentTheme === 'sepia') {
+        body.classList.remove('dark-theme', 'sepia-theme');
+        body.classList.add('eink-theme');
+        themeBtn.innerHTML = '☀️ Ljust';
+        localStorage.setItem('theme', 'eink');
+        applyCardTheme('eink');
+    } else {
+        body.classList.remove('dark-theme', 'sepia-theme', 'eink-theme');
+        themeBtn.innerHTML = '🌙 Mörkt';
+        localStorage.setItem('theme', 'light');
+        applyCardTheme('light');
+    }
+}
+
 function toggleSepiaTheme() {
     const body = document.body;
     const themeBtn = document.getElementById('themeBtn');
@@ -6951,7 +9905,260 @@ function toggleEInkTheme() {
 }
 
 // Get card color value based on theme
+function getCardColorValue(colorId, theme) {
+    const colors = {
+        light: {
+            1: '#d4f2d4', // Grön
+            2: '#ffe4b3', // Orange
+            3: '#ffc1cc', // Röd
+            4: '#fff7b3', // Gul
+            5: '#f3e5f5', // Lila
+            6: '#c7e7ff', // Blå
+            7: '#e0e0e0', // Grå
+            8: '#ffffff'  // Vit
+        },
+        dark: {
+            1: '#3d5a3d', // Mörk Grön
+            2: '#5a4d3a', // Mörk Orange
+            3: '#5a3c3a', // Mörk Röd
+            4: '#5a5a3a', // Mörk Gul
+            5: '#4a3d5a', // Mörk Lila
+            6: '#2e4a6f', // Mörk Blå
+            7: '#555555', // Mörk Grå
+            8: '#8a8a8a'  // Ljusgrå (vit blir för ljus i dark theme)
+        },
+        sepia: {
+            1: '#ded6c7', // Sepia Grön
+            2: '#e6d6c2', // Sepia Orange
+            3: '#ead6c7', // Sepia Röd
+            4: '#ebe2d6', // Sepia Gul
+            5: '#e2d6c7', // Sepia Lila
+            6: '#d6c7b3', // Sepia Blå
+            7: '#c0b8a8', // Sepia Grå
+            8: '#f5f2e8'  // Sepia Vit
+        },
+        eink: {
+            1: '#e8f5e8', // Väldigt ljus Grön
+            2: '#fff4e5', // Väldigt ljus Orange
+            3: '#ffe5eb', // Väldigt ljus Röd/Rosa
+            4: '#fffce5', // Väldigt ljus Gul
+            5: '#f8f0fa', // Väldigt ljus Lila
+            6: '#e5f4ff', // Väldigt ljus Blå
+            7: '#f0f0f0', // Ljus Grå
+            8: '#ffffff'  // Vit
+        }
+    };
+
+    // Extract number from colorId (card-color-1 -> 1)
+    const colorNumber = colorId.toString().replace('card-color-', '');
+
+    return colors[theme] && colors[theme][colorNumber] ? colors[theme][colorNumber] : null;
+}
+
+function applyCardTheme(theme) {
+    if (cy) {
+        if (theme === 'dark') {
+            // Dark theme styling
+            cy.style()
+                .selector('node').style({
+                    'background-color': function(node) {
+                        const cardColor = node.data('cardColor');
+                        if (cardColor) {
+                            // Color priority: if card has color, use it regardless of theme
+                            return getCardColorValue(cardColor, 'dark');
+                        }
+                        return '#2a2a2a';
+                    },
+                    'color': '#f0f0f0',
+                    'border-color': '#555'
+                })
+                .selector('node:selected').style({
+                    'border-color': '#66b3ff',  // Bright blue for visibility
+                    'border-width': 5,
+                    'box-shadow': '0 0 25px rgba(102, 179, 255, 0.8)'
+                })
+                .selector('node.search-match').style({
+                    'background-color': '#4a3c00',  // Dark yellow background
+                    'border-color': '#ffcc00',     // Bright yellow border
+                    'border-width': 3,
+                    'box-shadow': '0 0 15px rgba(255, 204, 0, 0.6)'
+                })
+                .selector('node.pinned').style({
+                    'border-color': '#4caf50',  // Bright green
+                    'border-width': 4,
+                    'box-shadow': '0 0 15px rgba(76, 175, 80, 0.6)'
+                })
+                .selector('node.temporal-marked').style({
+                    'border-width': function(node) {
+                        return node.data('temporalBorderWidth') || 6;
+                    },
+                    'border-color': function(node) {
+                        return node.data('temporalBorderColor') || '#ff4500';
+                    }
+                })
+                .update();
+        } else if (theme === 'sepia') {
+            // Sepia theme styling
+            cy.style()
+                .selector('node').style({
+                    'background-color': function(node) {
+                        const cardColor = node.data('cardColor');
+                        if (cardColor) {
+                            return getCardColorValue(cardColor, 'sepia');
+                        }
+                        return '#f0e6d2';
+                    },
+                    'color': '#5d4e37',
+                    'border-color': '#c8a882'
+                })
+                .selector('node:selected').style({
+                    'border-color': '#8b7556',  // Dark brown for sepia
+                    'border-width': 4,
+                    'box-shadow': '0 0 20px rgba(139, 117, 86, 0.7)'
+                })
+                .selector('node.search-match').style({
+                    'background-color': '#f4e8d0',  // Light sepia highlight
+                    'border-color': '#d2691e',     // Chocolate border
+                    'border-width': 2,
+                    'box-shadow': '0 0 10px rgba(210, 105, 30, 0.5)'
+                })
+                .selector('node.pinned').style({
+                    'border-color': '#8fbc8f',  // Dark sea green for sepia
+                    'border-width': 4,
+                    'box-shadow': '0 0 15px rgba(143, 188, 143, 0.6)'
+                })
+                .selector('node.temporal-marked').style({
+                    'border-width': function(node) {
+                        return node.data('temporalBorderWidth') || 6;
+                    },
+                    'border-color': function(node) {
+                        return node.data('temporalBorderColor') || '#ff4500';
+                    }
+                })
+                .update();
+        } else if (theme === 'eink') {
+            // E-ink theme styling - no shadows, sharp contrast, light colors with black text
+            cy.style()
+                .selector('node').style({
+                    'background-color': function(node) {
+                        const cardColor = node.data('cardColor');
+                        if (cardColor) {
+                            // Use very light e-ink colors with black text
+                            return getCardColorValue(cardColor, 'eink');
+                        }
+                        return '#ffffff';
+                    },
+                    'color': '#000000',
+                    'border-color': '#000000',
+                    'border-width': 2
+                })
+                .selector('node:selected').style({
+                    'border-color': '#000000',
+                    'border-width': 4,
+                    'box-shadow': 'none'  // No shadows for e-ink
+                })
+                .selector('node.search-match').style({
+                    'background-color': '#f0f0f0',
+                    'border-color': '#000000',
+                    'border-width': 3,
+                    'box-shadow': 'none'  // No shadows for e-ink
+                })
+                .selector('node.pinned').style({
+                    'border-color': '#000000',
+                    'border-width': 4,
+                    'box-shadow': 'none'  // No shadows for e-ink
+                })
+                .selector('node.temporal-marked').style({
+                    'border-width': function(node) {
+                        return node.data('temporalBorderWidth') || 4;
+                    },
+                    'border-color': '#000000'  // All black for e-ink
+                })
+                .update();
+        } else {
+            // Light theme styling (default)
+            cy.style()
+                .selector('node').style({
+                    'background-color': function(node) {
+                        const cardColor = node.data('cardColor');
+                        if (cardColor) {
+                            return getCardColorValue(cardColor, 'light');
+                        }
+                        return '#ffffff';
+                    },
+                    'color': '#333333',
+                    'border-color': '#ddd'
+                })
+                .selector('node:selected').style({
+                    'border-color': '#1565c0',
+                    'border-width': 4,
+                    'box-shadow': '0 0 20px rgba(21, 101, 192, 0.7)'
+                })
+                .selector('node.search-match').style({
+                    'background-color': '#fff9c4',
+                    'border-color': '#f57f17',
+                    'border-width': 2,
+                    'box-shadow': '0 0 10px rgba(245, 127, 23, 0.4)'
+                })
+                .selector('node.pinned').style({
+                    'border-color': '#2e7d32',
+                    'border-width': 4,
+                    'box-shadow': '0 0 15px rgba(46, 125, 50, 0.6)'
+                })
+                .selector('node.temporal-marked').style({
+                    'border-width': function(node) {
+                        return node.data('temporalBorderWidth') || 6;
+                    },
+                    'border-color': function(node) {
+                        return node.data('temporalBorderColor') || '#ff4500';
+                    }
+                })
+                .update();
+        }
+    }
+}
+
 // Load saved theme on page load
+function loadSavedTheme() {
+    const savedTheme = localStorage.getItem('theme') || localStorage.getItem('darkTheme'); // Backward compatibility
+    const themeBtn = document.getElementById('themeBtn');
+
+    // Handle backward compatibility
+    let theme = 'light';
+    if (savedTheme === 'dark' || savedTheme === 'true') {
+        theme = 'dark';
+    } else if (savedTheme === 'sepia') {
+        theme = 'sepia';
+    } else if (savedTheme === 'eink') {
+        theme = 'eink';
+    }
+
+    if (theme === 'dark') {
+        document.body.classList.add('dark-theme');
+        if (themeBtn) {
+            themeBtn.innerHTML = '📜 Sepia';
+        }
+        setTimeout(() => applyCardTheme('dark'), 100);
+    } else if (theme === 'sepia') {
+        document.body.classList.add('sepia-theme');
+        if (themeBtn) {
+            themeBtn.innerHTML = '📄 E-ink';
+        }
+        setTimeout(() => applyCardTheme('sepia'), 100);
+    } else if (theme === 'eink') {
+        document.body.classList.add('eink-theme');
+        if (themeBtn) {
+            themeBtn.innerHTML = '☀️ Ljust';
+        }
+        setTimeout(() => applyCardTheme('eink'), 100);
+    } else {
+        if (themeBtn) {
+            themeBtn.innerHTML = '🌙 Mörkt';
+        }
+        setTimeout(() => applyCardTheme('light'), 100);
+    }
+}
+
 function clearBoard() {
     if (confirm('Är du säker på att du vill rensa hela brädan och localStorage?\n\nDetta kommer att:\n• Ta bort alla kort från brädan\n• Rensa sparad data i localStorage\n• Återställa till tom bräda\n\nDenna åtgärd kan inte ångras!')) {
         // Clear memoization cache
@@ -8229,11 +11436,179 @@ function showFormDialog(x, y) {
 }
 
 // Create card from form data
+function createCardFromForm(x, y, selectedColor = '') {
+    const title = document.getElementById('formTitle').value.trim();
+    const text = document.getElementById('formText').value.trim();
+    const tagsInput = document.getElementById('formTags').value.trim();
+    
+    if (!text) return; // Need at least some text
+    
+    const tags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(t => t) : [];
+    
+    const newId = generateCardId();
+    const nodeData = {
+        id: newId,
+        title: title,
+        text: text,
+        tags: tags,
+        searchMatch: false
+    };
+    
+    // Add color if selected
+    if (selectedColor) {
+        nodeData.cardColor = selectedColor;
+    }
+    
+    const newNode = cy.add({
+        data: nodeData,
+        position: { x: x, y: y }
+    });
+    
+    // Apply color styling if selected
+    if (selectedColor) {
+        newNode.style('background-color', getCardColorValue(selectedColor, getCurrentTheme()));
+    }
+    
+    newNode.grabify();
+    console.log(`Created card via form: ${title || 'Untitled'} ${selectedColor ? 'with color ' + selectedColor : ''}`);
+    
+    // Apply temporal markings to newly created card
+    setTimeout(() => {
+        applyTemporalMarkings();
+    }, 100);
+}
 
+// Code syntax dialog for quick card creation
+function showCodeDialog(x, y) {
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.5); z-index: 2000;
+        display: flex; align-items: center; justify-content: center;
+    `;
+    
+    // Create code dialog
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+        background: white; padding: 20px; border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3); width: 500px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    `;
+    
+    dialog.innerHTML = `
+        <h3 style="margin: 0 0 10px 0; color: #333;">Snabbformat</h3>
+        <p style="margin: 0 0 15px 0; color: #666; font-size: 14px;">
+            #Titel<br>Innehåll här (Shift+Enter för ny rad)<br>#tag1 #tag2
+            <br><strong>Enter</strong>=Spara, <strong>Esc</strong>=Avbryt
+        </p>
+        <textarea id="codeInput" placeholder="#Titel här
+Skriv ditt innehåll här...
+#tag1 #tag2" 
+            style="width: 100%; height: 120px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; 
+                   font-family: 'SF Mono', Consolas, monospace; font-size: 14px; resize: vertical;"></textarea>
+    `;
+    
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    
+    const textarea = document.getElementById('codeInput');
+    textarea.focus();
+    
+    // Keyboard shortcuts
+    textarea.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            createCardFromCode(x, y, textarea.value);
+            document.body.removeChild(overlay);
+        }
+        else if (e.key === 'Escape') {
+            e.preventDefault();
+            document.body.removeChild(overlay);
+        }
+        // Shift+Enter allows normal newline (no preventDefault)
+    });
+    
+    // Click outside to cancel
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) {
+            document.body.removeChild(overlay);
+        }
+    });
+}
 
-
-
-
+// Parse code syntax and create card
+function createCardFromCode(x, y, input) {
+    if (!input.trim()) return;
+    
+    const lines = input.trim().split('\n');
+    let title = '';
+    let text = '';
+    let tags = [];
+    
+    let inContent = false;
+    
+    for (let line of lines) {
+        line = line.trim();
+        if (!line) continue;
+        
+        if (line.startsWith('#') && !inContent) {
+            // First # line is title, rest are tags
+            if (!title) {
+                title = line.substring(1).trim();
+                inContent = true;
+            } else {
+                // Tags line - extract all #tag words
+                const tagMatches = line.match(/#\w+/g);
+                if (tagMatches) {
+                    tags.push(...tagMatches.map(t => t.substring(1)));
+                }
+            }
+        } else if (line.startsWith('#') && inContent) {
+            // Tags in content
+            const tagMatches = line.match(/#\w+/g);
+            if (tagMatches) {
+                tags.push(...tagMatches.map(t => t.substring(1)));
+            }
+        } else {
+            // Content line
+            if (text) text += '\n';
+            text += line;
+            inContent = true;
+        }
+    }
+    
+    // If no title found, use first line of text
+    if (!title && text) {
+        const firstLine = text.split('\n')[0];
+        if (firstLine.length < 50) {
+            title = firstLine;
+            text = text.substring(firstLine.length).trim();
+        }
+    }
+    
+    if (!text && !title) return; // Need something
+    
+    const newId = generateCardId();
+    const newNode = cy.add({
+        data: {
+            id: newId,
+            title: title,
+            text: text || title, // Use title as text if no content
+            tags: [...new Set(tags)], // Remove duplicates
+            searchMatch: false
+        },
+        position: { x: x, y: y }
+    });
+    
+    newNode.grabify();
+    console.log(`Created card via code syntax: ${title || 'Untitled'}`);
+    
+    // Apply temporal markings to newly created card
+    setTimeout(() => {
+        applyTemporalMarkings();
+    }, 100);
+}
 
 // G+T: Copy cards in top-aligned grid
 function arrangeCopiedCardsGridTopAligned() {
@@ -8348,12 +11723,405 @@ function arrangeCopiedCardsInCluster() {
     console.log(`Q: Created and clustered ${newNodes.length} copied cards`);
 }
 
-
+// Quick note dialog for Alt+N
+function showQuickNoteDialog() {
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.5); z-index: 2000;
+        display: flex; align-items: center; justify-content: center;
+    `;
+    
+    // Create quick note dialog
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+        background: white; padding: 20px; border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3); width: 500px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    `;
+    
+    dialog.innerHTML = `
+        <h3 style="margin: 0 0 10px 0; color: #333;">Snabb Anteckning</h3>
+        <p style="margin: 0 0 15px 0; color: #666; font-size: 14px;">
+            Första raden = Titel<br>
+            Resten = Innehåll (Shift+Enter för ny rad)<br>
+            #taggar hittas automatiskt överallt<br>
+            <strong>Enter</strong>=Spara, <strong>Esc</strong>=Avbryt
+        </p>
+        <textarea id="quickNoteInput" placeholder="Min titel här
+Här skriver jag mitt innehåll...
+Kan ha #taggar överallt.
+#extra #taggar #här" 
+            style="width: 100%; height: 120px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; 
+                   font-family: 'SF Mono', Consolas, monospace; font-size: 14px; resize: vertical;"></textarea>
+    `;
+    
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    
+    const textarea = document.getElementById('quickNoteInput');
+    textarea.focus();
+    
+    // Keyboard shortcuts - same as code dialog
+    textarea.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            createCardFromQuickNote(textarea.value);
+            document.body.removeChild(overlay);
+        }
+        else if (e.key === 'Escape') {
+            e.preventDefault();
+            document.body.removeChild(overlay);
+        }
+        // Shift+Enter allows normal newline
+    });
+    
+    // Click outside to cancel
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) {
+            document.body.removeChild(overlay);
+        }
+    });
+    
+    // ESC handling for focus issues
+    function handleEscape(e) {
+        if (e.key === 'Escape') {
+            document.body.removeChild(overlay);
+            document.removeEventListener('keydown', handleEscape);
+        }
+    }
+    document.addEventListener('keydown', handleEscape);
+}
 
 // Parse quick note and create card
+function createCardFromQuickNote(input) {
+    if (!input.trim()) return;
+    
+    const lines = input.trim().split('\n');
+    if (lines.length === 0) return;
+    
+    // First line is always title
+    const title = lines[0].trim();
+    
+    // Rest is content (skip first line)
+    let contentLines = lines.slice(1);
+    
+    // Check if last line contains only tags (and has at least one #tag)
+    let extraTags = [];
+    if (contentLines.length > 0) {
+        const lastLine = contentLines[contentLines.length - 1].trim();
+        const hasOnlyTags = /^(#\w+\s*)+$/.test(lastLine); // Only #tags and whitespace
+        
+        if (hasOnlyTags && lastLine.includes('#')) {
+            // Extract tags from last line and remove it from content
+            const tagMatches = lastLine.match(/#\w+/g);
+            if (tagMatches) {
+                extraTags = tagMatches.map(t => t.substring(1));
+            }
+            contentLines = contentLines.slice(0, -1); // Remove last line from content
+        }
+    }
+    
+    // Join remaining content lines
+    const text = contentLines.join('\n').trim();
+    
+    // Find all #tags in title and content
+    let allTags = [...extraTags];
+    const allText = (title + ' ' + text);
+    const tagMatches = allText.match(/#\w+/g);
+    if (tagMatches) {
+        allTags.push(...tagMatches.map(t => t.substring(1)));
+    }
+    
+    // Remove duplicates and filter out empty tags
+    const uniqueTags = [...new Set(allTags)].filter(tag => tag.length > 0);
+    
+    // Use screen center as position (no mouse position for keyboard shortcut)
+    const viewport = cy.extent();
+    const centerX = (viewport.x1 + viewport.x2) / 2;
+    const centerY = (viewport.y1 + viewport.y2) / 2;
+    
+    const newId = generateCardId();
+    const newNode = cy.add({
+        data: {
+            id: newId,
+            title: title,
+            text: text || title, // Use title as text if no content
+            tags: uniqueTags,
+            searchMatch: false
+        },
+        position: { x: centerX, y: centerY }
+    });
+    
+    newNode.grabify();
+    console.log(`Created quick note: "${title}" with ${uniqueTags.length} tags`);
+}
 
+// Edit card - unified for all card types (including images)
+function editCard(node) {
+    // Clear any existing edit dialogs first
+    clearAllEditDialogs();
+    
+    // Handle image nodes differently - use annotation field for text
+    const isImageNode = node.data('type') === 'image';
+    const currentText = isImageNode ? (node.data('annotation') || '') : (node.data('text') || '');
+    const currentTags = node.data('tags') || [];
+    
+    // Create overlay for editing (unified UI without title)
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.7); z-index: 10000;
+        display: flex; justify-content: center; align-items: center;
+    `;
+    
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+        background: white; padding: 20px; border-radius: 10px;
+        max-width: 500px; width: 90%; max-height: 80vh;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        box-sizing: border-box;
+    `;
+    
+    dialog.innerHTML = `
+        <h3 style="margin-top: 0; color: #333; font-size: 18px;">Redigera kort</h3>
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #555;">Text:</label>
+            <textarea id="editCardText" 
+                style="width: 100%; height: 200px; font-family: inherit; font-size: 14px; 
+                       border: 1px solid #ccc; border-radius: 4px; padding: 8px;
+                       box-sizing: border-box; resize: vertical;">${currentText}</textarea>
+        </div>
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #555;">Färg (valfritt):</label>
+            <div id="editCardColorPicker" style="display: flex; gap: 8px; align-items: center;">
+                <div class="color-dot" data-color="" style="width: 24px; height: 24px; border-radius: 50%; 
+                     background: #f5f5f5; border: 2px solid #ddd; cursor: pointer; position: relative;"
+                     title="Ingen färg">
+                    <span style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+                          font-size: 16px; color: #666;">⭘</span>
+                </div>
+                <div class="color-dot" data-color="1" style="width: 24px; height: 24px; border-radius: 50%; 
+                     background: #d4f2d4; border: 2px solid transparent; cursor: pointer;" title="Grön"></div>
+                <div class="color-dot" data-color="2" style="width: 24px; height: 24px; border-radius: 50%; 
+                     background: #ffe4b3; border: 2px solid transparent; cursor: pointer;" title="Orange"></div>
+                <div class="color-dot" data-color="3" style="width: 24px; height: 24px; border-radius: 50%; 
+                     background: #ffc1cc; border: 2px solid transparent; cursor: pointer;" title="Röd"></div>
+                <div class="color-dot" data-color="4" style="width: 24px; height: 24px; border-radius: 50%; 
+                     background: #fff7b3; border: 2px solid transparent; cursor: pointer;" title="Gul"></div>
+                <div class="color-dot" data-color="5" style="width: 24px; height: 24px; border-radius: 50%; 
+                     background: #f3e5f5; border: 2px solid transparent; cursor: pointer;" title="Lila"></div>
+                <div class="color-dot" data-color="6" style="width: 24px; height: 24px; border-radius: 50%; 
+                     background: #c7e7ff; border: 2px solid transparent; cursor: pointer;" title="Blå"></div>
+                <div class="color-dot" data-color="7" style="width: 24px; height: 24px; border-radius: 50%; 
+                     background: #e0e0e0; border: 2px solid transparent; cursor: pointer;" title="Grå"></div>
+                <div class="color-dot" data-color="8" style="width: 24px; height: 24px; border-radius: 50%; 
+                     background: #ffffff; border: 2px solid transparent; cursor: pointer;" title="Vit"></div>
+            </div>
+        </div>
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #555;">Tags (valfritt):</label>
+            <input type="text" id="editCardTags" value="${currentTags.join(', ')}"
+                style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;
+                       box-sizing: border-box; font-size: 14px;">
+        </div>
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #555;">📅 Snabbveckor:</label>
+            <div id="editWeekButtons" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <!-- Week buttons will be populated by JavaScript -->
+            </div>
+        </div>
+        <div style="text-align: right;">
+            <button id="cancelEdit" style="background: #666; color: white; border: none; 
+                                         padding: 10px 20px; border-radius: 4px; margin-right: 10px;
+                                         cursor: pointer; font-size: 14px;">Avbryt</button>
+            <button id="saveEdit" style="background: #007acc; color: white; border: none; 
+                                        padding: 10px 20px; border-radius: 4px; cursor: pointer;
+                                        font-size: 14px;">Spara ändringar</button>
+        </div>
+        <div style="margin-top: 10px; font-size: 12px; color: #666;">
+            <strong>Tips:</strong> Enter = ny rad, Ctrl+Enter = spara, Esc = avbryt
+        </div>
+    `;
+    
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    
+    // Focus on textarea and select all text
+    const textarea = document.getElementById('editCardText');
+    textarea.focus();
+    textarea.select();
+    
+    // Handle color picker selection and show current color
+    let selectedColor = '';
+    const currentCardColor = node.data('cardColor') || '';
+    const currentColorNumber = currentCardColor.replace('card-color-', '') || '';
+    
+    const colorDots = document.querySelectorAll('#editCardColorPicker .color-dot');
+    colorDots.forEach(dot => {
+        // Show current color as selected
+        if (dot.dataset.color === currentColorNumber) {
+            dot.style.border = '2px solid #007acc';
+            selectedColor = currentColorNumber;
+        } else if (!currentColorNumber && dot.dataset.color === '') {
+            dot.style.border = '2px solid #007acc';
+            selectedColor = '';
+        }
+        
+        dot.addEventListener('click', function() {
+            // Remove selection from all dots
+            colorDots.forEach(d => d.style.border = d.dataset.color ? '2px solid transparent' : '2px solid #ddd');
+            
+            // Select this dot
+            this.style.border = '2px solid #007acc';
+            selectedColor = this.dataset.color;
+        });
+    });
+    
+    // Populate week buttons
+    const weekData = getCurrentWeekData();
+    const weekButtonsContainer = document.getElementById('editWeekButtons');
+    const weekButtons = [
+        { text: weekData.thisWeek, label: 'denna vecka', title: 'Denna vecka' },
+        { text: weekData.nextWeek, label: 'nästa vecka', title: 'Nästa vecka' },
+        { text: weekData.weekAfter, label: 'nästnästa vecka', title: 'Veckan efter nästa' }
+    ];
+    
+    weekButtons.forEach(btn => {
+        const weekBtn = document.createElement('button');
+        weekBtn.type = 'button';
+        weekBtn.innerHTML = `<strong>${btn.text}</strong><br><small>${btn.label}</small>`;
+        weekBtn.title = btn.title;
+        weekBtn.style.cssText = `
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 12px;
+            line-height: 1.2;
+            transition: all 0.2s ease;
+            text-align: center;
+            min-width: 70px;
+        `;
+        
+        weekBtn.addEventListener('mouseenter', function() {
+            this.style.background = '#e9ecef';
+            this.style.borderColor = '#007acc';
+        });
+        
+        weekBtn.addEventListener('mouseleave', function() {
+            this.style.background = '#f8f9fa';
+            this.style.borderColor = '#dee2e6';
+        });
+        
+        weekBtn.addEventListener('click', function() {
+            const tagsInput = document.getElementById('editCardTags');
+            const currentTags = tagsInput.value.trim();
+            const weekTag = btn.text;
+            
+            if (currentTags) {
+                // Add to existing tags
+                if (!currentTags.includes(weekTag)) {
+                    tagsInput.value = currentTags + ', ' + weekTag;
+                }
+            } else {
+                // First tag
+                tagsInput.value = weekTag;
+            }
+            
+            // Visual feedback
+            this.style.background = '#d4edda';
+            this.style.borderColor = '#28a745';
+            setTimeout(() => {
+                this.style.background = '#f8f9fa';
+                this.style.borderColor = '#dee2e6';
+            }, 500);
+        });
+        
+        weekButtonsContainer.appendChild(weekBtn);
+    });
+    
+    // Handle keyboard shortcuts with proper cleanup
+    function cleanup() {
+        if (document.body.contains(overlay)) {
+            document.body.removeChild(overlay);
+        }
+        document.removeEventListener('keydown', handleEscape);
+    }
+    
+    function handleEscape(e) {
+        if (e.key === 'Escape') {
+            cleanup();
+        }
+    }
+    
+    // Handle save
+    document.getElementById('saveEdit').onclick = function() {
+        const newText = textarea.value.trim();
+        const tagsInput = document.getElementById('editCardTags').value || '';
+        const newTags = tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag);
+        
+        // Allow saving with just tags (no text required)
+        if (!newText && newTags.length === 0) {
+            alert('Antingen text eller minst en tagg krävs');
+            return;
+        }
+        
+        if (isImageNode) {
+            // For image nodes, save to annotation field and update searchable text
+            node.data('annotation', newText);
+            node.data('searchableText', newText.toLowerCase());
+            
+            // Update title to show annotation indicator
+            // Don't show filename in title, keep title empty for clean image display
+            node.data('title', '');
+        } else {
+            // For regular nodes, save to text field
+            node.data('text', newText);
+        }
+        
+        node.data('tags', newTags);
+        
+        // Apply selected color if any
+        if (selectedColor) {
+            node.data('cardColor', `card-color-${selectedColor}`);
+        } else if (selectedColor === '') {
+            // Remove color if "no color" was selected
+            node.data('cardColor', null);
+        }
+        
+        // Apply auto-gray coloring for #done tags
+        applyAutoDoneColoring(node);
 
+        // Force refresh of node styling
+        cy.style().update();
 
+        refreshSearchAndFilter();
+
+        // Save immediately to prevent data loss from autosave/Drive sync
+        saveBoard();
+
+        cleanup();
+    };
+    
+    // Handle cancel
+    document.getElementById('cancelEdit').onclick = function() {
+        cleanup();
+    };
+    
+    // Handle keyboard shortcuts
+    textarea.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && e.key === 'Enter') {
+            document.getElementById('saveEdit').click();
+        } else if (e.key === 'Escape') {
+            cleanup();
+        }
+    });
+    
+    document.addEventListener('keydown', handleEscape);
+}
 
 // DEPRECATED - Edit manually created cards with textarea popup
 // Now using unified editCard() function instead
@@ -11302,60 +15070,26 @@ let renderColumnViewTimeout = null;
 function renderColumnView() {
     const container = document.getElementById('columnContainer');
     container.innerHTML = '';
-
-
+    
+    
     // Setup background handlers once
     setupColumnBackgroundHandlers();
-
+    
     if (!cy) return;
-
+    
     // Apply temporal markings before rendering
     if (typeof applyTemporalMarkings === 'function') {
         applyTemporalMarkings();
     }
-
-    // Determine if we should filter (search active, selected cards, or tag filter)
-    // BUT: Don't filter if any card is being edited (to keep context visible)
-    const hasSearchMatches = searchActive && cy.$('.search-match').length > 0;
-    const hasSelectedCards = cy.$('node:selected').length > 0;
-    const isEditingAnyCard = columnCardEditStates.size > 0;
-    const showFilteredOnly = (hasSearchMatches || hasSelectedCards) && !isEditingAnyCard;
-
-    // Get nodes - either filtered or all
-    let nodes;
-    if (showFilteredOnly) {
-        if (hasSearchMatches) {
-            // Show only search matches
-            nodes = cy.$('.search-match').stdFilter(function(node) {
-                return !node.data('isAnnotation');
-            });
-        } else {
-            // Show only selected cards
-            nodes = cy.$('node:selected').stdFilter(function(node) {
-                return !node.data('isAnnotation');
-            });
-        }
-    } else {
-        // Show all nodes
-        nodes = cy.nodes().stdFilter(function(node) {
-            return !node.data('isAnnotation'); // Exclude annotation nodes
-        });
-    }
-
+    
+    // Get all nodes and apply automatic sorting
+    let nodes = cy.nodes().stdFilter(function(node) {
+        return !node.data('isAnnotation'); // Exclude annotation nodes
+    });
+    
     // Apply sorting based on current sort preference
     nodes = sortColumnViewNodes(nodes);
-
-    // Show filter indicator if filtered
-    if (showFilteredOnly) {
-        const totalCards = cy.nodes().stdFilter(function(node) {
-            return !node.data('isAnnotation');
-        }).length;
-        const filterInfo = document.createElement('div');
-        filterInfo.style.cssText = 'padding: 12px; background: #e3f2fd; border-left: 4px solid #2196f3; margin-bottom: 16px; font-size: 14px; color: #1976d2;';
-        filterInfo.innerHTML = `📌 Visar <strong>${nodes.length}</strong> av ${totalCards} kort <span style="margin-left: 12px; cursor: pointer; text-decoration: underline;" onclick="clearSearch(); renderColumnView();">Visa alla</span>`;
-        container.appendChild(filterInfo);
-    }
-
+    
     // Use document fragment for better performance
     const fragment = document.createDocumentFragment();
     nodes.forEach(node => {
@@ -11363,7 +15097,7 @@ function renderColumnView() {
         fragment.appendChild(cardDiv);
     });
     container.appendChild(fragment);
-
+    
     // Apply current search highlighting
     updateColumnViewSearch();
 }
@@ -11783,22 +15517,13 @@ function createInlineEditArea(node, cardDiv) {
 
     // Keyboard handlers
     const keyHandler = (e) => {
-        // Stop propagation to prevent global shortcuts from interfering
-        e.stopPropagation();
-
         if (e.key === 'Escape') {
-            e.preventDefault();
             cancelHandler();
         } else if (e.ctrlKey && e.key === 'Enter') {
             e.preventDefault();
             saveHandler();
         }
     };
-
-    // Prevent global shortcuts from interfering with tags input
-    tagsInput.addEventListener('keydown', (e) => {
-        e.stopPropagation();
-    });
 
     saveBtn.addEventListener('click', saveHandler);
     cancelBtn.addEventListener('click', cancelHandler);
@@ -12002,9 +15727,6 @@ function createColumnCard(node) {
             } else {
                 // Open inline edit
                 columnCardEditStates.set(nodeId, true);
-
-                // Deselect all cards to prevent filtered view after edit closes
-                cy.nodes().unselect();
             }
             // Re-render to show/hide inline edit area
             renderColumnView();
@@ -12382,6 +16104,13 @@ function updateColumnViewSearch() {
     });
 }
 
+function getCurrentTheme() {
+    if (document.body.classList.contains('dark-theme')) return 'dark';
+    if (document.body.classList.contains('sepia-theme')) return 'sepia';
+    if (document.body.classList.contains('eink-theme')) return 'eink';
+    return 'light';
+}
+
 // Hook into existing search functions to update column view
 const originalPerformSearch = performSearch;
 performSearch = function(query) {
@@ -12533,9 +16262,15 @@ function watchEditDialogs() {
                         const nodeId = node.dataset?.nodeId || getEditingNodeId();
                         
                         if (textarea && nodeId && isColumnView) {
-                            // DISABLED: This was breaking inline edit by re-rendering on every keystroke
-                            // The inline edit system now handles updates properly on save
-                            // DO NOT add input listener that updates node data and triggers re-render
+                            // Add input listener to textarea
+                            textarea.addEventListener('input', function() {
+                                // Update node data temporarily for preview
+                                const cyNode = cy.getElementById(nodeId);
+                                if (cyNode) {
+                                    cyNode.data('text', this.value);
+                                    setTimeout(() => updateColumnViewCard(nodeId), 10);
+                                }
+                            });
                         }
                     }
                 });
@@ -13131,7 +16866,348 @@ window.testZoteroLinkBadge = function() {
     return testCard;
 };
 
+// Keyboard shortcuts dialog - Make globally accessible
+window.showKeyboardShortcutsDialog = function() {
+    // Remove any existing dialog
+    const existing = document.getElementById('keyboardShortcutsDialog');
+    if (existing) {
+        existing.remove();
+        return;
+    }
 
+    const overlay = document.createElement('div');
+    overlay.id = 'keyboardShortcutsDialog';
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.6);
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(8px);
+    `;
+
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        max-width: 700px;
+        width: 90%;
+        max-height: 80vh;
+        overflow-y: auto;
+        padding: 30px;
+    `;
+
+    dialog.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+            <h2 style="margin: 0; font-size: 28px;">⌨️ Kortkommandon</h2>
+            <button onclick="document.getElementById('keyboardShortcutsDialog').remove()" style="background: none; border: none; font-size: 28px; cursor: pointer; color: #666;">×</button>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 25px;">
+            <!-- Arrangement -->
+            <div class="shortcut-category">
+                <h3 style="font-size: 16px; color: #333; margin: 0 0 12px 0; font-weight: 600;">📐 Arrangement</h3>
+                <div class="shortcut-list">
+                    <div class="shortcut-item"><kbd data-action="H">H</kbd><span>Horisontell rad</span></div>
+                    <div class="shortcut-item"><kbd data-action="V">V</kbd><span>Vertikal kolumn</span></div>
+                    <div class="shortcut-item"><kbd data-action="G+V">G+V</kbd><span>Grid vertikal</span></div>
+                    <div class="shortcut-item"><kbd data-action="G+H">G+H</kbd><span>Grid horisontell</span></div>
+                    <div class="shortcut-item"><kbd data-action="G+T">G+T</kbd><span>Grid tight (kompakt)</span></div>
+                    <div class="shortcut-item"><kbd data-action="Q">Q</kbd><span>Kluster/skräphög</span></div>
+                    <div class="shortcut-item"><kbd data-action="X">X</kbd><span>Cirkulär svärm (Obsidian-style)</span></div>
+                    <div class="shortcut-item"><kbd data-action="B">B</kbd><span>Layout med connectioner (force-directed)</span></div>
+                    <div class="shortcut-item"><kbd data-action="C">C</kbd><span>Kopiera kort</span></div>
+                </div>
+            </div>
+
+            <!-- Färg -->
+            <div class="shortcut-category">
+                <h3 style="font-size: 16px; color: #333; margin: 0 0 12px 0; font-weight: 600;">🎨 Färg</h3>
+                <div class="shortcut-list">
+                    <div class="shortcut-item"><kbd data-action="0">0</kbd><span>Ta bort färg</span></div>
+                    <div class="shortcut-item"><kbd data-action="1">1</kbd><span>Grön</span></div>
+                    <div class="shortcut-item"><kbd data-action="2">2</kbd><span>Orange</span></div>
+                    <div class="shortcut-item"><kbd data-action="3">3</kbd><span>Röd</span></div>
+                    <div class="shortcut-item"><kbd data-action="4">4</kbd><span>Gul</span></div>
+                    <div class="shortcut-item"><kbd data-action="5">5</kbd><span>Lila</span></div>
+                    <div class="shortcut-item"><kbd data-action="6">6</kbd><span>Blå</span></div>
+                    <div class="shortcut-item"><kbd data-action="T">T</kbd><span>Färgväljare</span></div>
+                </div>
+            </div>
+
+            <!-- Kortredigering -->
+            <div class="shortcut-category">
+                <h3 style="font-size: 16px; color: #333; margin: 0 0 12px 0; font-weight: 600;">📌 Kortredigering</h3>
+                <div class="shortcut-list">
+                    <div class="shortcut-item"><kbd data-action="N">N</kbd><span>Nytt kort</span></div>
+                    <div class="shortcut-item"><kbd data-action="P">P</kbd><span>Pin/unpin kort</span></div>
+                    <div class="shortcut-item"><kbd data-action="U">U</kbd><span>Avmarkera alla</span></div>
+                    <div class="shortcut-item"><kbd data-action="Delete">Delete</kbd><span>Radera kort</span></div>
+                </div>
+            </div>
+
+            <!-- Navigation & Sök -->
+            <div class="shortcut-category">
+                <h3 style="font-size: 16px; color: #333; margin: 0 0 12px 0; font-weight: 600;">🔍 Navigation & Sök</h3>
+                <div class="shortcut-list">
+                    <div class="shortcut-item"><kbd data-action="Z">Z</kbd><span>Zooma ut</span></div>
+                    <div class="shortcut-item"><kbd data-action="Ctrl+A">Ctrl+A</kbd><span>Markera alla</span></div>
+                    <div class="shortcut-item"><kbd data-action="Ctrl+F">Ctrl+F</kbd><span>Sök</span></div>
+                    <div class="shortcut-item"><kbd data-action="Escape">Escape</kbd><span>Avbryt/stäng</span></div>
+                </div>
+            </div>
+
+            <!-- Spara & Export -->
+            <div class="shortcut-category">
+                <h3 style="font-size: 16px; color: #333; margin: 0 0 12px 0; font-weight: 600;">💾 Spara & Export</h3>
+                <div class="shortcut-list">
+                    <div class="shortcut-item"><kbd data-action="Ctrl+S">Ctrl+S</kbd><span>Spara</span></div>
+                    <div class="shortcut-item"><kbd data-action="Ctrl+E">Ctrl+E</kbd><span>Exportera</span></div>
+                    <div class="shortcut-item"><kbd data-action="Ctrl+O">Ctrl+O</kbd><span>Ladda fil</span></div>
+                    <div class="shortcut-item"><kbd data-action="Ctrl+Z">Ctrl+Z</kbd><span>Undo</span></div>
+                    <div class="shortcut-item"><kbd data-action="Ctrl+Y">Ctrl+Y</kbd><span>Redo</span></div>
+                    <div class="shortcut-item"><kbd data-action="Alt+S">Alt+S</kbd><span>Smart save</span></div>
+                </div>
+            </div>
+
+            <!-- Tema -->
+            <div class="shortcut-category">
+                <h3 style="font-size: 16px; color: #333; margin: 0 0 12px 0; font-weight: 600;">🌙 Tema</h3>
+                <div class="shortcut-list">
+                    <div class="shortcut-item"><kbd data-action="Shift+D">Shift+D</kbd><span>Mörkt tema</span></div>
+                    <div class="shortcut-item"><kbd data-action="Shift+S">Shift+S</kbd><span>Sepia tema</span></div>
+                    <div class="shortcut-item"><kbd data-action="Shift+E">Shift+E</kbd><span>E-ink tema</span></div>
+                </div>
+            </div>
+
+            <!-- Ritverktyg -->
+            <div class="shortcut-category">
+                <h3 style="font-size: 16px; color: #333; margin: 0 0 12px 0; font-weight: 600;">🎨 Ritverktyg</h3>
+                <div class="shortcut-list">
+                    <div class="shortcut-item"><kbd data-action="D">D</kbd><span>Annotation toolbar</span></div>
+                </div>
+            </div>
+
+            <!-- Övrigt -->
+            <div class="shortcut-category">
+                <h3 style="font-size: 16px; color: #333; margin: 0 0 12px 0; font-weight: 600;">⚙️ Övrigt</h3>
+                <div class="shortcut-list">
+                    <div class="shortcut-item"><kbd data-action="M">M</kbd><span>Multi-import</span></div>
+                    <div class="shortcut-item"><kbd data-action="I">I</kbd><span>Viktighet sort (kolumnvy)</span></div>
+                    <div class="shortcut-item"><kbd data-action="W">W</kbd><span>Färg sort (kolumnvy)</span></div>
+                    <div class="shortcut-item"><kbd data-action="K">K</kbd><span>Kolumnvy toggle</span></div>
+                    <div class="shortcut-item"><kbd data-action="Shift+T">Shift+T</kbd><span>Simplified toolbar</span></div>
+                    <div class="shortcut-item"><kbd data-action="Ctrl+Q">Ctrl+Q</kbd><span>Visa kortkommandon</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #eee; text-align: center;">
+            <button onclick="document.getElementById('keyboardShortcutsDialog').remove()" style="padding: 10px 24px; background: #007acc; color: white; border: none; border-radius: 6px; font-size: 14px; cursor: pointer;">
+                Stäng (ESC)
+            </button>
+        </div>
+
+        <style>
+            .shortcut-item {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 8px 0;
+                font-size: 14px;
+            }
+            /* Desktop - normala storlekar */
+            .shortcut-item kbd {
+                background: #f5f5f5;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-family: 'Courier New', monospace;
+                font-size: 12px;
+                font-weight: bold;
+                color: #333;
+                box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+                min-width: 50px;
+                text-align: center;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            }
+            .shortcut-item kbd:hover {
+                background: #e0e0e0;
+                border-color: #bbb;
+                transform: translateY(-1px);
+                box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+            }
+            .shortcut-item kbd:active {
+                transform: translateY(0);
+                box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+                background: #d0d0d0;
+            }
+            .shortcut-item span {
+                flex: 1;
+                margin-left: 12px;
+                color: #666;
+            }
+            .shortcut-list {
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+            }
+
+            /* Mobile - lite större touch-targets */
+            @media (max-width: 768px) {
+                #keyboardShortcutsDialog > div {
+                    padding: 20px;
+                }
+                .shortcut-item {
+                    padding: 6px 0;
+                }
+                .shortcut-item kbd {
+                    padding: 8px 10px;
+                    min-width: 55px;
+                    min-height: 40px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+            }
+        </style>
+    `;
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    // Add click handlers to all kbd elements
+    const kbdElements = dialog.querySelectorAll('kbd[data-action]');
+    kbdElements.forEach(kbd => {
+        kbd.addEventListener('click', function() {
+            const action = this.getAttribute('data-action');
+
+            // Close dialog
+            overlay.remove();
+
+            // Execute action
+            switch(action) {
+                // Arrangement
+                case 'H': arrangeSelectedInRow(); break;
+                case 'V': arrangeSelectedInColumn(); break;
+                case 'G+V': arrangeSelectedGridVerticalColumns(); break;
+                case 'G+H': arrangeSelectedGridHorizontalPacked(); break;
+                case 'G+T': arrangeSelectedGridTopAligned(); break;
+                case 'Q': clusterSelectedCards(); break;
+                case 'X': arrangeCircularSwarm(); break;
+                case 'B': layoutWithConnections(); break;
+                case 'C': copySelectedCards(); break;
+
+                // Färg
+                case '0': case '1': case '2': case '3': case '4': case '5': case '6':
+                    applyColorToSelected(parseInt(action)); break;
+                case 'T':
+                    const selectedNodes = cy.$('node:selected');
+                    if (selectedNodes.length > 0) {
+                        const fakeEvent = {
+                            clientX: window.innerWidth / 2,
+                            clientY: window.innerHeight / 2
+                        };
+                        showColorPicker(fakeEvent, selectedNodes);
+                    }
+                    break;
+
+                // Kortredigering
+                case 'N': addNewCard(); break;
+                case 'P':
+                    cy.$('node:selected').forEach(node => {
+                        if (node.hasClass('pinned')) {
+                            unpinCard(node);
+                        } else {
+                            pinCard(node);
+                        }
+                    });
+                    break;
+                case 'U': cy.nodes().unselect(); break;
+                case 'Delete': deleteSelectedCards(); break;
+
+                // Navigation & Sök
+                case 'Z': zoomOutToCenter(); break;
+                case 'Ctrl+A': cy.nodes().not('.pinned').select(); break;
+                case 'Ctrl+F': document.getElementById('searchInput').focus(); break;
+                case 'Escape': cy.nodes().unselect(); break;
+
+                // Spara & Export
+                case 'Ctrl+S': saveBoard(); break;
+                case 'Ctrl+E': showExportMenu(); break;
+                case 'Ctrl+O': loadBoard(); break;
+                case 'Ctrl+Z':
+                    if (undoStack.length > 0) {
+                        const currentState = {
+                            cards: cy.nodes().map(node => ({
+                                id: node.id(),
+                                position: { x: node.position().x, y: node.position().y },
+                                selected: node.selected()
+                            }))
+                        };
+                        redoStack.push(currentState);
+                        const previousState = undoStack.pop();
+                        restoreState(previousState);
+                    }
+                    break;
+                case 'Ctrl+Y':
+                    if (redoStack.length > 0) {
+                        const currentState = {
+                            cards: cy.nodes().map(node => ({
+                                id: node.id(),
+                                position: { x: node.position().x, y: node.position().y },
+                                selected: node.selected()
+                            }))
+                        };
+                        undoStack.push(currentState);
+                        const nextState = redoStack.pop();
+                        restoreState(nextState);
+                    }
+                    break;
+                case 'Alt+S': smartSave(); break;
+
+                // Tema
+                case 'Shift+D': toggleDarkTheme(); break;
+                case 'Shift+S': toggleSepiaTheme(); break;
+                case 'Shift+E': toggleEInkTheme(); break;
+
+                // Ritverktyg
+                case 'D': toggleAnnotationToolbar(); break;
+
+                // Övrigt
+                case 'M': showMultiCardPasteDialog(); break;
+                case 'I': if (isColumnView) setColumnViewSort('importance'); break;
+                case 'W': if (isColumnView) setColumnViewSort('background-color'); break;
+                case 'K': toggleView(); break;
+                case 'Shift+T': toggleSimplifiedToolbar(); break;
+                case 'Ctrl+Q': showKeyboardShortcutsDialog(); break;
+            }
+        });
+    });
+
+    // Close on ESC key
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            overlay.remove();
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
+
+    // Close on click outside
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+            overlay.remove();
+        }
+    });
+}
 
 // Initialize badge system after Cytoscape is ready
 document.addEventListener('DOMContentLoaded', function() {
