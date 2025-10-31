@@ -13,6 +13,57 @@ function showContextMenu(event, node) {
     menu.style.left = x + 'px';
     menu.style.top = y + 'px';
     menu.style.zIndex = '3000';
+
+    // Add image source options for mobile background long press
+    if (!node && isMobileDevice()) {
+        const pasteOption = document.createElement('div');
+        pasteOption.className = 'context-menu-item';
+        pasteOption.innerHTML = '📋 Klistra in';
+        pasteOption.onclick = async () => {
+            hideContextMenu();
+            try {
+                await pasteClipboardContent(x, y);
+            } catch (err) {
+                console.error('Clipboard paste failed:', err);
+                alert('Kunde inte klistra in från clipboard. Kontrollera behörigheter.');
+            }
+        };
+        menu.appendChild(pasteOption);
+
+        const cameraOption = document.createElement('div');
+        cameraOption.className = 'context-menu-item';
+        cameraOption.innerHTML = '📷 Ta foto';
+        cameraOption.onclick = () => {
+            hideContextMenu();
+            document.getElementById('hiddenCameraInput').click();
+        };
+        menu.appendChild(cameraOption);
+
+        const galleryOption = document.createElement('div');
+        galleryOption.className = 'context-menu-item';
+        galleryOption.innerHTML = '🖼️ Välj från galleri';
+        galleryOption.onclick = () => {
+            hideContextMenu();
+            document.getElementById('hiddenGalleryInput').click();
+        };
+        menu.appendChild(galleryOption);
+
+        const fileOption = document.createElement('div');
+        fileOption.className = 'context-menu-item';
+        fileOption.innerHTML = '📁 Välj fil';
+        fileOption.onclick = () => {
+            hideContextMenu();
+            document.getElementById('hiddenGalleryInput').click();
+        };
+        menu.appendChild(fileOption);
+
+        // Add a separator
+        const separator = document.createElement('div');
+        separator.style.height = '1px';
+        separator.style.backgroundColor = '#eee';
+        separator.style.margin = '8px 0';
+        menu.appendChild(separator);
+    }
     
     // Pin/Unpin option
     const isPinned = node.hasClass('pinned');

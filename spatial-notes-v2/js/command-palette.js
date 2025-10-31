@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // AI & Tools
         { id: 'ai-chatgpt', title: '🤖 ChatGPT Sorter', action: () => toggleAiPanel() },
         { id: 'ai-claude', title: '🤖 Claude AI Assistant', action: () => toggleAIPanel() },
+        { id: 'reset-gemini-key', title: '🔑 Reset Google AI API Key', action: () => { localStorage.removeItem('googleAiApiKey'); alert('Google AI API Key has been reset.'); } },
 
         // Annotation
         { id: 'annotation-tools', title: '🎨 Toggle Annotation Tools', shortcut: 'D', action: () => toggleAnnotationToolbar() },

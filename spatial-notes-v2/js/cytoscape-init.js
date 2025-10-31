@@ -567,7 +567,7 @@ function initCytoscape() {
     let canvasPressTimer = null;
     const cyContainer = document.getElementById('cy');
     
-    // Canvas background long press using Cytoscape events
+    // Touch handling on canvas background (not on nodes)
     let backgroundTouchTimer = null;
     let backgroundTouchPos = null;
     

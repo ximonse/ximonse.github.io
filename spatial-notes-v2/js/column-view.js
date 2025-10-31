@@ -578,288 +578,12 @@ function createColumnCard(node) {
         showColumnContextMenu(e, node.id());
     });
     
-    // Add iPad/mobile long-press functionality for tagging and color change
-    let longPressTimer = null;
-    let touchStartTime = 0;
-    let touchMoved = false;
-    
-    cardDiv.addEventListener('touchstart', (e) => {
-        console.log('DEBUG column touchstart:', node.id(), 'touches:', e.touches?.length);
-        touchStartTime = Date.now();
-        touchMoved = false;
-        
-        // Set up long press detection (800ms)
-        longPressTimer = setTimeout(() => {
-            console.log('DEBUG column long press timeout fired, touchMoved:', touchMoved);
-            if (!touchMoved) {
-                e.preventDefault();
-                // Show combined tag/color context menu for iPad
-                console.log('DEBUG calling showMobileCardMenu from column long press:', e.touches[0], node.id());
-                showMobileCardMenu(e.touches[0], node.id());
-            }
-        }, 800);
-    }, { passive: false });
-    
-    cardDiv.addEventListener('touchmove', () => {
-        touchMoved = true;
-        if (longPressTimer) {
-            clearTimeout(longPressTimer);
-            longPressTimer = null;
-        }
-    });
-    
-    cardDiv.addEventListener('touchend', (e) => {
-        if (longPressTimer) {
-            clearTimeout(longPressTimer);
-            longPressTimer = null;
-        }
-        
-        // If it was a quick tap (< 200ms) and didn't move, treat as normal click
-        if (!touchMoved && (Date.now() - touchStartTime) < 200) {
-            // Trigger normal click behavior
-            const clickEvent = new MouseEvent('click', {
-                bubbles: true,
-                cancelable: true,
-                clientX: e.changedTouches[0].clientX,
-                clientY: e.changedTouches[0].clientY
-            });
-            cardDiv.dispatchEvent(clickEvent);
-        }
-    });
+
     
     return cardDiv;
 }
 
-// Mobile/iPad context menu with tagging and color options
-function showMobileCardMenu(touch, nodeId) {
-    console.log('DEBUG showMobileCardMenu called with touch:', touch, 'nodeId:', nodeId);
-    // Remove any existing mobile menu
-    const existingMenu = document.getElementById('mobileCardMenu');
-    if (existingMenu) {
-        document.body.removeChild(existingMenu);
-        console.log('DEBUG removed existing menu');
-    }
-    
-    const node = cy.getElementById(nodeId);
-    
-    // Ensure the target node is selected for tag operations
-    if (!node.selected()) {
-        console.log('DEBUG target node not selected, selecting it');
-        node.select();
-        // Update column view visual selection
-        if (isColumnView) {
-            const cardDiv = document.querySelector(`[data-node-id="${nodeId}"]`);
-            if (cardDiv) {
-                cardDiv.classList.add('selected');
-            }
-        }
-    }
-    
-    const selectedNodes = cy.$('node:selected');
-    const isMultipleSelected = selectedNodes.length > 1;
-    const targetNodes = isMultipleSelected ? selectedNodes : cy.$(`#${nodeId}`);
-    console.log('DEBUG node found:', !!node, 'selectedNodes.length:', selectedNodes.length, 'isMultipleSelected:', isMultipleSelected);
-    
-    // Create mobile menu
-    const menu = document.createElement('div');
-    menu.id = 'mobileCardMenu';
-    menu.style.cssText = `
-        position: fixed;
-        left: ${Math.min(touch.clientX, window.innerWidth - 280)}px;
-        top: ${Math.min(touch.clientY, window.innerHeight - 400)}px;
-        background: white;
-        border: 1px solid #ccc;
-        border-radius: 12px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-        z-index: 10000;
-        min-width: 260px;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        font-size: 16px;
-        padding: 12px 0;
-    `;
-    
-    const targetText = isMultipleSelected ? `${selectedNodes.length} kort` : '1 kort';
-    
-    menu.innerHTML = `
-        <div style="padding: 8px 16px; font-weight: bold; color: #666; border-bottom: 1px solid #eee;">
-            ${targetText}
-        </div>
-        
-        <!-- Color Section -->
-        <div style="padding: 12px 16px; border-bottom: 1px solid #eee;">
-            <div style="font-weight: bold; margin-bottom: 8px; color: #333;">Färg</div>
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;" id="mobileColorGrid">
-            </div>
-            <div style="margin-top: 8px;">
-                <div class="mobile-clear-color" style="background: #f5f5f5; padding: 6px 12px; border-radius: 16px; text-align: center; cursor: pointer; border: 1px solid #ddd;">Ta bort färg</div>
-            </div>
-        </div>
-        
-        <!-- Tags Section -->
-        <div style="padding: 12px 16px; border-bottom: 1px solid #eee;">
-            <div style="font-weight: bold; margin-bottom: 8px; color: #333;">Taggar</div>
-            <div class="mobile-menu-item" data-action="add-tag" style="padding: 8px 12px; cursor: pointer; border-radius: 8px; margin-bottom: 4px;">➕ Lägg till tagg</div>
-            <div class="mobile-menu-item" data-action="remove-tag" style="padding: 8px 12px; cursor: pointer; border-radius: 8px;">➖ Ta bort tagg</div>
-        </div>
 
-        <!-- Pin Section -->
-        <div style="padding: 12px 16px;">
-            <div style="font-weight: bold; margin-bottom: 8px; color: #333;">Pinning</div>
-            <div class="mobile-menu-item" data-action="toggle-pin" id="mobilePinToggle" style="padding: 8px 12px; cursor: pointer; border-radius: 8px;">📌 Pinna kort</div>
-        </div>
-    `;
-    
-    document.body.appendChild(menu);
-
-    // Update pin button text based on current state
-    const pinToggleBtn = menu.querySelector('#mobilePinToggle');
-    const anyPinned = targetNodes.some(node => node.hasClass('pinned'));
-    if (anyPinned) {
-        pinToggleBtn.innerHTML = '📌 Ta bort pinning';
-    } else {
-        pinToggleBtn.innerHTML = '📌 Pinna kort';
-    }
-
-    // Create color dots dynamically with real colors
-    const colorGrid = menu.querySelector('#mobileColorGrid');
-    const currentTheme = getCurrentTheme();
-    
-    for (let i = 1; i <= 8; i++) {
-        const colorValue = getCardColorValue(`card-color-${i}`, currentTheme);
-        const colorDot = document.createElement('div');
-        colorDot.className = 'mobile-color-dot';
-        colorDot.dataset.color = i;
-        colorDot.style.cssText = `
-            background: ${colorValue};
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            color: ${currentTheme === 'light' ? '#333' : '#fff'};
-            cursor: pointer;
-            border: 2px solid #ddd;
-        `;
-        colorDot.textContent = i;
-        colorGrid.appendChild(colorDot);
-    }
-    
-    // Add color click handlers
-    menu.querySelectorAll('.mobile-color-dot').forEach(dot => {
-        dot.addEventListener('click', () => {
-            const colorNum = dot.dataset.color;
-            const colorId = `card-color-${colorNum}`;
-            
-            targetNodes.forEach(node => {
-                node.data('cardColor', colorId);
-                const colorValue = getCardColorValue(colorId, getCurrentTheme());
-                node.style('background-color', colorValue);
-            });
-            
-            // Update column view if active
-            if (isColumnView) {
-                renderColumnViewDebounced();
-            }
-
-            // Show feedback
-            const statusDiv = document.getElementById('selectionInfo');
-            if (statusDiv) {
-                statusDiv.textContent = `Färgade ${targetNodes.length} kort med färg ${colorNum}`;
-                statusDiv.classList.add('visible');
-                setTimeout(() => statusDiv.classList.remove('visible'), 2000);
-            }
-
-            // Save immediately to prevent data loss from autosave/Drive sync
-            saveBoard();
-
-            document.body.removeChild(menu);
-        });
-    });
-    
-    // Clear color handler
-    menu.querySelector('.mobile-clear-color').addEventListener('click', () => {
-        targetNodes.forEach(node => {
-            removeCardColor(node);
-        });
-
-        if (isColumnView) {
-            renderColumnViewDebounced();
-        }
-
-        const statusDiv = document.getElementById('selectionInfo');
-        if (statusDiv) {
-            statusDiv.textContent = `Tog bort färg från ${targetNodes.length} kort`;
-            statusDiv.classList.add('visible');
-            setTimeout(() => statusDiv.classList.remove('visible'), 2000);
-        }
-
-        // Save immediately to prevent data loss from autosave/Drive sync
-        saveBoard();
-
-        document.body.removeChild(menu);
-    });
-    
-    // Tag and Pin action handlers
-    menu.querySelectorAll('.mobile-menu-item').forEach(item => {
-        item.addEventListener('click', () => {
-            const action = item.dataset.action;
-            console.log('DEBUG mobile menu item clicked:', action);
-            if (action === 'add-tag') {
-                console.log('DEBUG calling addTagToSelected from mobile menu');
-                addTagToSelected();
-            } else if (action === 'remove-tag') {
-                console.log('DEBUG calling removeTagFromSelected from mobile menu');
-                removeTagFromSelected();
-            } else if (action === 'toggle-pin') {
-                console.log('DEBUG toggling pin for selected cards');
-                const anyPinned = targetNodes.some(node => node.hasClass('pinned'));
-                targetNodes.forEach(node => {
-                    if (anyPinned) {
-                        unpinCard(node);
-                        node.grabify(); // Make draggable again
-                    } else {
-                        pinCard(node);
-                        node.ungrabify(); // Make undraggable
-                    }
-                });
-
-                // Update column view if active
-                if (isColumnView) {
-                    renderColumnViewDebounced();
-                }
-
-                // Show feedback
-                const statusDiv = document.getElementById('selectionInfo');
-                if (statusDiv) {
-                    const action = anyPinned ? 'Tog bort pinning från' : 'Pinnade';
-                    statusDiv.textContent = `${action} ${targetNodes.length} kort`;
-                    statusDiv.classList.add('visible');
-                    setTimeout(() => statusDiv.classList.remove('visible'), 2000);
-                }
-
-                saveBoard();
-            }
-            document.body.removeChild(menu);
-        });
-    });
-    
-    // Close menu when clicking outside
-    setTimeout(() => {
-        const closeHandler = (e) => {
-            if (!menu.contains(e.target)) {
-                if (document.body.contains(menu)) {
-                    document.body.removeChild(menu);
-                }
-                document.removeEventListener('click', closeHandler);
-                document.removeEventListener('touchstart', closeHandler);
-            }
-        };
-        document.addEventListener('click', closeHandler);
-        document.addEventListener('touchstart', closeHandler);
-    }, 100);
-}
 
 function toggleColumnCardSelection(nodeId, cardDiv) {
     const node = cy.getElementById(nodeId);
@@ -1103,72 +827,105 @@ setTimeout(() => {
 // Column view context menu
 function showColumnContextMenu(e, nodeId) {
     // Remove any existing context menu
-    const existingMenu = document.getElementById('columnContextMenu');
-    if (existingMenu) {
-        document.body.removeChild(existingMenu);
-    }
+    hideContextMenu(); // Use the global hide function
+
+    const node = cy.getElementById(nodeId);
+    if (!node) return;
 
     const selectedNodes = cy.$('node:selected');
     const isMultipleSelected = selectedNodes.length > 1;
-    
+    const targetNodes = isMultipleSelected ? selectedNodes : node;
+
     // Create context menu
     const menu = document.createElement('div');
-    menu.id = 'columnContextMenu';
+    menu.className = 'context-menu'; // Use the main context menu class
     menu.style.cssText = `
         position: fixed;
         left: ${e.clientX}px;
         top: ${e.clientY}px;
         background: white;
         border: 1px solid #ccc;
-        border-radius: 4px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        border-radius: 12px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.3);
         z-index: 10000;
-        min-width: 150px;
+        min-width: 220px;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        font-size: 14px;
+        font-size: 16px;
+        padding: 8px 0;
     `;
 
-    const targetText = isMultipleSelected ? `${selectedNodes.length} kort` : '1 kort';
+    // --- Tags Section ---
+    const addTagOption = document.createElement('div');
+    addTagOption.className = 'context-menu-item';
+    addTagOption.innerHTML = '➕ Lägg till tagg';
+    addTagOption.onclick = () => { hideContextMenu(); addTagToSelected(); };
+    menu.appendChild(addTagOption);
 
-    menu.innerHTML = `
-        <div style="padding: 8px 0; border-bottom: 1px solid #eee;">
-            <div style="padding: 4px 12px; font-weight: bold; color: #666;">Taggar för ${targetText}</div>
-        </div>
-        <div style="padding: 4px 0;">
-            <div class="context-menu-item" onclick="addTagToSelected()" style="padding: 8px 12px; cursor: pointer;">➕ Lägg till tagg</div>
-            <div class="context-menu-item" onclick="removeTagFromSelected()" style="padding: 8px 12px; cursor: pointer;">➖ Ta bort tagg</div>
-        </div>
-        <div style="padding: 8px 0; border-top: 1px solid #eee;">
-            <div style="padding: 4px 12px; font-weight: bold; color: #666;">Färger för ${targetText}</div>
-        </div>
-        <div style="padding: 4px 0;">
-            <div class="context-menu-item" onclick="showColumnColorPicker(event, '${nodeId}')" style="padding: 8px 12px; cursor: pointer;">🎨 Färga kort</div>
-            <div class="context-menu-item" onclick="removeColorFromSelected()" style="padding: 8px 12px; cursor: pointer;">❌ Ta bort färg</div>
-        </div>
-    `;
+    const removeTagOption = document.createElement('div');
+    removeTagOption.className = 'context-menu-item';
+    removeTagOption.innerHTML = '➖ Ta bort tagg';
+    removeTagOption.onclick = () => { hideContextMenu(); removeTagFromSelected(); };
+    menu.appendChild(removeTagOption);
 
-    // Add hover effects to menu items
-    menu.querySelectorAll('.context-menu-item').forEach(item => {
-        item.addEventListener('mouseenter', () => {
-            item.style.backgroundColor = '#f0f0f0';
+    // --- Color Section ---
+    const colorOption = document.createElement('div');
+    colorOption.className = 'context-menu-item';
+    colorOption.innerHTML = '🎨 Färga kort';
+    colorOption.onclick = () => { 
+        hideContextMenu(); 
+        showColorPicker(e, targetNodes);
+    };
+    menu.appendChild(colorOption);
+
+    if (targetNodes.some(n => n.data('cardColor'))) {
+        const removeColorOption = document.createElement('div');
+        removeColorOption.className = 'context-menu-item';
+        removeColorOption.innerHTML = '❌ Ta bort färg';
+        removeColorOption.onclick = () => { 
+            hideContextMenu();
+            targetNodes.forEach(n => removeCardColor(n));
+            saveBoard();
+            if (isColumnView) renderColumnViewDebounced();
+        };
+        menu.appendChild(removeColorOption);
+    }
+
+    // --- Pinning Section ---
+    const anyPinned = targetNodes.some(n => n.hasClass('pinned'));
+    const pinOption = document.createElement('div');
+    pinOption.className = 'context-menu-item';
+    pinOption.innerHTML = anyPinned ? '📌 Ta bort pinning' : '📌 Pinna kort';
+    pinOption.onclick = () => {
+        hideContextMenu();
+        targetNodes.forEach(n => {
+            if (anyPinned) unpinCard(n); else pinCard(n);
         });
-        item.addEventListener('mouseleave', () => {
-            item.style.backgroundColor = '';
-        });
-    });
+        saveBoard();
+        if (isColumnView) renderColumnViewDebounced();
+    };
+    menu.appendChild(pinOption);
+
+    // --- Image Section (only for single, image nodes) ---
+    if (!isMultipleSelected && (node.data('type') === 'image' || node.data('isImageCard'))) {
+        const resizeOption = document.createElement('div');
+        resizeOption.className = 'context-menu-item';
+        resizeOption.innerHTML = '↗️ Ändra storlek';
+        resizeOption.onclick = () => { hideContextMenu(); showImageResizeDialog(node); };
+        menu.appendChild(resizeOption);
+
+        const readWithGeminiOption = document.createElement('div');
+        readWithGeminiOption.className = 'context-menu-item';
+        readWithGeminiOption.innerHTML = '✨ Läs med Gemini';
+        readWithGeminiOption.onclick = () => { hideContextMenu(); readImageWithGemini(node); };
+        menu.appendChild(readWithGeminiOption);
+    }
 
     document.body.appendChild(menu);
 
     // Close menu when clicking outside
-    const closeMenu = (e) => {
-        if (!menu.contains(e.target)) {
-            document.body.removeChild(menu);
-            document.removeEventListener('click', closeMenu);
-        }
-    };
-    
     setTimeout(() => {
-        document.addEventListener('click', closeMenu);
+        document.addEventListener('click', hideContextMenu, { once: true });
+        document.addEventListener('touchstart', hideContextMenu, { once: true });
     }, 10);
 }
 
