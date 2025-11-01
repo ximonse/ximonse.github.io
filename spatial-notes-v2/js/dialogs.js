@@ -232,45 +232,147 @@ function hideContextMenu() {
 
 function showKeyboardShortcutsDialog() {
     const shortcuts = {
-        'Global': {
-            'Ctrl+K': 'Open Command Palette',
-            'N': 'New Card',
-            'Ctrl+S': 'Save Board',
-            'Ctrl+O': 'Load Board',
-            'Ctrl+Q': 'Show Shortcuts',
-            'Ctrl+H': 'Show User Manual',
+        'Save & Google Drive': {
+            'Ctrl+S': '💾 Save to LocalStorage',
+            '': '💾 Save to Google Drive',
+            ' ': '🔗 Google Drive Sign In/Out',
         },
-        'Card Selection': {
-            'Ctrl+Click': 'Select Multiple Cards',
-            'Ctrl+A': 'Select All Cards',
-            'Delete': 'Delete Selected Cards',
-            'P': 'Pin Selected Cards',
-            'U': 'Unpin Selected Cards',
-            'C': 'Copy Selected Cards',
+        'File Operations': {
+            'Ctrl+O': '📂 Load from File',
+        },
+        'Card Creation & Import': {
+            'N': '➕ Add New Card',
+            'M': '📋 Multi-Import (Create Multiple Cards)',
+            '  ': '📷 Upload Images',
+            '   ': '🔍 Smart Search with Auto-Sort',
+        },
+        'Search & Navigation': {
+            'F': '🔎 Focus Search Field',
+            'O': '📊 Show Sort Menu',
+            'Ctrl+K': '⚡ Open Command Palette',
+        },
+        'Colors': {
+            'T': '🎨 Open Color Picker',
+            '0': '⚪ Remove Color from Selected',
+            '1': '🟢 Apply Color 1 (Green)',
+            '2': '🟠 Apply Color 2 (Orange)',
+            '3': '🔴 Apply Color 3 (Red)',
+            '4': '🟡 Apply Color 4 (Yellow)',
+            '5': '🟣 Apply Color 5 (Purple)',
+            '6': '🔵 Apply Color 6 (Blue)',
+            '7': '⚫ Apply Color 7 (Gray)',
+            '8': '⚪ Apply Color 8 (White)',
+        },
+        'Card Actions': {
+            'C': '📋 Copy Selected Cards',
+            'P': '📌 Pin Selected Cards',
+            'U': '🔓 Unpin Selected Cards',
+            'Delete': '🗑️ Delete Selected Cards',
+            'Ctrl+A': '✨ Select All Cards',
+        },
+        'Tags': {
+            '    ': '🏷️ Add Tag to Selected Cards',
+            '     ': '🏷️ Remove Tag from Selected Cards',
         },
         'Arrangement': {
-            'V': 'Arrange in Column',
-            'H': 'Arrange in Row',
-            'G+V': 'Arrange in Vertical Grid',
-            'G+H': 'Arrange in Horizontal Grid',
-            'G+T': 'Arrange in Top-Aligned Grid',
-            'Q': 'Cluster/Stack Cards',
+            'V': '↕️ Arrange in Column',
+            'H': '↔️ Arrange in Row',
+            'G+V': '🚦 Arrange in Vertical Grid',
+            'G+H': '🚥 Arrange in Horizontal Grid',
+            'G+T': '📈 Arrange in Top-Aligned Grid',
+            'Q': '👨‍👩‍👧‍👦 Cluster Selected Cards',
+            'QQ / Alt+S': '📚 Stack Selected Cards',
+            'X': '⭕ Circular Swarm Arrangement',
+            'B': '🌐 Force-Directed Physics Layout',
+        },
+        'Arrows': {
+            '      ': '↔️ Toggle Arrow Visibility',
+            '       ': '✂️ Remove Arrows Between Selected',
+        },
+        'Column View': {
+            'K': '📋 Toggle Column/Board View',
+            'I': '⚡ Sort by Importance (Column View)',
+            'W': '🎨 Sort by Background Color (Column View)',
+        },
+        'Annotation': {
+            'D': '🎨 Toggle Annotation Tools',
+        },
+        'Themes & View': {
+            'Shift+T': '☰ Toggle Simplified/Full Toolbar',
+            'Shift+D': '🌙 Cycle Theme (Light/Dark)',
+            'Shift+S': '📜 Sepia Theme',
+            'Shift+E': '📄 E-Ink Theme',
+        },
+        'Help': {
+            'Ctrl+Q': '⌨️ Show Keyboard Shortcuts',
+            'Ctrl+H': '❓ Show User Manual',
         }
     };
 
-    let dialogContent = '<div style="max-height: 70vh; overflow-y: auto;">';
+    // Function to download cheat sheet
+    function downloadCheatSheet() {
+        let content = '# Spatial Notes - Keyboard Shortcuts Cheat Sheet\n\n';
+        content += 'Generated: ' + new Date().toLocaleDateString() + '\n\n';
+        content += '═══════════════════════════════════════════════════════\n\n';
+
+        for (const category in shortcuts) {
+            content += `## ${category}\n`;
+            content += '─'.repeat(50) + '\n';
+            for (const shortcut in shortcuts[category]) {
+                const key = shortcut.trim() || '(No shortcut)';
+                const desc = shortcuts[category][shortcut];
+                content += `${key.padEnd(20)} │ ${desc}\n`;
+            }
+            content += '\n';
+        }
+
+        content += '═══════════════════════════════════════════════════════\n';
+        content += '\n💡 TIP: Press Ctrl+K (or Cmd+K) to open the Command Palette\n';
+        content += '         and search for any command!\n';
+
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'spatial-notes-shortcuts.txt';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    let dialogContent = '<div style="max-height: 60vh; overflow-y: auto; padding-right: 10px;">';
     for (const category in shortcuts) {
-        dialogContent += `<h3>${category}</h3><ul style="list-style: none; padding: 0;">`;
+        dialogContent += `<h3 style="color: #333; margin-top: 15px; margin-bottom: 8px; font-size: 16px;">${category}</h3><ul style="list-style: none; padding: 0; margin: 0;">`;
         for (const shortcut in shortcuts[category]) {
-            dialogContent += `<li style="display: flex; justify-content: space-between; padding: 4px 0;"><span>${shortcuts[category][shortcut]}</span><span style="background: #eee; padding: 2px 6px; border-radius: 4px; font-family: monospace;">${shortcut}</span></li>`;
+            const displayShortcut = shortcut.trim() === '' ? '<span style="color: #999; font-size: 11px;">(via Command Palette)</span>' : `<span style="background: #eee; padding: 2px 8px; border-radius: 4px; font-family: monospace; font-size: 12px;">${shortcut}</span>`;
+            dialogContent += `<li style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f0f0f0;"><span style="font-size: 14px;">${shortcuts[category][shortcut]}</span>${displayShortcut}</li>`;
         }
         dialogContent += '</ul>';
     }
     dialogContent += '</div>';
 
     const dialog = document.createElement('div');
-    dialog.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); z-index: 10002; max-width: 500px; width: 90%;';
-    dialog.innerHTML = `<h2>Keyboard Shortcuts</h2>${dialogContent}<button onclick="this.parentElement.remove()" style="margin-top: 20px; padding: 8px 16px; width: 100%;">Close</button>`;
+    dialog.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 5px 25px rgba(0,0,0,0.3); z-index: 10002; max-width: 600px; width: 90%;';
+    dialog.innerHTML = `
+        <h2 style="margin-top: 0; color: #333;">⌨️ Keyboard Shortcuts</h2>
+        ${dialogContent}
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+            <button onclick="this.parentElement.parentElement.querySelector('button[data-download]').click()" data-download style="flex: 1; padding: 10px 16px; background: #007bff; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">
+                📥 Download Cheat Sheet
+            </button>
+            <button onclick="this.parentElement.parentElement.remove()" style="flex: 1; padding: 10px 16px; background: #6c757d; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">
+                Close
+            </button>
+        </div>
+    `;
+
+    // Add download functionality
+    const downloadBtn = dialog.querySelector('button[data-download]');
+    downloadBtn.onclick = () => {
+        downloadCheatSheet();
+    };
+
     document.body.appendChild(dialog);
 }
 

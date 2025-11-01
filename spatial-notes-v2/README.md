@@ -21,7 +21,23 @@ A modular visual note-taking tool built with Cytoscape.js that lets users create
 - **Multi-platform Upload**: Camera, gallery, and file picker on mobile
 - **Smart Compression**: WebP → PNG → JPEG fallback
 
-### 🆕 Gemini OCR Integration (2025-11-01)
+### 🆕 Command Palette & UI Enhancements (2025-11-01 PM)
+- **Command Palette (Ctrl+K)**: Search and execute 50+ commands
+  - 13 organized categories: Save & Google Drive, File Operations, Card Creation, Colors, etc.
+  - Fuzzy search by command name or category
+  - Keyboard navigation with arrows
+  - Shows keyboard shortcuts for each command
+  - Smart scroll - selected item always visible
+- **Keyboard Shortcuts (Ctrl+Q)**: Interactive cheat sheet
+  - All commands listed with shortcuts and descriptions
+  - Download as .txt file for offline reference
+  - Organized by category for easy learning
+- **Enhanced Menus**:
+  - Simplified toolbar with board/column view toggle
+  - Right-click tagging and coloring now works for multiple cards
+  - Escape key closes all dialogs and overlays
+
+### 🆕 Gemini OCR Integration (2025-11-01 AM)
 - **Single Image OCR**: Right-click → "✨ Läs med Gemini" to extract text from images
 - **Batch Processing**: Select multiple image cards and process them all at once
   - Desktop: Select cards → Right-click → "✨ Läs X bilder med Gemini"

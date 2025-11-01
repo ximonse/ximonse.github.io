@@ -63,6 +63,22 @@
     border-radius: 4px;
 }
 
+.command-palette-category {
+    padding: 8px 16px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #666;
+    background: #f9f9f9;
+    border-top: 1px solid #e0e0e0;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.command-palette-category:first-child {
+    border-top: none;
+}
+
 .dark-theme .command-palette {
     background: #2d3748;
     color: #e2e8f0;
@@ -82,4 +98,11 @@
 .dark-theme .command-palette-item .shortcut {
     background: #718096;
     color: #1a202c;
+}
+
+.dark-theme .command-palette-category {
+    color: #a0aec0;
+    background: #1a202c;
+    border-top-color: #2d3748;
+    border-bottom-color: #2d3748;
 }

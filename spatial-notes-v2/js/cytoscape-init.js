@@ -162,11 +162,13 @@ function initCytoscape() {
                 style: {
                     'width': 300, // Same as regular cards
                     'height': function(node) {
-                        // Use the same logic as getMeasuredTextHeight for consistency
-                        return getMeasuredTextHeight(node);
+                        // Use saved aspect ratio height, or fallback to default
+                        const savedHeight = node.data('displayHeight');
+                        return savedHeight || 300; // Fallback to square if no height saved
                     },
                     'background-image': 'data(imageData)',
-                    'background-fit': 'cover',
+                    'background-fit': 'contain',
+                    'background-offset-y': '15px',
                     'background-color': function(node) {
                         // Support color styling for image cards
                         const cardColor = node.data('cardColor');

@@ -429,6 +429,251 @@ function removeCardColor(node) {
     console.log('Removed color from card:', node.id());
 }
 
+// Bulk tag dialog for multiple selected cards
+function showBulkTagDialog(selectedNodes) {
+    console.log('🏷️ Opening bulk tag dialog for', selectedNodes.length, 'cards');
+
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+        background: white;
+        padding: 30px;
+        border-radius: 15px;
+        max-width: 400px;
+        width: 90%;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    `;
+
+    dialog.innerHTML = `
+        <h3 style="margin-top: 0; color: #333;">🏷️ Lägg till tagg</h3>
+        <p style="color: #666; margin-bottom: 20px;">Lägg till samma tagg på alla ${selectedNodes.length} markerade kort</p>
+        <div style="margin: 20px 0;">
+            <label for="bulkTagInput" style="display: block; margin-bottom: 5px; font-weight: bold;">Tagg namn:</label>
+            <input type="text" id="bulkTagInput" placeholder="skriv tagg här..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px;">
+            <small style="color: #888; display: block; margin-top: 5px;">Tips: använd inga mellanslag, t.ex. "viktigt" eller "projekt2025"</small>
+        </div>
+        <div style="text-align: right; margin-top: 25px;">
+            <button id="cancelBulkTag" style="margin-right: 10px; padding: 8px 16px; border: 1px solid #ddd; border-radius: 5px; background: white; cursor: pointer;">Avbryt</button>
+            <button id="applyBulkTag" style="padding: 8px 16px; border: none; border-radius: 5px; background: #007bff; color: white; cursor: pointer;">Lägg till tagg</button>
+        </div>
+    `;
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    // Focus the input
+    const tagInput = document.getElementById('bulkTagInput');
+    tagInput.focus();
+
+    // Cancel button
+    document.getElementById('cancelBulkTag').onclick = () => {
+        document.body.removeChild(overlay);
+    };
+
+    // Apply button
+    document.getElementById('applyBulkTag').onclick = () => {
+        const tagName = tagInput.value.trim();
+        if (tagName) {
+            applyBulkTag(selectedNodes, tagName);
+            document.body.removeChild(overlay);
+        } else {
+            tagInput.style.borderColor = 'red';
+            tagInput.focus();
+        }
+    };
+
+    // ESC to close
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            if (document.body.contains(overlay)) {
+                document.body.removeChild(overlay);
+            }
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
+
+    // Enter to apply
+    tagInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            document.getElementById('applyBulkTag').click();
+        }
+    });
+}
+
+// Apply bulk tag to multiple cards
+function applyBulkTag(selectedNodes, tagName) {
+    console.log('🏷️ Applying tag "' + tagName + '" to', selectedNodes.length, 'cards');
+
+    let addedCount = 0;
+    let skippedCount = 0;
+
+    selectedNodes.forEach(node => {
+        const currentTags = node.data('tags') || [];
+
+        // Check if tag already exists (case insensitive)
+        const tagExists = currentTags.some(tag =>
+            tag.toLowerCase() === tagName.toLowerCase()
+        );
+
+        if (!tagExists) {
+            // Add the tag
+            const newTags = [...currentTags, tagName];
+            node.data('tags', newTags);
+
+            // Apply auto-gray coloring for #done tags
+            applyAutoDoneColoring(node);
+
+            addedCount++;
+            console.log(`Added tag "${tagName}" to card: ${node.data('title') || node.id()}`);
+        } else {
+            skippedCount++;
+            console.log(`Tag "${tagName}" already exists on card: ${node.data('title') || node.id()}`);
+        }
+    });
+
+    // Show success message
+    const searchInfo = document.getElementById('searchInfo');
+    let message = `🏷️ Tagg "${tagName}" tillagd på ${addedCount} kort`;
+    if (skippedCount > 0) {
+        message += ` (${skippedCount} kort hade redan taggen)`;
+    }
+
+    searchInfo.textContent = message;
+    searchInfo.classList.add('visible');
+    setTimeout(() => {
+        searchInfo.classList.remove('visible');
+    }, 3000);
+
+    console.log(`✅ Bulk tag completed: ${addedCount} added, ${skippedCount} skipped`);
+
+    // Update column view if active
+    if (isColumnView) {
+        renderColumnViewDebounced();
+    }
+
+    // Save the board to persist changes
+    saveBoard();
+}
+
+// Color picker system
+function showColorPicker(event, nodes) {
+    console.log('showColorPicker called with', nodes.length, 'nodes');
+
+    // Remove any existing color picker
+    hideColorPicker();
+
+    // Get mouse position or use event position
+    const x = event.clientX || event.pageX || window.innerWidth / 2;
+    const y = event.clientY || event.pageY || window.innerHeight / 2;
+    console.log('Color picker position:', x, y);
+
+    // Create color picker popup
+    const picker = document.createElement('div');
+    picker.className = 'color-picker-popup';
+    picker.style.position = 'fixed';
+    picker.style.left = x + 'px';
+    picker.style.top = y + 'px';
+    picker.style.zIndex = '4000';
+
+    // Add title
+    const title = document.createElement('div');
+    title.className = 'color-picker-title';
+    title.textContent = `Välj färg för ${nodes.length} kort`;
+    picker.appendChild(title);
+
+    // Create color grid
+    const colorGrid = document.createElement('div');
+    colorGrid.className = 'color-picker-grid';
+
+    // Add the 8 color options
+    for (let i = 1; i <= 8; i++) {
+        const colorDot = document.createElement('div');
+        colorDot.className = `color-picker-dot card-color-${i}`;
+        colorDot.textContent = i; // Add number inside the dot
+        colorDot.style.lineHeight = '26px'; // Center vertically
+        colorDot.style.textAlign = 'center'; // Center horizontally
+        colorDot.style.fontSize = '14px';
+        colorDot.style.fontWeight = 'bold';
+        colorDot.style.color = '#333';
+        colorDot.style.textShadow = '0 0 3px rgba(255,255,255,0.8)';
+        colorDot.onclick = () => {
+            console.log(`Clicked color ${i}, applying to ${nodes.length} cards`);
+            // Apply color to all nodes
+            nodes.forEach(node => {
+                console.log(`Setting color card-color-${i} on node:`, node.id());
+                node.data('cardColor', `card-color-${i}`);
+                // Update cytoscape styling immediately
+                const colorValue = getCardColorValue(`card-color-${i}`, getCurrentTheme());
+                console.log(`Color value:`, colorValue);
+                node.style('background-color', colorValue);
+            });
+
+            // Update column view if active
+            if (isColumnView) {
+                renderColumnViewDebounced();
+            }
+
+            // Save immediately to prevent data loss from autosave/Drive sync
+            saveBoard();
+
+            hideColorPicker();
+            console.log(`Applied color ${i} to ${nodes.length} cards`);
+        };
+        colorGrid.appendChild(colorDot);
+    }
+
+    picker.appendChild(colorGrid);
+
+    // Add cancel button
+    const cancelBtn = document.createElement('div');
+    cancelBtn.className = 'color-picker-cancel';
+    cancelBtn.textContent = 'Avbryt';
+    cancelBtn.onclick = hideColorPicker;
+    picker.appendChild(cancelBtn);
+
+    console.log('Adding picker to body:', picker);
+    document.body.appendChild(picker);
+    console.log('Picker added, should be visible now');
+
+    // Close picker on click elsewhere
+    setTimeout(() => {
+        currentClickHandler = function(e) {
+            if (!picker.contains(e.target)) {
+                hideColorPicker();
+            }
+        };
+        document.addEventListener('click', currentClickHandler);
+    }, 100);
+}
+
+function hideColorPicker() {
+    const existingPicker = document.querySelector('.color-picker-popup');
+    if (existingPicker) {
+        existingPicker.remove();
+    }
+    // Remove the click handler if it exists
+    if (currentClickHandler) {
+        document.removeEventListener('click', currentClickHandler);
+        currentClickHandler = null;
+    }
+    console.log('Color picker hidden and event listeners cleaned up');
+}
+
 
 
 // Parse and create multiple cards from text
@@ -7206,6 +7451,14 @@ function createSimplifiedToolbar() {
     shortcutsBtn.style.cssText = 'padding: 8px 12px;';
     shortcutsBtn.onclick = showKeyboardShortcutsDialog;
 
+    // View toggle button (board/column)
+    const viewToggleBtn = document.createElement('button');
+    viewToggleBtn.innerHTML = '📋';
+    viewToggleBtn.className = 'toolbar-btn';
+    viewToggleBtn.title = 'Växla bräd/kolumnvy (K)';
+    viewToggleBtn.style.cssText = 'padding: 8px 12px;';
+    viewToggleBtn.onclick = toggleView;
+
     // Toggle to full toolbar button
     const expandBtn = document.createElement('button');
     expandBtn.innerHTML = '⚙️ Meny';
@@ -7219,6 +7472,7 @@ function createSimplifiedToolbar() {
     simplifiedDiv.appendChild(searchBtn);
     simplifiedDiv.appendChild(sortBtn);
     simplifiedDiv.appendChild(shortcutsBtn);
+    simplifiedDiv.appendChild(viewToggleBtn);
     simplifiedDiv.appendChild(expandBtn);
 
     toolbar.appendChild(simplifiedDiv);
@@ -13174,3 +13428,38 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }, 500);
 });
+
+// Fix old image cards with wrong aspect ratios (run once)
+window.fixOldImageCards = function() {
+    const imageNodes = cy.nodes('[type="image"]');
+    let fixed = 0;
+
+    imageNodes.forEach(node => {
+        const imageWidth = node.data('imageWidth');
+        const imageHeight = node.data('imageHeight');
+
+        if (imageWidth && imageHeight) {
+            const displayWidth = 300;
+            const ratio = imageHeight / imageWidth;
+            const newDisplayHeight = Math.round(displayWidth * ratio);
+
+            // Update the stored height
+            node.data('displayHeight', newDisplayHeight);
+            fixed++;
+
+            console.log(`Fixed ${node.id()}: ${imageWidth}x${imageHeight} → display ${displayWidth}x${newDisplayHeight}`);
+        }
+    });
+
+    console.log(`✅ Fixed ${fixed} image cards with correct aspect ratios!`);
+
+    // Save the changes
+    saveBoard();
+
+    // Refresh the view
+    cy.style().update();
+
+    alert(`Fixade ${fixed} bildkort med rätt proportioner! Ladda om sidan för att se resultatet.`);
+};
+
+console.log('💡 TIP: Kör fixOldImageCards() i console för att fixa gamla bildkorts proportioner!');

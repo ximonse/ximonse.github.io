@@ -450,7 +450,15 @@ cy.on('touchstart', 'node', function(evt) {
 
 ## 👨‍💻 SESSIONS-HISTORIK
 
-- **2025-11-01**: Gemini OCR integration - Batch processing & unified menus
+- **2025-11-01 (eftermiddag)**: Command Palette & UI Förbättringar ✅
+  - **Command Palette (Ctrl+K)**: Kompletterad med 19+ nya kommandon, tydliga kategorier
+  - **Keyboard Shortcuts (Ctrl+Q)**: Nedladdningsbar cheat sheet, alla kommandon listade
+  - **Minimalistisk meny**: Toggle-knapp för bräd/kolumnvy
+  - **Taggning & Färgning**: Board view + kolumnvy fixes (högerklick fungerar nu)
+  - **Tekniska fixes**: Script loading order, function exposure till window, currentClickHandler fix
+  - **Förbättrad scroll**: Markerad item centreras alltid i Command Palette
+
+- **2025-11-01 (förmiddag)**: Gemini OCR integration - Batch processing & unified menus
 - **2025-10-29**: PDF import implementation
 - **2025-10-24**: Modulär omstrukturering (CSS klar)
 - **2025-09-04**: Kolumnvy shortcuts
