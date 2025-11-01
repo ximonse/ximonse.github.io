@@ -10,6 +10,7 @@ if (typeof window.pickerApiLoaded === 'undefined') window.pickerApiLoaded = fals
 if (typeof window.isSignedIn === 'undefined') window.isSignedIn = false;
 if (typeof window.tokenExpiry === 'undefined') window.tokenExpiry = null;
 if (typeof window.rememberMeEnabled === 'undefined') window.rememberMeEnabled = false;
+if (typeof window.isGoogleApiLoaded === 'undefined') window.isGoogleApiLoaded = false;
 
 // ---- Credential Management (localStorage) ------------------------------
 function getApiKey() {
@@ -90,6 +91,7 @@ function initializeGoogleAPI() {
   });
 
   console.log('✅ Google Identity Services initialized');
+  window.isGoogleApiLoaded = true;
 }
 
 // Store pending picker request
@@ -225,7 +227,121 @@ async function pickerCallback(data) {
   }
 }
 
+// ---- Load Project from Google Drive ------------------------------------
+// This function is called by main.js when switching projects
+async function loadFromGoogleDrive() {
+  // Check if we have auth
+  if (!window.isSignedIn || !window.accessToken) {
+    console.log('Not signed in to Google Drive');
+    return false;
+  }
+
+  try {
+    const currentProject = localStorage.getItem('spatial-notes-project-name') || 'Nytt projekt';
+    console.log(`Loading project "${currentProject}" from Google Drive...`);
+
+    // Find the project file (delegate to main.js if findSpatialNotesFile exists)
+    if (typeof findSpatialNotesFile !== 'function') {
+      console.error('findSpatialNotesFile not found in main.js');
+      return false;
+    }
+
+    const fileId = await findSpatialNotesFile();
+    if (!fileId) {
+      console.log(`No saved file found for project "${currentProject}"`);
+      return false;
+    }
+
+    // Download file from Drive
+    const response = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+      {
+        headers: { 'Authorization': `Bearer ${window.accessToken}` }
+      }
+    );
+
+    if (!response.ok) {
+      console.error('Failed to load from Drive:', response.statusText);
+      return false;
+    }
+
+    const fileContent = await response.text();
+    const boardData = JSON.parse(fileContent);
+
+    // Clear existing cards
+    if (typeof cy !== 'undefined') {
+      cy.batch(() => {
+        cy.nodes().remove();
+      });
+
+      // Load cards from boardData
+      if (boardData.cards && boardData.cards.length > 0) {
+        cy.batch(() => {
+          boardData.cards.forEach(card => {
+            const node = cy.add({
+              data: {
+                id: card.id,
+                title: card.title || '',
+                text: card.text || '',
+                tags: card.tags || [],
+                hidden_tags: card.hidden_tags || [],
+                cardColor: card.cardColor || '',
+                type: card.type || 'text',
+                isImageCard: card.isImageCard || false,
+                imageData: card.imageData || null,
+                imageWidth: card.imageWidth || null,
+                imageHeight: card.imageHeight || null,
+                isAnnotation: card.isAnnotation || false,
+                annotationType: card.annotationType || null,
+                shape: card.shape || null,
+                isPinned: card.isPinned || false
+              },
+              position: { x: card.x || 0, y: card.y || 0 }
+            });
+
+            // Apply styling
+            if (card.type === 'image' && card.imageData) {
+              const displayWidth = card.displayWidth || 300;
+              const ratio = card.imageHeight / card.imageWidth;
+              const displayHeight = Math.round(displayWidth * ratio);
+              node.style({
+                'background-image': card.imageData,
+                'background-fit': 'contain',
+                'width': displayWidth + 'px',
+                'height': displayHeight + 'px'
+              });
+            }
+          });
+
+          // Load edges
+          if (boardData.edges) {
+            boardData.edges.forEach(edgeData => {
+              cy.add({
+                group: 'edges',
+                data: {
+                  source: edgeData.source,
+                  target: edgeData.target
+                }
+              });
+            });
+          }
+        });
+
+        console.log(`✅ Loaded ${boardData.cards.length} cards from Drive`);
+        return true;
+      }
+    }
+
+    return false;
+
+  } catch (error) {
+    console.error('Error loading from Google Drive:', error);
+    return false;
+  }
+}
+
 // ---- Expose Functions Globally -----------------------------------------
 window.importFromGoogleDrive = importFromGoogleDrive;
 window.openDrivePicker = openDrivePicker;
 window.initializeGoogleAPI = initializeGoogleAPI;
+window.loadFromGoogleDrive = loadFromGoogleDrive;
