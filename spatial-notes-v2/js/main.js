@@ -398,7 +398,7 @@ function applyBulkTag(selectedNodes, tagName) {
 
 
 
-let currentClickHandler = null;
+// currentClickHandler now in config.js
 
 
 
@@ -740,7 +740,7 @@ function createMultipleCardsFromText(text) {
 // 🤖 AI ASSISTANT - Claude Integration with Chat Panel
 // ====================================================================================================
 
-let aiChatHistory = [];
+// aiChatHistory now in config.js
 
 // Toggle AI Panel
 function toggleAIPanel() {
@@ -958,18 +958,8 @@ function showClaudeAPIKeyDialog() {
 // ====================================================================================================
 // 🤖 CHATGPT ASSISTANT
 // ====================================================================================================
-const AI_STORAGE_KEY = 'spatial-notes-openai-key';
-const aiColorCycle = ['card-color-1', 'card-color-2', 'card-color-3', 'card-color-4', 'card-color-5', 'card-color-6', 'card-color-7', 'card-color-8'];
-const aiAssistantState = {
-    initialized: false,
-    isProcessing: false,
-    cachedKey: '',
-    speechRecognition: null,
-    isListening: false,
-    voiceBuffer: '',
-    silenceStop: false,
-    lastPrompt: ''
-};
+// AI_STORAGE_KEY, aiColorCycle, aiAssistantState now in config.js
+// Note: config.js has different aiAssistantState structure - merge if needed
 
 function getStoredAiKeyRaw() {
     try {
@@ -3784,8 +3774,8 @@ function deleteSelectedCards() {
 // ========================================
 // SORTING SYSTEM - EASY TO FIND
 // ========================================
-// Global sorting state
-let sortMode = null; // null, 'textLength-asc', 'textLength-desc', 'alphabetic-asc', 'alphabetic-desc', 'color', 'date-asc', 'date-desc', 'temporal-asc', 'temporal-desc', 'tagCount'
+// Global sorting state - now in config.js
+// sortMode
 
 function showSortMenu(event) {
     event.preventDefault();
@@ -5551,9 +5541,8 @@ function arrangeSelectedGridTopAligned() {
     console.log(`G+T: Tight grid with 120px overlap - max ${maxCols} wide, ${rows} deep for ${selectedNodes.length} cards`);
 }
 
-// Change tracking for autosave
-let hasChanges = false;
-let autosaveInterval = null;
+// Change tracking for autosave - now in config.js
+// hasChanges, autosaveInterval
 
 // Mark that changes have been made
 function markChanged() {
@@ -7206,7 +7195,7 @@ function clearBoard() {
 }
 
 // Toggle metadata view for development and analysis
-let showMetadata = false;
+// showMetadata now in config.js
 function toggleMetadataView() {
     showMetadata = !showMetadata;
     const btn = document.getElementById('metadataBtn');
@@ -7294,7 +7283,7 @@ function analyzeMetadata() {
 // 📱 SIMPLIFIED TOOLBAR FUNCTIONS
 // ====================================================================================================
 
-let isSimplifiedToolbar = localStorage.getItem('spatial-notes-simplified-toolbar') === 'true';
+// isSimplifiedToolbar now in config.js
 
 function toggleSimplifiedToolbar() {
     isSimplifiedToolbar = !isSimplifiedToolbar;
