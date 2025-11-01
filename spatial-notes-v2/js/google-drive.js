@@ -127,67 +127,67 @@ function showGoogleApiKeyDialog() {
 
         </p>
 
-                <form onsubmit="return false;" style="margin-bottom: 20px;">
+        <form id="googleApiKeyForm" onsubmit="return false;" style="margin-bottom: 20px;">
 
-                    <input type="password" id="googleApiKeyInput" placeholder="AIza..." style="
+            <input type="password" id="googleApiKeyInput" autocomplete="new-password" placeholder="AIza..." style="
 
-                        width: 100%;
+                width: 100%;
 
-                        padding: 12px;
+                padding: 12px;
 
-                        border: 1px solid #ddd;
+                border: 1px solid #ddd;
 
-                        border-radius: 6px;
+                border-radius: 6px;
 
-                        font-family: monospace;
+                font-family: monospace;
 
-                        font-size: 14px;
+                font-size: 14px;
 
-                        box-sizing: border-box;
+                box-sizing: border-box;
 
-                        margin-bottom: 20px;
+                margin-bottom: 20px;
 
-                    ">
+            ">
 
-                    <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
 
-                        <button type="button" id="cancelApiKey" style="
+                <button type="button" id="cancelApiKey" style="
 
-                            padding: 10px 20px;
+                    padding: 10px 20px;
 
-                            border: 1px solid #ddd;
+                    border: 1px solid #ddd;
 
-                            background: white;
+                    background: white;
 
-                            border-radius: 6px;
+                    border-radius: 6px;
 
-                            cursor: pointer;
+                    cursor: pointer;
 
-                            font-size: 14px;
+                    font-size: 14px;
 
-                        ">Avbryt</button>
+                ">Avbryt</button>
 
-                        <button type="submit" id="saveApiKey" style="
+                <button type="submit" id="saveApiKey" style="
 
-                            padding: 10px 20px;
+                    padding: 10px 20px;
 
-                            border: none;
+                    border: none;
 
-                            background: #007bff;
+                    background: #007bff;
 
-                            color: white;
+                    color: white;
 
-                            border-radius: 6px;
+                    border-radius: 6px;
 
-                            cursor: pointer;
+                    cursor: pointer;
 
-                            font-size: 14px;
+                    font-size: 14px;
 
-                        ">Spara och fortsätt</button>
+                ">Spara och fortsätt</button>
 
-                    </div>
+            </div>
 
-                </form>
+        </form>
 
     `;
 
@@ -199,55 +199,27 @@ function showGoogleApiKeyDialog() {
 
 
 
+    const form = document.getElementById('googleApiKeyForm');
     const input = document.getElementById('googleApiKeyInput');
+    const cancelBtn = document.getElementById('cancelApiKey');
 
     input.focus();
 
-
-
-    document.getElementById('cancelApiKey').onclick = () => {
-
-        overlay.remove();
-
-    };
-
-
-
-    document.getElementById('saveApiKey').onclick = () => {
-
+    form.addEventListener('submit', (e) => {
+        e.preventDefault();
         const apiKey = input.value.trim();
-
         if (apiKey) {
-
             localStorage.setItem('googleApiKey', apiKey);
-
             GOOGLE_API_KEY = apiKey;
-
             overlay.remove();
-
-            importFromGoogleDrive();
-
         } else {
-
             alert('Ogiltig API-nyckel.');
-
         }
-
-    };
-
-
-
-    input.addEventListener('keydown', (e) => {
-
-        if (e.key === 'Enter') {
-
-            document.getElementById('saveApiKey').click();
-
-        }
-
     });
 
-
+    cancelBtn.addEventListener('click', () => {
+        overlay.remove();
+    });
 
     overlay.addEventListener('keydown', (e) => {
 
@@ -274,15 +246,12 @@ function getGoogleApiKey() {
 // Open Google Drive Picker to select multiple images
 
 async function importFromGoogleDrive() {
-
     const apiKey = getGoogleApiKey();
-
     if (!apiKey) {
-
-        showGoogleApiKeyDialog();
-
+        if (window.location.protocol !== 'file:') {
+            showGoogleApiKeyDialog();
+        }
         return;
-
     }
 
 
@@ -472,15 +441,12 @@ async function pickerCallback(data) {
 // Load board from Google Drive
 
 async function loadFromGoogleDrive() {
-
     const apiKey = getGoogleApiKey();
-
     if (!apiKey) {
-
-        showGoogleApiKeyDialog();
-
+        if (window.location.protocol !== 'file:') {
+            showGoogleApiKeyDialog();
+        }
         return;
-
     }
 
     try {
@@ -1046,15 +1012,10 @@ async function initializeGoogleAPI() {
             // Load available projects and current project
 
             setTimeout(async () => {
-
                 await loadAvailableProjects();
-
-                if (currentProject) {
-
+                if (currentProject && window.location.protocol !== 'file:') {
                     await loadFromGoogleDrive();
-
                 }
-
             }, 1000);
 
         }
