@@ -127,63 +127,67 @@ function showGoogleApiKeyDialog() {
 
         </p>
 
-        <input type="password" id="googleApiKeyInput" placeholder="AIza..." style="
+                <form onsubmit="return false;" style="margin-bottom: 20px;">
 
-            width: 100%;
+                    <input type="password" id="googleApiKeyInput" placeholder="AIza..." style="
 
-            padding: 12px;
+                        width: 100%;
 
-            border: 1px solid #ddd;
+                        padding: 12px;
 
-            border-radius: 6px;
+                        border: 1px solid #ddd;
 
-            font-family: monospace;
+                        border-radius: 6px;
 
-            font-size: 14px;
+                        font-family: monospace;
 
-            box-sizing: border-box;
+                        font-size: 14px;
 
-            margin-bottom: 20px;
+                        box-sizing: border-box;
 
-        ">
+                        margin-bottom: 20px;
 
-        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    ">
 
-            <button id="cancelApiKey" style="
+                    <div style="display: flex; gap: 10px; justify-content: flex-end;">
 
-                padding: 10px 20px;
+                        <button type="button" id="cancelApiKey" style="
 
-                border: 1px solid #ddd;
+                            padding: 10px 20px;
 
-                background: white;
+                            border: 1px solid #ddd;
 
-                border-radius: 6px;
+                            background: white;
 
-                cursor: pointer;
+                            border-radius: 6px;
 
-                font-size: 14px;
+                            cursor: pointer;
 
-            ">Avbryt</button>
+                            font-size: 14px;
 
-            <button id="saveApiKey" style="
+                        ">Avbryt</button>
 
-                padding: 10px 20px;
+                        <button type="submit" id="saveApiKey" style="
 
-                border: none;
+                            padding: 10px 20px;
 
-                background: #007bff;
+                            border: none;
 
-                color: white;
+                            background: #007bff;
 
-                border-radius: 6px;
+                            color: white;
 
-                cursor: pointer;
+                            border-radius: 6px;
 
-                font-size: 14px;
+                            cursor: pointer;
 
-            ">Spara och fortsätt</button>
+                            font-size: 14px;
 
-        </div>
+                        ">Spara och fortsätt</button>
+
+                    </div>
+
+                </form>
 
     `;
 
