@@ -643,8 +643,63 @@ function updateNodeAppearance(node) {
     }
 }
 
+
+// Funktion för att öppna Google Drive-filväljaren
+function importFromGoogleDrive() {
+    if (!pickerApiLoaded) {
+        alert("Google Picker API är inte laddad än. Försök igen om en liten stund.");
+        return;
+    }
+
+    const view = new google.picker.View(google.picker.ViewId.DOCS);
+    view.setMimeTypes("image/png,image/jpeg,image/jpg,application/pdf");
+
+    const picker = new google.picker.PickerBuilder()
+        .enableFeature(google.picker.Feature.NAV_HIDDEN)
+        .setAppId(GOOGLE_APP_ID)
+        .setOAuthToken(accessToken)
+        .addView(view)
+        .addView(new google.picker.DocsUploadView())
+        .setCallback(pickerCallback)
+        .build();
+    picker.setVisible(true);
+}
+
+// Callback-funktion för Google Picker
+function pickerCallback(data) {
+    if (data[google.picker.Response.ACTION] == google.picker.Action.PICKED) {
+        const doc = data[google.picker.Response.DOCUMENTS][0];
+        const fileId = doc.id;
+        const fileName = doc.name;
+
+        // Hämta filens innehåll från Google Drive
+        fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`
+            }
+        })
+        .then(res => res.blob())
+        .then(blob => {
+            if (blob.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const imageData = e.target.result;
+                    // Skapa ett bild-kort
+                    createImageCard(imageData, fileName);
+                };
+                reader.readAsDataURL(blob);
+            } else if (blob.type === 'application/pdf') {
+                // Hantera PDF-filer
+                alert(`PDF-import är inte implementerad än, men filen "${fileName}" har valts.`);
+                // Här kan du lägga till kod för att hantera PDF-filer
+            }
+        });
+    }
+}
 // Update sync status display using the existing search results info area
 function updateSyncStatus(message, type = '') {
+
     const statusEl = document.querySelector('.search-results-info');
     
     if (!statusEl) {

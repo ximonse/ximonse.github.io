@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
         { id: 'import-json', category: 'File Operations', title: '📥 Import from JSON', action: () => window.importFromJSON() },
         { id: 'import-pdf-extractor', category: 'File Operations', title: '📥 Import from PDF-Extractor', action: () => window.importFromExtractor() },
         { id: 'import-zotero', category: 'File Operations', title: '📚 Import from Zotero', action: () => document.getElementById('zoteroHtmlInput').click() },
+        { id: 'import-google-drive', category: 'File Operations', title: '📥 Import from Google Drive', action: () => window.importFromGoogleDrive() },
 
         // Card Creation & Import
         { id: 'add-new-card', category: 'Card Creation', title: '➕ Add New Card', shortcut: 'N', action: () => window.addNewCard() },

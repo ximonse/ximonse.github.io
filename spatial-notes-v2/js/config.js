@@ -77,6 +77,7 @@ const aiAssistantState = {
 
 // Google Drive integration constants
 const GOOGLE_CLIENT_ID = '971005822021-8ebrpd92n1upsedg7s5fn80mnmvhou5d.apps.googleusercontent.com';
+const GOOGLE_APP_ID = '971005822021'; // Extracted from GOOGLE_CLIENT_ID
 const GOOGLE_API_KEY = 'AIzaSyBOti4mM-6x9WDnZIjIeyEU01T1-DQ-dY4'; // Public API key for Picker
 const GOOGLE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
