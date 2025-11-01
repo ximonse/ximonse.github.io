@@ -241,6 +241,40 @@ function handleImageFiles(files) {
 }
 
 // Process image to 800px width with S-curve + strong light-gray whitening for handwritten notes (~35-90 KB)
+// Helper function to apply convolution filter (for sharpening)
+function applyConvolutionFilter(pixels, width, height, kernel) {
+    const output = new Uint8ClampedArray(pixels.length);
+    const kernelSize = 3;
+    const half = Math.floor(kernelSize / 2);
+
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            let r = 0, g = 0, b = 0;
+
+            for (let ky = 0; ky < kernelSize; ky++) {
+                for (let kx = 0; kx < kernelSize; kx++) {
+                    const pixelY = Math.min(height - 1, Math.max(0, y + ky - half));
+                    const pixelX = Math.min(width - 1, Math.max(0, x + kx - half));
+                    const pixelIndex = (pixelY * width + pixelX) * 4;
+                    const kernelValue = kernel[ky * kernelSize + kx];
+
+                    r += pixels[pixelIndex] * kernelValue;
+                    g += pixels[pixelIndex + 1] * kernelValue;
+                    b += pixels[pixelIndex + 2] * kernelValue;
+                }
+            }
+
+            const outputIndex = (y * width + x) * 4;
+            output[outputIndex] = Math.min(255, Math.max(0, r));
+            output[outputIndex + 1] = Math.min(255, Math.max(0, g));
+            output[outputIndex + 2] = Math.min(255, Math.max(0, b));
+            output[outputIndex + 3] = pixels[outputIndex + 3]; // Preserve alpha
+        }
+    }
+
+    return output;
+}
+
 function processImage(file) {
     return new Promise((resolve, reject) => {
         const canvas = document.createElement('canvas');
@@ -248,11 +282,15 @@ function processImage(file) {
         const img = new Image();
         
         img.onload = () => {
-            // Scale to 800px width for better quality, maintain aspect ratio
-            const ratio = 800 / img.width;
-            canvas.width = 800;
+            // Scale to 1000px width for sharper text, maintain aspect ratio
+            const ratio = 1000 / img.width;
+            canvas.width = 1000;
             canvas.height = Math.round(img.height * ratio);
-            
+
+            // Use high-quality image smoothing for better text clarity
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+
             // Draw image to canvas
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             
@@ -290,34 +328,45 @@ function processImage(file) {
             
             // Apply the enhanced image data back to canvas
             ctx.putImageData(imageData, 0, 0);
-            
+
+            // Apply subtle sharpening for text clarity
+            const sharpenedData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const sharpenKernel = [
+                0, -0.5, 0,
+                -0.5, 3, -0.5,
+                0, -0.5, 0
+            ];
+            const sharpenedPixels = applyConvolutionFilter(imageData.data, canvas.width, canvas.height, sharpenKernel);
+            sharpenedData.data.set(sharpenedPixels);
+            ctx.putImageData(sharpenedData, 0, 0);
+
             // Try WebP for best quality/size ratio, fallback to PNG, then JPEG
             let base64;
             let format = 'unknown';
             
             try {
-                // Try WebP first (best compression + quality)
-                base64 = canvas.toDataURL('image/webp', 0.95);
+                // Try WebP first (best compression + quality) - higher quality for text
+                base64 = canvas.toDataURL('image/webp', 0.97);
                 if (base64.startsWith('data:image/webp')) {
-                    format = 'WebP 95%';
+                    format = 'WebP 97%';
                 } else {
                     throw new Error('WebP not supported');
                 }
             } catch {
                 try {
-                    // Fallback to PNG
+                    // Fallback to PNG for sharp text
                     base64 = canvas.toDataURL('image/png');
                     format = 'PNG (lossless)';
-                    
-                    // If PNG too large, use max JPEG
-                    if (base64.length > 300000) { // ~225KB in base64
-                        base64 = canvas.toDataURL('image/jpeg', 1.0);
-                        format = 'JPEG 100%';
+
+                    // If PNG too large, use high quality JPEG
+                    if (base64.length > 400000) { // ~300KB in base64 (increased for 1000px)
+                        base64 = canvas.toDataURL('image/jpeg', 0.95);
+                        format = 'JPEG 95%';
                     }
                 } catch {
                     // Final fallback
-                    base64 = canvas.toDataURL('image/jpeg', 1.0);
-                    format = 'JPEG 100%';
+                    base64 = canvas.toDataURL('image/jpeg', 0.95);
+                    format = 'JPEG 95%';
                 }
             }
             
