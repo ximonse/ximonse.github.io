@@ -2,9 +2,14 @@
 // Google Drive Integration - Image Import via Picker
 // ========================================================================
 
-let accessToken = null;
-let tokenClient = null;
-let pickerApiLoaded = false;
+// Use global variables on window for main.js compatibility
+// Initialize if not already set
+if (typeof window.accessToken === 'undefined') window.accessToken = null;
+if (typeof window.tokenClient === 'undefined') window.tokenClient = null;
+if (typeof window.pickerApiLoaded === 'undefined') window.pickerApiLoaded = false;
+if (typeof window.isSignedIn === 'undefined') window.isSignedIn = false;
+if (typeof window.tokenExpiry === 'undefined') window.tokenExpiry = null;
+if (typeof window.rememberMeEnabled === 'undefined') window.rememberMeEnabled = false;
 
 // ---- Credential Management (localStorage) ------------------------------
 function getApiKey() {
@@ -33,11 +38,13 @@ function clearGoogleCreds() {
 
 // Expose globally for debugging/management
 window.clearGoogleCreds = clearGoogleCreds;
+window.getApiKey = getApiKey;
+window.getClientId = getClientId;
 
 // ---- Initialize Google APIs --------------------------------------------
 window.onGapiLoad = function() {
   gapi.load('picker', () => {
-    pickerApiLoaded = true;
+    window.pickerApiLoaded = true;
     console.log('✅ Google Picker API loaded');
   });
 };
@@ -56,14 +63,24 @@ function initializeGoogleAPI() {
     return;
   }
 
-  tokenClient = google.accounts.oauth2.initTokenClient({
+  window.tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: clientId,
-    scope: 'https://www.googleapis.com/auth/drive.readonly',
+    scope: 'https://www.googleapis.com/auth/drive.file', // Need write access for project sync
     callback: (response) => {
       if (response.access_token) {
-        accessToken = response.access_token;
+        window.accessToken = response.access_token;
+        window.isSignedIn = true;
+        window.tokenExpiry = Date.now() + (response.expires_in ? response.expires_in * 1000 : 3600000);
+
         console.log('✅ OAuth token received');
-        // After getting token, open picker automatically
+        console.log('Token expires at:', new Date(window.tokenExpiry).toLocaleString());
+
+        // Update UI if updateAuthStatus exists (from main.js)
+        if (typeof updateAuthStatus === 'function') {
+          updateAuthStatus();
+        }
+
+        // After getting token, open picker automatically if pending
         openPickerAfterAuth();
       } else if (response.error) {
         console.error('❌ OAuth error:', response.error);
@@ -94,10 +111,14 @@ async function importFromGoogleDrive() {
   }
 
   // Check if we have a valid access token
-  if (!accessToken) {
+  if (!window.accessToken) {
     console.log('No access token - requesting sign-in...');
     pendingPickerOpen = true;
-    tokenClient.requestAccessToken();
+    if (window.tokenClient) {
+      window.tokenClient.requestAccessToken();
+    } else {
+      alert('Google API inte initialiserat. Ladda om sidan (Ctrl+F5).');
+    }
     return;
   }
 
@@ -110,7 +131,7 @@ async function openDrivePicker() {
   const apiKey = getApiKey();
   if (!apiKey) return;
 
-  if (!pickerApiLoaded || !google.picker) {
+  if (!window.pickerApiLoaded || !google.picker) {
     alert('Google Picker laddar fortfarande... försök igen om ett ögonblick.');
     return;
   }
@@ -123,7 +144,7 @@ async function openDrivePicker() {
 
   const picker = new google.picker.PickerBuilder()
     .setDeveloperKey(apiKey)
-    .setOAuthToken(accessToken)
+    .setOAuthToken(window.accessToken)
     .addView(view)
     .enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
     .setCallback(pickerCallback)
@@ -150,7 +171,7 @@ async function pickerCallback(data) {
         const response = await fetch(
           `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,
           {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
+            headers: { 'Authorization': `Bearer ${window.accessToken}` }
           }
         );
 
@@ -185,7 +206,14 @@ async function pickerCallback(data) {
       : `✅ Importerade ${imported} bilder från Drive`;
 
     console.log(message);
-    alert(message);
+
+    // Use updateSyncStatus if available (from main.js), otherwise alert
+    if (typeof updateSyncStatus === 'function') {
+      updateSyncStatus(message, 'success');
+      setTimeout(() => updateSyncStatus('', ''), 3000);
+    } else {
+      alert(message);
+    }
 
     // Save board after import (if function exists)
     if (typeof saveBoard === 'function') {
