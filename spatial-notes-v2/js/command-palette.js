@@ -6,7 +6,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Save & Google Drive (Top Priority)
         { id: 'save-board', category: 'Save & Google Drive', title: '💾 Save to LocalStorage', shortcut: 'Ctrl+S', action: () => window.saveBoard() },
         { id: 'save-google-drive', category: 'Save & Google Drive', title: '💾 Save to Google Drive', action: () => window.saveToGoogleDriveWithStructure() },
-        { id: 'load-google-drive', category: 'Save & Google Drive', title: '📥 Load from Google Drive', action: () => window.loadFromGoogleDrive() },
         { id: 'google-drive-projects', category: 'Save & Google Drive', title: '📁 Browse Google Drive Projects', action: () => window.showProjectManager() },
         { id: 'google-drive-auth', category: 'Save & Google Drive', title: '🔗 Google Drive Sign In/Out', action: () => window.toggleGoogleDriveAuth() },
 
@@ -18,7 +17,6 @@ document.addEventListener('DOMContentLoaded', () => {
         { id: 'import-json', category: 'File Operations', title: '📥 Import from JSON', action: () => window.importFromJSON() },
         { id: 'import-pdf-extractor', category: 'File Operations', title: '📥 Import from PDF-Extractor', action: () => window.importFromExtractor() },
         { id: 'import-zotero', category: 'File Operations', title: '📚 Import from Zotero', action: () => document.getElementById('zoteroHtmlInput').click() },
-        { id: 'import-google-drive', category: 'File Operations', title: '📥 Import from Google Drive', action: () => window.importFromGoogleDrive() },
 
         // Card Creation & Import
         { id: 'add-new-card', category: 'Card Creation', title: '➕ Add New Card', shortcut: 'N', action: () => window.addNewCard() },
