@@ -76,3 +76,6 @@ const aiAssistantState = {
 };
 
 // Google Drive integration - credentials stored in localStorage (see google-drive.js)
+let currentProject = localStorage.getItem('spatial-notes-project-name') || 'Nytt projekt';
+let availableProjects = [];
+let projectsLoaded = false;
