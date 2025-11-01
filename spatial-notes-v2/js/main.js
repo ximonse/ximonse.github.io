@@ -158,14 +158,12 @@ function getArrangementPosition() {
     };
 }
 
-// Text measurement using invisible ruler
-let textRuler = null;
-
-// Memoization cache for getMeasuredTextHeight
-const heightCache = new Map();
+// Text measurement using invisible ruler - now in config.js
+// (textRuler, heightCache)
 
 // Sample data - strukturerade kort med titel och text (arrangerade med G+V layout)
-const initialCards = [
+// Now defined in config.js as initialCards
+const initialCardsOld = [
     {
         id: 'welcome-1',
         title: '👋 Välkommen!',

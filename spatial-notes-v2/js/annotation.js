@@ -417,9 +417,7 @@ function editAnnotationText(node) {
     });
 }
 
-// MINIMAL UNDO/REDO SYSTEM - Define early so functions can use it
-let undoStack = [];
-let redoStack = [];
-const MAX_UNDO_STEPS = 20;
+// MINIMAL UNDO/REDO SYSTEM - Now defined in config.js
+// (undoStack, redoStack, MAX_UNDO_STEPS)
 
 // Generate unique timestamp-based ID for new cards
