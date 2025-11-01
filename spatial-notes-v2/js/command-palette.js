@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
         { id: 'arrow-tool', title: '→ Annotation: Arrow Tool', action: () => setAnnotationMode('arrow') },
 
         // Settings & View
+        { id: 'google-drive-auth', title: '🔗 Google Drive Sign In/Out', action: () => toggleGoogleDriveAuth() },
         { id: 'column-view', title: '📋 Toggle Column/Board View', shortcut: 'K', action: () => toggleView() },
         { id: 'toggle-theme', title: '🎨 Cycle Theme', shortcut: 'Shift+D', action: () => toggleDarkTheme() },
         { id: 'show-shortcuts', title: '⌨️ Show Keyboard Shortcuts', shortcut: 'Ctrl+Q', action: () => showKeyboardShortcutsDialog() },
