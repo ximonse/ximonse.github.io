@@ -133,9 +133,23 @@ async function openDrivePicker() {
   const apiKey = getApiKey();
   if (!apiKey) return;
 
-  if (!window.pickerApiLoaded || !google.picker) {
-    alert('Google Picker laddar fortfarande... försök igen om ett ögonblick.');
-    return;
+  // Wait for picker to load if not ready yet
+  if (!window.pickerApiLoaded || typeof google === 'undefined' || !google.picker) {
+    console.log('⏳ Waiting for Google Picker to load...');
+
+    // Try waiting up to 5 seconds
+    for (let i = 0; i < 10; i++) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      if (window.pickerApiLoaded && typeof google !== 'undefined' && google.picker) {
+        break;
+      }
+    }
+
+    // Check again after waiting
+    if (!window.pickerApiLoaded || typeof google === 'undefined' || !google.picker) {
+      alert('Google Picker kunde inte laddas. Ladda om sidan (Ctrl+F5) och försök igen.');
+      return;
+    }
   }
 
   console.log('🖼️ Opening Google Drive Picker...');
@@ -311,18 +325,78 @@ async function loadFromGoogleDrive() {
                 'height': displayHeight + 'px'
               });
             }
+
+            // Restore annotation styling
+            if (card.isAnnotation) {
+              if (card.annotationType === 'shape') {
+                node.addClass('annotation-shape');
+                if (card.shape) node.data('shape', card.shape);
+                if (card.label) node.data('label', card.label);
+                if (card.customWidth) node.data('customWidth', card.customWidth);
+                if (card.customHeight) node.data('customHeight', card.customHeight);
+
+                node.style({
+                  'background-color': card.backgroundColor || '#ff0000',
+                  'width': card.width || '200px',
+                  'height': card.height || '200px'
+                });
+              } else if (card.annotationType === 'text') {
+                node.addClass('annotation-text');
+                if (card.textSize) node.data('textSize', card.textSize);
+                if (card.label) node.data('label', card.label);
+                if (card.customWidth) node.data('customWidth', card.customWidth);
+                if (card.customHeight) node.data('customHeight', card.customHeight);
+
+                node.style({
+                  'background-color': card.backgroundColor || '#ff0000',
+                  'font-size': card.fontSize || '32px',
+                  'width': card.width || '200px',
+                  'height': card.height || '100px'
+                });
+              }
+            } else if (card.cardColor) {
+              // Apply cardColor for non-annotations
+              if (typeof getCardColorValue === 'function' && typeof getCurrentTheme === 'function') {
+                const colorValue = getCardColorValue(card.cardColor, getCurrentTheme());
+                node.style('background-color', colorValue);
+              }
+            }
+
+            // Handle pinned cards
+            if (card.isPinned || card.pinned) {
+              node.addClass('pinned');
+              node.data('pinned', true);
+              node.ungrabify();
+            } else {
+              node.grabify();
+            }
           });
 
           // Load edges
           if (boardData.edges) {
             boardData.edges.forEach(edgeData => {
-              cy.add({
+              const newEdge = cy.add({
                 group: 'edges',
                 data: {
                   source: edgeData.source,
-                  target: edgeData.target
+                  target: edgeData.target,
+                  isAnnotation: edgeData.isAnnotation || false,
+                  annotationType: edgeData.annotationType || null,
+                  connectionType: edgeData.connectionType || null
                 }
               });
+
+              // Restore edge styling if available
+              if (edgeData.lineColor || edgeData.targetArrowColor) {
+                newEdge.style({
+                  'line-color': edgeData.lineColor || '#999',
+                  'target-arrow-color': edgeData.targetArrowColor || '#999',
+                  'target-arrow-shape': edgeData.targetArrowShape || 'triangle',
+                  'width': edgeData.width || 5,
+                  'arrow-scale': edgeData.arrowScale || 1.8,
+                  'curve-style': edgeData.curveStyle || 'bezier'
+                });
+              }
             });
           }
         });
