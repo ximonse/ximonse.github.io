@@ -707,3 +707,93 @@ async function callGeminiAPI(apiKey, imageData) {
         throw error;
     }
 }
+
+// Batch Gemini OCR for multiple images
+async function batchGeminiOCR(nodes) {
+    console.log('DEBUG: batchGeminiOCR called for', nodes.length, 'nodes');
+
+    // Filter for only image nodes
+    const imageNodes = nodes.filter(node => node.data('type') === 'image' && node.data('imageData'));
+
+    if (imageNodes.length === 0) {
+        alert('Inga bildkort valda.');
+        return;
+    }
+
+    // Get API key once
+    const apiKey = await getGoogleAIAPIKey();
+    if (!apiKey) {
+        console.error('DEBUG: Google AI API key not found or user cancelled.');
+        return;
+    }
+
+    // Show status
+    const statusDiv = document.getElementById('selectionInfo');
+    if (statusDiv) {
+        statusDiv.textContent = `✨ Läser ${imageNodes.length} bilder med Gemini...`;
+        statusDiv.classList.add('visible');
+    }
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    // Process each image sequentially (to avoid rate limiting)
+    for (let i = 0; i < imageNodes.length; i++) {
+        const node = imageNodes[i];
+
+        // Update status
+        if (statusDiv) {
+            statusDiv.textContent = `✨ Läser bild ${i + 1}/${imageNodes.length}...`;
+        }
+
+        try {
+            const imageData = node.data('imageData');
+            const response = await callGeminiAPI(apiKey, imageData);
+
+            if (!response || !response.candidates || response.candidates.length === 0 ||
+                !response.candidates[0].content || !response.candidates[0].content.parts ||
+                response.candidates[0].content.parts.length === 0) {
+                throw new Error('Ogiltigt svar från Gemini API.');
+            }
+
+            const text = response.candidates[0].content.parts[0].text;
+            console.log(`DEBUG: Gemini OCR for image ${i + 1}:`, text);
+
+            // Update node with extracted text
+            node.data('annotation', text);
+            node.data('searchableText', text.toLowerCase());
+
+            successCount++;
+
+            // Small delay to avoid rate limiting
+            if (i < imageNodes.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+
+        } catch (error) {
+            console.error(`DEBUG: Error processing image ${i + 1}:`, error);
+            errorCount++;
+        }
+    }
+
+    // Show final status
+    if (statusDiv) {
+        if (errorCount === 0) {
+            statusDiv.textContent = `✅ Läste ${successCount} bilder med Gemini!`;
+        } else {
+            statusDiv.textContent = `⚠️ Läste ${successCount} bilder, ${errorCount} fel`;
+        }
+        setTimeout(() => {
+            statusDiv.classList.remove('visible');
+        }, 3000);
+    }
+
+    // Refresh display
+    cy.style().update();
+    saveBoard();
+
+    // Refresh column view if active
+    if (typeof isColumnView !== 'undefined' && isColumnView && typeof renderColumnViewDebounced === 'function') {
+        renderColumnViewDebounced();
+    }
+}

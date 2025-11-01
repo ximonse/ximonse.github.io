@@ -12014,10 +12014,14 @@ function createColumnCard(node) {
         }
     });
 
-    // Add right-click context menu
+    // Add right-click context menu (desktop only, mobile uses long-press)
     cardDiv.addEventListener('contextmenu', (e) => {
         e.preventDefault();
-        showColumnContextMenu(e, node.id());
+        // On mobile devices, don't show the column context menu
+        // because we already have the mobile menu from long-press
+        if (!isMobileDevice()) {
+            showColumnContextMenu(e, node.id());
+        }
     });
     
     // Add iPad/mobile touch functionality
@@ -12179,13 +12183,30 @@ function showMobileCardMenu(touch, nodeId) {
         </div>
 
         <!-- Pin Section -->
-        <div style="padding: 12px 16px;">
+        <div style="padding: 12px 16px;" id="mobilePinSection">
             <div style="font-weight: bold; margin-bottom: 8px; color: #333;">Pinning</div>
             <div class="mobile-menu-item" data-action="toggle-pin" id="mobilePinToggle" style="padding: 8px 12px; cursor: pointer; border-radius: 8px;">📌 Pinna kort</div>
         </div>
     `;
     
     document.body.appendChild(menu);
+
+    // Check if any selected nodes are images
+    const hasImageNodes = targetNodes.some(n => n.data('type') === 'image');
+
+    // Add Gemini OCR section for image nodes
+    if (hasImageNodes) {
+        const pinSection = menu.querySelector('#mobilePinSection');
+        pinSection.style.borderBottom = '1px solid #eee';
+
+        const geminiSection = document.createElement('div');
+        geminiSection.style.cssText = 'padding: 12px 16px;';
+        geminiSection.innerHTML = `
+            <div style="font-weight: bold; margin-bottom: 8px; color: #333;">Gemini OCR</div>
+            <div class="mobile-menu-item" data-action="gemini-ocr" style="padding: 8px 12px; cursor: pointer; border-radius: 8px; background: linear-gradient(145deg, #8b5cf6 0%, #7c3aed 100%); color: white; font-weight: 500;">✨ Läs bild med Gemini</div>
+        `;
+        menu.appendChild(geminiSection);
+    }
 
     // Update pin button text based on current state
     const pinToggleBtn = menu.querySelector('#mobilePinToggle');
@@ -12316,6 +12337,14 @@ function showMobileCardMenu(touch, nodeId) {
                 }
 
                 saveBoard();
+            } else if (action === 'gemini-ocr') {
+                console.log('DEBUG running batch Gemini OCR on selected images');
+                // Close menu immediately
+                document.body.removeChild(menu);
+
+                // Run batch Gemini OCR
+                batchGeminiOCR(targetNodes);
+                return; // Don't remove menu again
             }
             document.body.removeChild(menu);
         });

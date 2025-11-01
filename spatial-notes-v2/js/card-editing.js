@@ -27,10 +27,11 @@ function editCard(node) {
         <h3 style="margin-top: 0; color: #333; font-size: 18px;">Redigera kort</h3>
         <div style="margin-bottom: 15px;">
             <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #555;">Text:</label>
-            <textarea id="editCardText" 
-                style="width: 100%; height: 200px; font-family: inherit; font-size: 14px; 
+            <textarea id="editCardText"
+                style="width: 100%; height: 200px; font-family: inherit; font-size: 14px;
                        border: 1px solid #ccc; border-radius: 4px; padding: 8px;
                        box-sizing: border-box; resize: vertical;">${currentText}</textarea>
+            ${isImageNode ? `<button id="geminiOcrBtn" type="button" style="margin-top: 8px; background: linear-gradient(145deg, #8b5cf6 0%, #7c3aed 100%); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3); transition: all 0.2s ease;">✨ Läs bild med Gemini OCR</button>` : ''}
         </div>
         <div style="margin-bottom: 15px;">
             <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #555;">Färg (valfritt):</label>
@@ -181,7 +182,76 @@ function editCard(node) {
         
         weekButtonsContainer.appendChild(weekBtn);
     });
-    
+
+    // Handle Gemini OCR button for image nodes
+    if (isImageNode) {
+        const geminiBtn = document.getElementById('geminiOcrBtn');
+        if (geminiBtn) {
+            geminiBtn.addEventListener('click', async function() {
+                const originalText = this.textContent;
+                this.disabled = true;
+                this.textContent = '⏳ Läser bild...';
+                this.style.opacity = '0.7';
+
+                try {
+                    const apiKey = await getGoogleAIAPIKey();
+                    if (!apiKey) {
+                        this.textContent = originalText;
+                        this.disabled = false;
+                        this.style.opacity = '1';
+                        return;
+                    }
+
+                    const imageData = node.data('imageData');
+                    if (!imageData) {
+                        alert('Ingen bilddata hittades på detta kort.');
+                        this.textContent = originalText;
+                        this.disabled = false;
+                        this.style.opacity = '1';
+                        return;
+                    }
+
+                    const response = await callGeminiAPI(apiKey, imageData);
+
+                    if (!response || !response.candidates || response.candidates.length === 0 ||
+                        !response.candidates[0].content || !response.candidates[0].content.parts ||
+                        response.candidates[0].content.parts.length === 0) {
+                        throw new Error('Ogiltigt svar från Gemini API.');
+                    }
+
+                    const extractedText = response.candidates[0].content.parts[0].text;
+
+                    // Fill the textarea with extracted text
+                    const textarea = document.getElementById('editCardText');
+                    if (textarea.value.trim()) {
+                        // If there's already text, append
+                        textarea.value = textarea.value + '\n\n' + extractedText;
+                    } else {
+                        // Otherwise replace
+                        textarea.value = extractedText;
+                    }
+
+                    // Visual feedback
+                    this.textContent = '✅ Klar!';
+                    this.style.background = 'linear-gradient(145deg, #10b981 0%, #059669 100%)';
+                    setTimeout(() => {
+                        this.textContent = originalText;
+                        this.style.background = 'linear-gradient(145deg, #8b5cf6 0%, #7c3aed 100%)';
+                        this.disabled = false;
+                        this.style.opacity = '1';
+                    }, 2000);
+
+                } catch (error) {
+                    console.error('Gemini OCR error:', error);
+                    alert('Fel vid OCR: ' + error.message);
+                    this.textContent = originalText;
+                    this.disabled = false;
+                    this.style.opacity = '1';
+                }
+            });
+        }
+    }
+
     // Handle keyboard shortcuts with proper cleanup
     function cleanup() {
         if (document.body.contains(overlay)) {

@@ -368,17 +368,29 @@ function initCytoscape() {
     // Touch and hold to edit card on mobile
     let touchTimer = null;
     let touchedNode = null;
-    
+
     cy.on('touchstart', 'node', function(evt) {
         touchedNode = evt.target;
+        const originalEvent = evt.originalEvent;
+
         touchTimer = setTimeout(() => {
             if (touchedNode) {
-                editCard(touchedNode);
+                // If the node is already selected (part of a multi-selection),
+                // show context menu instead of editing
+                const selectedNodes = cy.$('node:selected');
+                if (touchedNode.selected() && selectedNodes.length > 1) {
+                    // Show context menu for multiple selections
+                    console.log('DEBUG: Long press on selected node, showing context menu');
+                    showContextMenu(originalEvent || evt, touchedNode);
+                } else {
+                    // Single card: edit it
+                    editCard(touchedNode);
+                }
                 touchedNode = null;
             }
         }, 1000); // 1 second hold
     });
-    
+
     cy.on('touchend touchmove', 'node', function(evt) {
         if (touchTimer) {
             clearTimeout(touchTimer);

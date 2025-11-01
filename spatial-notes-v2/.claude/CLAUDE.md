@@ -214,6 +214,138 @@ async function processPdfFile(file) {
 
 ---
 
+### 📄 GEMINI OCR INTEGRATION (2025-11-01) ✅
+
+**HUVUDUPPGIFT:** Gemini Vision API för textextrahering från bilder
+
+**"Från manuell transkribering till AI-driven OCR - batch processing för flera bilder!"**
+
+#### IMPLEMENTERADE GEMINI OCR FEATURES:
+
+1. **Single Image OCR**
+   - Högerklick på bildkort → "✨ Läs med Gemini"
+   - Edit-dialog knapp: "✨ Läs bild med Gemini OCR" (bildkort endast)
+   - Automatisk textextrahering + hashtags
+   - Sparas i annotation-fältet för sökbarhet
+
+2. **Batch Processing**
+   - Markera flera bildkort samtidigt
+   - Desktop: Högerklick → "✨ Läs X bilder med Gemini"
+   - Mobile Board: Långtryck → Context menu → Gemini OCR
+   - Mobile Column: Långtryck → "✨ Läs bild med Gemini"
+   - Sequential processing med 500ms delay (rate limiting)
+   - Progress feedback: "Läser bild 1/10..." osv.
+
+3. **Unified Context Menus**
+   - Desktop: Högerklick visar samma meny som tidigare
+   - Mobile Board View: Långtryck på enstaka kort → Edit, flera kort → Context menu
+   - Mobile Column View: Långtryck → Mobilmeny (inga dubbla menyer)
+   - Konsistent UX över alla plattformar
+
+#### TEKNISK IMPLEMENTATION:
+
+**Modifierade filer:**
+- **js/card-editing.js** (rad 34): Gemini OCR-knapp i edit-dialog för bildkort
+- **js/card-editing.js** (rad 186-253): Event handler för OCR-knapp i edit-dialog
+- **js/image-handling.js** (rad 604-662): `readImageWithGemini()` för enstaka bilder
+- **js/image-handling.js** (rad 711-799): `batchGeminiOCR()` för flera bilder
+- **js/dialogs.js** (rad 128-149): Smart Gemini-knapp som räknar antal bilder
+- **js/cytoscape-init.js** (rad 372-392): Smart långtryck-logik för board view
+- **js/main.js** (rad 12190-12204): Gemini OCR-sektion i mobilmeny
+- **js/main.js** (rad 12336-12343): Event handler för batch OCR i mobilmeny
+- **js/main.js** (rad 12017-12025): Fix för dubbla menyer i column view
+
+**Key Functions:**
+
+```javascript
+// Single image OCR (existing, från högerklick)
+async function readImageWithGemini(node) {
+    const apiKey = await getGoogleAIAPIKey();
+    const imageData = node.data('imageData');
+    const response = await callGeminiAPI(apiKey, imageData);
+    const text = response.candidates[0].content.parts[0].text;
+
+    // Save to annotation field for searchability
+    node.data('annotation', text);
+    node.data('searchableText', text.toLowerCase());
+}
+
+// Batch OCR for multiple images
+async function batchGeminiOCR(nodes) {
+    const imageNodes = nodes.filter(n => n.data('type') === 'image');
+    const apiKey = await getGoogleAIAPIKey();
+
+    for (let i = 0; i < imageNodes.length; i++) {
+        // Show progress
+        statusDiv.textContent = `✨ Läser bild ${i + 1}/${imageNodes.length}...`;
+
+        // Process image
+        const response = await callGeminiAPI(apiKey, imageData);
+        node.data('annotation', extractedText);
+
+        // Rate limiting delay
+        if (i < imageNodes.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+    }
+}
+
+// Smart long-press for board view (cytoscape-init.js)
+cy.on('touchstart', 'node', function(evt) {
+    touchTimer = setTimeout(() => {
+        const selectedNodes = cy.$('node:selected');
+        if (touchedNode.selected() && selectedNodes.length > 1) {
+            // Multiple selection → show context menu
+            showContextMenu(originalEvent, touchedNode);
+        } else {
+            // Single card → edit it
+            editCard(touchedNode);
+        }
+    }, 1000);
+});
+```
+
+#### ANVÄNDNINGSWORKFLOW:
+
+**Desktop:**
+1. Ladda upp bildkort (drag-drop eller 📷 knapp)
+2. Markera bilder (Shift+klick eller box select)
+3. Högerklick → "✨ Läs X bilder med Gemini"
+4. Ange API-nyckel vid första användningen
+5. Vänta medan bilder processas (progress visas)
+6. Alla kort har nu extraherad text + hashtags
+
+**Mobile Board View:**
+1. Tap för att markera flera bildkort
+2. Långtryck på ett av de markerade korten
+3. Context menu visas (samma som desktop!)
+4. Tap "✨ Läs med Gemini"
+5. Följ progress-uppdateringar
+
+**Mobile Column View:**
+1. Långtryck på bildkort
+2. Mobilmeny visas (ingen dubbel-meny längre)
+3. Tap "✨ Läs bild med Gemini"
+4. Fungerar för både enstaka och flera kort
+
+**Edit Dialog:**
+1. Dubbelklicka på bildkort
+2. Klicka "✨ Läs bild med Gemini OCR"
+3. Text fylls i automatiskt i textarea
+4. Redigera och spara
+
+#### FÖRDELAR:
+
+- **Batch Processing**: Hantera 10+ bilder på en gång
+- **Rate Limiting**: 500ms delay mellan anrop
+- **Unified UX**: Samma workflow på desktop och mobil
+- **No Duplicate Menus**: Fix för överlappande menyer i column view
+- **Smart Detection**: Visar bara OCR-alternativ för bildkort
+- **Progress Feedback**: Tydlig feedback under processing
+- **Auto-tagging**: Gemini lägger till relevanta hashtags automatiskt
+
+---
+
 ## 🎓 TIDIGARE MILESTONES
 
 ### Färgsystem (2025-08-07)
@@ -318,6 +450,7 @@ async function processPdfFile(file) {
 
 ## 👨‍💻 SESSIONS-HISTORIK
 
+- **2025-11-01**: Gemini OCR integration - Batch processing & unified menus
 - **2025-10-29**: PDF import implementation
 - **2025-10-24**: Modulär omstrukturering (CSS klar)
 - **2025-09-04**: Kolumnvy shortcuts

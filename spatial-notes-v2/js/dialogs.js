@@ -127,11 +127,25 @@ function showContextMenu(event, node) {
 
         const readWithGeminiOption = document.createElement('div');
         readWithGeminiOption.className = 'context-menu-item';
-        readWithGeminiOption.innerHTML = '✨ Läs med Gemini';
-        readWithGeminiOption.onclick = () => {
-            hideContextMenu();
-            readImageWithGemini(node);
-        };
+
+        // Check if multiple nodes are selected
+        const selectedNodes = cy.$('node:selected');
+        const hasMultipleImages = selectedNodes.length > 1 && selectedNodes.some(n => n.data('type') === 'image');
+
+        if (hasMultipleImages) {
+            const imageCount = selectedNodes.filter(n => n.data('type') === 'image').length;
+            readWithGeminiOption.innerHTML = `✨ Läs ${imageCount} bilder med Gemini`;
+            readWithGeminiOption.onclick = () => {
+                hideContextMenu();
+                batchGeminiOCR(selectedNodes);
+            };
+        } else {
+            readWithGeminiOption.innerHTML = '✨ Läs med Gemini';
+            readWithGeminiOption.onclick = () => {
+                hideContextMenu();
+                readImageWithGemini(node);
+            };
+        }
         menu.appendChild(readWithGeminiOption);
     }
 
