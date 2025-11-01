@@ -5655,8 +5655,9 @@ function loadBoardFromData(boardData) {
                 const hasAnnotation = (cardData.annotation || '').length > 0;
                 console.log(`✅ Restored image: ${filename} (${hasAnnotation ? 'with annotation' : 'no annotation'})`);
             }
-            
-            newNode.grabify();
+
+            // Don't call grabify() here - pinned state is already handled above (lines 5583-5589)
+            // Calling grabify() here would override the ungrabify() for pinned cards!
         });
         
         // Restore edges/arrows if they exist
