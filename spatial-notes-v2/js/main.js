@@ -1,20 +1,5 @@
-// Global variables
-let cy;
-let searchActive = false;
-let copiedCards = []; // Store copied cards for arrangement commands
-
-// Annotation system variables
-let annotationMode = 'select';
-let annotationColor = '#ff6b6b';
-let connectionStartNode = null;
-let annotationToolbarVisible = false;
-let resizeMode = false;
-
-// Mouse position tracking
-let lastMousePosition = { x: null, y: null };
-
-
-
+// Global variables now declared in config.js
+// (cy, searchActive, copiedCards, annotationMode, annotationColor, etc)
 
 // Generate unique timestamp-based card ID
 function generateCardId() {
@@ -12962,3 +12947,25 @@ window.fixOldImageCards = function() {
 };
 
 console.log('💡 TIP: Kör fixOldImageCards() i console för att fixa gamla bildkorts proportioner!');
+
+// ============================================================
+// Expose functions globally for HTML onclick handlers
+// ============================================================
+window.toggleSimplifiedToolbar = typeof toggleSimplifiedToolbar !== 'undefined' ? toggleSimplifiedToolbar : function() {};
+window.toggleProjectDropdown = typeof toggleProjectDropdown !== 'undefined' ? toggleProjectDropdown : function() {};
+window.renameProject = typeof renameProject !== 'undefined' ? renameProject : function() {};
+window.createNewProject = typeof createNewProject !== 'undefined' ? createNewProject : function() {};
+window.showProjectList = typeof showProjectList !== 'undefined' ? showProjectList : function() {};
+window.manageProjects = typeof manageProjects !== 'undefined' ? manageProjects : function() {};
+window.selectSearchResults = typeof selectSearchResults !== 'undefined' ? selectSearchResults : function() {};
+window.triggerImageUpload = typeof triggerImageUpload !== 'undefined' ? triggerImageUpload : function() {};
+window.showCommandPalette = typeof showCommandPalette !== 'undefined' ? showCommandPalette : function() {};
+window.showUserManual = typeof showUserManual !== 'undefined' ? showUserManual : function() {};
+window.zoomOutToCenter = typeof zoomOutToCenter !== 'undefined' ? zoomOutToCenter : function() {};
+window.addNewCard = typeof addNewCard !== 'undefined' ? addNewCard : function() {};
+window.toggleAiPanel = typeof toggleAiPanel !== 'undefined' ? toggleAiPanel : function() {};
+window.runAiSorting = typeof runAiSorting !== 'undefined' ? runAiSorting : function() {};
+window.toggleAiVoiceInput = typeof toggleAiVoiceInput !== 'undefined' ? toggleAiVoiceInput : function() {};
+window.saveAiApiKey = typeof saveAiApiKey !== 'undefined' ? saveAiApiKey : function() {};
+window.toggleAIPanel = typeof toggleAIPanel !== 'undefined' ? toggleAIPanel : function() {};
+window.sendAIMessage = typeof sendAIMessage !== 'undefined' ? sendAIMessage : function() {};
