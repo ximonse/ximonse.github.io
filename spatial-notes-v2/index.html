@@ -74,10 +74,10 @@
         <button class="toolbar-btn" id="imageUploadBtn" onclick="triggerImageUpload()" title="Tre bildval: Kamera, Galleri, Filväljare" style="padding: 8px 16px;">
             📷 Bilder
         </button>
-        <button class="toolbar-btn" id="googleLoadBtn" onclick="loadFromGoogleDrive()" title="Ladda från Google Drive" style="padding: 8px 16px;">
+        <button class="toolbar-btn" id="googleLoadBtn" title="Ladda från Google Drive" style="padding: 8px 16px;">
             ↓
         </button>
-        <button class="toolbar-btn" id="googleImportBtn" onclick="importFromGoogleDrive()" title="Importera från Google Drive" style="padding: 8px 16px;">
+        <button class="toolbar-btn" id="googleImportBtn" title="Importera från Google Drive" style="padding: 8px 16px;">
             G
         </button>
         <button class="toolbar-btn" id="commandPaletteBtn" onclick="showCommandPalette()" title="Visa kommandon (Ctrl+K)" style="padding: 8px 16px;">
@@ -212,7 +212,30 @@ Exempel: Visa alla kort om projektet, Sortera todos i veckogrid" rows="2"></text
     <!-- Main application (remaining functionality) -->
     <script src="js/main.js"></script>
 
+    <!-- Google Drive Integration -->
+    <script src="js/google-drive.js"></script>
+
     <!-- Command palette (needs to load AFTER main.js) -->
     <script src="js/command-palette.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('googleLoadBtn').addEventListener('click', () => {
+                if (typeof window.loadFromGoogleDrive === 'function') {
+                    window.loadFromGoogleDrive();
+                } else {
+                    alert("Drive load function isn't loaded — check js/google-drive.js path and cache (Ctrl+F5).");
+                }
+            });
+
+            document.getElementById('googleImportBtn').addEventListener('click', () => {
+                if (typeof window.importFromGoogleDrive === 'function') {
+                    window.importFromGoogleDrive();
+                } else {
+                    alert("Drive import function isn't loaded — check js/google-drive.js path and cache (Ctrl+F5).");
+                }
+            });
+        });
+    </script>
 </body>
 </html>
