@@ -74,9 +74,6 @@
         <button class="toolbar-btn" id="imageUploadBtn" onclick="triggerImageUpload()" title="Tre bildval: Kamera, Galleri, Filväljare" style="padding: 8px 16px;">
             📷 Bilder
         </button>
-        <button class="toolbar-btn" id="googleLoadBtn" title="Ladda från Google Drive" style="padding: 8px 16px;">
-            ↓
-        </button>
         <button class="toolbar-btn" id="googleImportBtn" title="Importera från Google Drive" style="padding: 8px 16px;">
             G
         </button>
@@ -194,6 +191,12 @@ Exempel: Visa alla kort om projektet, Sortera todos i veckogrid" rows="2"></text
         </div>
     </div>
 
+	<!-- Google Identity Services & gapi loader -->
+	<script src="https://accounts.google.com/gsi/client" async defer></script>
+	<script src="https://apis.google.com/js/api.js?onload=onGapiLoad" async defer></script>
+
+	<!-- Your Drive/Picker logic -->
+	<script src="js/google-drive.js"></script>
 
     <!-- JavaScript Modules - Phase 1 Integration -->
     <!-- Load order: text-measurement must be first (used by almost everything) -->
@@ -212,22 +215,12 @@ Exempel: Visa alla kort om projektet, Sortera todos i veckogrid" rows="2"></text
     <!-- Main application (remaining functionality) -->
     <script src="js/main.js"></script>
 
-    <!-- Google Drive Integration -->
-    <script src="js/google-drive.js"></script>
-
     <!-- Command palette (needs to load AFTER main.js) -->
     <script src="js/command-palette.js"></script>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             initializeGoogleAPI();
-            document.getElementById('googleLoadBtn').addEventListener('click', () => {
-                if (typeof window.loadFromGoogleDrive === 'function') {
-                    window.loadFromGoogleDrive();
-                } else {
-                    alert("Drive load function isn't loaded — check js/google-drive.js path and cache (Ctrl+F5).");
-                }
-            });
 
             document.getElementById('googleImportBtn').addEventListener('click', () => {
                 if (typeof window.importFromGoogleDrive === 'function') {
