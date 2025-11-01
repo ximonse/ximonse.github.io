@@ -282,9 +282,9 @@ function processImage(file) {
         const img = new Image();
         
         img.onload = () => {
-            // Scale to 1000px width for sharper text, maintain aspect ratio
-            const ratio = 1000 / img.width;
-            canvas.width = 1000;
+            // Scale to 700px width for sharper text, maintain aspect ratio
+            const ratio = 700 / img.width;
+            canvas.width = 700;
             canvas.height = Math.round(img.height * ratio);
 
             // Use high-quality image smoothing for better text clarity
@@ -359,7 +359,7 @@ function processImage(file) {
                     format = 'PNG (lossless)';
 
                     // If PNG too large, use high quality JPEG
-                    if (base64.length > 400000) { // ~300KB in base64 (increased for 1000px)
+                    if (base64.length > 350000) { // ~260KB in base64 (adjusted for 700px)
                         base64 = canvas.toDataURL('image/jpeg', 0.95);
                         format = 'JPEG 95%';
                     }
