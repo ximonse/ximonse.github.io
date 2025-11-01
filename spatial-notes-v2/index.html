@@ -220,6 +220,7 @@ Exempel: Visa alla kort om projektet, Sortera todos i veckogrid" rows="2"></text
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            initializeGoogleAPI();
             document.getElementById('googleLoadBtn').addEventListener('click', () => {
                 if (typeof window.loadFromGoogleDrive === 'function') {
                     window.loadFromGoogleDrive();

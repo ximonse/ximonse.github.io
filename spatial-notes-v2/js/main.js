@@ -9587,128 +9587,6 @@ async function updateFileInGoogleDrive(fileId, fileBlob) {
     });
 }
 
-// Initialize Google API
-async function initializeGoogleAPI() {
-    try {
-        // Wait for Google Identity Services to be available
-        if (typeof google === 'undefined' || !google.accounts) {
-            console.log('Google Identity Services not yet loaded, retrying in 2 seconds...');
-            setTimeout(() => initializeGoogleAPI(), 2000);
-            return;
-        }
-        
-        console.log('Initializing Google Identity Services...');
-        
-        // Try to load saved tokens first
-        const hasValidTokens = loadSavedTokens();
-        if (hasValidTokens) {
-            console.log('✅ Auto-signed in with saved tokens');
-            updateAuthStatus();
-            
-            // Load available projects and current project
-            setTimeout(async () => {
-                await loadAvailableProjects();
-                if (currentProject) {
-                    await loadFromGoogleDrive();
-                }
-            }, 1000);
-        }
-        
-        // Initialize Google Identity Services token client
-        tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: GOOGLE_CLIENT_ID,
-            scope: GOOGLE_SCOPE,
-            callback: (response) => {
-                if (response.access_token) {
-                    accessToken = response.access_token;
-                    isSignedIn = true;
-                    
-                    // Calculate token expiry (Google tokens typically last 1 hour)
-                    tokenExpiry = Date.now() + (response.expires_in ? response.expires_in * 1000 : 3600000);
-                    
-                    // Save tokens for persistence
-                    saveTokens();
-                    
-                    console.log('Successfully signed in to Google Drive');
-                    console.log('Token expires at:', new Date(tokenExpiry).toLocaleString());
-                    updateAuthStatus();
-                    
-                    // Load available projects and then current project
-                    setTimeout(async () => {
-                        await loadAvailableProjects();
-                        await loadFromGoogleDrive();
-                    }, 500);
-                } else if (response.error) {
-                    console.error('Authentication error:', response.error);
-                    updateSyncStatus('Authentication failed', 'error');
-                }
-            },
-        });
-        
-        isGoogleApiLoaded = true;
-        console.log('Google Identity Services initialized successfully');
-
-        // Load Google Picker API
-        if (typeof gapi !== 'undefined') {
-            gapi.load('picker', {
-                'callback': function() {
-                    pickerApiLoaded = true;
-                    console.log('✅ Google Picker API loaded');
-                },
-                'onerror': function() {
-                    console.error('❌ Failed to load Google Picker API');
-                }
-            });
-        } else {
-            console.log('⏳ Waiting for gapi to load Picker...');
-            setTimeout(() => {
-                if (typeof gapi !== 'undefined') {
-                    gapi.load('picker', () => {
-                        pickerApiLoaded = true;
-                        console.log('✅ Google Picker API loaded (delayed)');
-                    });
-                }
-            }, 2000);
-        }
-
-        // Try to restore saved tokens
-        if (loadSavedTokens()) {
-            console.log(`Restored session from saved tokens, project: ${currentProject}`);
-            updateAuthStatus();
-            
-            // Load projects and current project
-            setTimeout(async () => {
-                await loadAvailableProjects();
-                console.log(`Loading saved project: ${currentProject}`);
-                await loadFromGoogleDrive();
-            }, 500);
-        } else {
-            updateAuthStatus();
-        }
-        
-    } catch (error) {
-        console.error('Error initializing Google Identity Services:', error);
-        
-        // Check if we're running locally
-        if (window.location.protocol === 'file:') {
-            console.log('Google Drive sync requires HTTPS. Deploy to GitHub Pages to test.');
-            updateSyncStatus('Google Drive needs HTTPS', 'info');
-            
-            // Disable the Google Drive button for local development
-            const driveBtn = document.getElementById('googleDriveBtn');
-            if (driveBtn) {
-                driveBtn.disabled = true;
-                driveBtn.innerHTML = '<span>⚠️</span><span>Needs HTTPS</span>';
-            }
-        } else {
-            console.log('Google Identity Services will retry in 5 seconds...');
-            updateSyncStatus('Google API loading...', 'info');
-            
-            // Retry initialization after 5 seconds
-            setTimeout(() => initializeGoogleAPI(), 5000);
-        }
-    }
-}
 
 // Update authentication status
 function updateAuthStatus() {
@@ -10352,8 +10230,7 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log(`Restored current project: ${currentProject}`);
     }
     
-    // Initialize Google Drive API (wait for gapi to load)
-    setTimeout(() => initializeGoogleAPI(), 3000);
+
     
     // Initialize project name UI
     initializeProjectName();
