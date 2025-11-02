@@ -13,20 +13,240 @@ if (typeof window.rememberMeEnabled === 'undefined') window.rememberMeEnabled = 
 if (typeof window.isGoogleApiLoaded === 'undefined') window.isGoogleApiLoaded = false;
 
 // ---- Credential Management (localStorage) ------------------------------
-function getApiKey() {
+function showApiKeyDialog() {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    `;
+
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      width: 90%;
+      max-width: 500px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    `;
+
+    dialog.innerHTML = `
+      <h2 style="margin: 0 0 20px 0; color: #333;">🔑 Google Drive API-nyckel</h2>
+      <p style="margin: 0 0 20px 0; color: #666; line-height: 1.6;">
+        För att använda Google Drive-integrationen behöver du en API-nyckel.
+      </p>
+      <p style="margin: 0 0 15px 0; color: #666; line-height: 1.6;">
+        <strong>Så här skaffar du en nyckel:</strong><br>
+        1. Gå till <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color: #007bff;">Google Cloud Console</a><br>
+        2. Skapa ett nytt projekt eller välj ett befintligt<br>
+        3. Gå till "API:er och tjänster" > "Autentiseringsuppgifter"<br>
+        4. Klicka på "Skapa autentiseringsuppgifter" > "API-nyckel"<br>
+        5. Aktivera "Google Drive API" och "Google Picker API"<br>
+        6. Klistra in nyckeln här nedan
+      </p>
+      <p style="margin: 0 0 15px 0; color: #e67e22; font-size: 13px;">
+        ⚠️ Din API-nyckel sparas endast lokalt i din webbläsare.
+      </p>
+      <input type="password" id="googleApiKeyInput" autocomplete="off" placeholder="AIza..." style="
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-family: monospace;
+        font-size: 14px;
+        box-sizing: border-box;
+        margin-bottom: 20px;
+      ">
+      <div style="display: flex; gap: 10px; justify-content: flex-end;">
+        <button id="cancelApiKey" style="
+          padding: 10px 20px;
+          border: 1px solid #ddd;
+          background: white;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 14px;
+        ">Avbryt</button>
+        <button id="saveApiKey" style="
+          padding: 10px 20px;
+          border: none;
+          background: #007bff;
+          color: white;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 14px;
+        ">Spara</button>
+      </div>
+    `;
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    const input = document.getElementById('googleApiKeyInput');
+    input.focus();
+
+    const closeDialog = (key = null) => {
+      overlay.remove();
+      resolve(key);
+    };
+
+    document.getElementById('cancelApiKey').onclick = () => closeDialog();
+    document.getElementById('saveApiKey').onclick = () => {
+      const apiKey = input.value.trim();
+      if (apiKey) {
+        localStorage.setItem('googleApiKey', apiKey);
+        closeDialog(apiKey);
+      } else {
+        alert('Vänligen ange en giltig API-nyckel.');
+      }
+    };
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        document.getElementById('saveApiKey').click();
+      }
+    });
+
+    overlay.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeDialog();
+      }
+    });
+  });
+}
+
+function showClientIdDialog() {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    `;
+
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      width: 90%;
+      max-width: 500px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    `;
+
+    dialog.innerHTML = `
+      <h2 style="margin: 0 0 20px 0; color: #333;">🔐 Google OAuth Client ID</h2>
+      <p style="margin: 0 0 20px 0; color: #666; line-height: 1.6;">
+        För att logga in med Google behöver du ett OAuth Client ID.
+      </p>
+      <p style="margin: 0 0 15px 0; color: #666; line-height: 1.6;">
+        <strong>Så här skaffar du ett Client ID:</strong><br>
+        1. Gå till <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color: #007bff;">Google Cloud Console</a><br>
+        2. I samma projekt som API-nyckeln<br>
+        3. Klicka på "Skapa autentiseringsuppgifter" > "OAuth-klient-ID"<br>
+        4. Välj "Webbapplikation"<br>
+        5. Lägg till din webbplats URL (t.ex. https://ximonse.github.io)<br>
+        6. Klistra in Client ID här nedan
+      </p>
+      <p style="margin: 0 0 15px 0; color: #e67e22; font-size: 13px;">
+        ⚠️ Ditt Client ID sparas endast lokalt i din webbläsare.
+      </p>
+      <input type="password" id="googleClientIdInput" autocomplete="off" placeholder="123456789-xxx.apps.googleusercontent.com" style="
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-family: monospace;
+        font-size: 14px;
+        box-sizing: border-box;
+        margin-bottom: 20px;
+      ">
+      <div style="display: flex; gap: 10px; justify-content: flex-end;">
+        <button id="cancelClientId" style="
+          padding: 10px 20px;
+          border: 1px solid #ddd;
+          background: white;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 14px;
+        ">Avbryt</button>
+        <button id="saveClientId" style="
+          padding: 10px 20px;
+          border: none;
+          background: #007bff;
+          color: white;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 14px;
+        ">Spara</button>
+      </div>
+    `;
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    const input = document.getElementById('googleClientIdInput');
+    input.focus();
+
+    const closeDialog = (id = null) => {
+      overlay.remove();
+      resolve(id);
+    };
+
+    document.getElementById('cancelClientId').onclick = () => closeDialog();
+    document.getElementById('saveClientId').onclick = () => {
+      const clientId = input.value.trim();
+      if (clientId) {
+        localStorage.setItem('googleClientId', clientId);
+        closeDialog(clientId);
+      } else {
+        alert('Vänligen ange ett giltigt Client ID.');
+      }
+    };
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        document.getElementById('saveClientId').click();
+      }
+    });
+
+    overlay.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeDialog();
+      }
+    });
+  });
+}
+
+async function getApiKey() {
   let key = localStorage.getItem("googleApiKey");
   if (!key) {
-    key = prompt("Ange din Google API KEY (behöver Drive + Picker aktiverat):");
-    if (key) localStorage.setItem("googleApiKey", key.trim());
+    key = await showApiKeyDialog();
   }
   return key?.trim();
 }
 
-function getClientId() {
+async function getClientId() {
   let id = localStorage.getItem("googleClientId");
   if (!id) {
-    id = prompt("Ange din Google OAuth CLIENT ID (Web application):");
-    if (id) localStorage.setItem("googleClientId", id.trim());
+    id = await showClientIdDialog();
   }
   return id?.trim();
 }
@@ -51,17 +271,29 @@ window.onGapiLoad = function() {
 };
 
 // Initialize OAuth Token Client (Google Identity Services)
-function initializeGoogleAPI() {
+async function initializeGoogleAPI() {
   if (typeof google === 'undefined' || !google.accounts) {
     console.log('Google Identity Services not loaded yet, retrying...');
     setTimeout(initializeGoogleAPI, 2000);
     return;
   }
 
-  const clientId = getClientId();
+  const clientId = await getClientId();
   if (!clientId) {
     console.log('No Client ID set - Google Drive disabled');
     return;
+  }
+
+  // Try to restore saved tokens from previous session
+  if (typeof loadSavedTokens === 'function') {
+    const restored = loadSavedTokens();
+    if (restored) {
+      console.log('✅ Restored saved login session');
+      // Update UI if available
+      if (typeof updateAuthStatus === 'function') {
+        updateAuthStatus();
+      }
+    }
   }
 
   window.tokenClient = google.accounts.oauth2.initTokenClient({
@@ -72,9 +304,16 @@ function initializeGoogleAPI() {
         window.accessToken = response.access_token;
         window.isSignedIn = true;
         window.tokenExpiry = Date.now() + (response.expires_in ? response.expires_in * 1000 : 3600000);
+        window.rememberMeEnabled = true; // Default to remembering login
 
         console.log('✅ OAuth token received');
         console.log('Token expires at:', new Date(window.tokenExpiry).toLocaleString());
+
+        // Save tokens to localStorage for persistence
+        if (typeof saveTokens === 'function') {
+          saveTokens(true); // Force remember
+          console.log('Tokens saved to localStorage');
+        }
 
         // Update UI if updateAuthStatus exists (from main.js)
         if (typeof updateAuthStatus === 'function') {
