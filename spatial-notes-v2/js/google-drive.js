@@ -320,7 +320,7 @@ async function createTokenClient(clientId) {
 
   window.tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: clientId,
-    scope: 'https://www.googleapis.com/auth/drive.file',
+    scope: 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file',
     callback: (response) => {
       if (response.access_token) {
         window.accessToken = response.access_token;
