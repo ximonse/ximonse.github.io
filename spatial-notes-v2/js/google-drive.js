@@ -277,7 +277,8 @@ window.onGapiLoad = function() {
   });
 };
 
-// Initialize OAuth Token Client (Google Identity Services)
+// Initialize OAuth Token Client (Google Identity Services) - SILENT on page load
+// This function NEVER shows dialogs or triggers OAuth - it only prepares the environment
 async function initializeGoogleAPI() {
   if (typeof google === 'undefined' || !google.accounts) {
     console.log('Google Identity Services not loaded yet, retrying...');
@@ -285,40 +286,54 @@ async function initializeGoogleAPI() {
     return;
   }
 
-  const clientId = await getClientId();
-  if (!clientId) {
-    console.log('No Client ID set - Google Drive disabled');
-    return;
-  }
+  // SILENT token restoration: Only if we have BOTH clientId AND valid tokens
+  const savedClientId = localStorage.getItem('googleClientId');
+  if (savedClientId) {
+    // First check if we have valid tokens
+    let hasValidTokens = false;
+    if (typeof loadSavedTokens === 'function') {
+      hasValidTokens = loadSavedTokens(); // Returns true only if tokens are valid
+    }
 
-  // Try to restore saved tokens from previous session
-  if (typeof loadSavedTokens === 'function') {
-    const restored = loadSavedTokens();
-    if (restored) {
-      console.log('✅ Restored saved login session');
+    // Only create tokenClient if we successfully restored valid tokens
+    if (hasValidTokens) {
+      console.log('✅ Found valid saved session, creating token client...');
+      await createTokenClient(savedClientId);
       // Update UI if available
       if (typeof updateAuthStatus === 'function') {
         updateAuthStatus();
       }
+    } else {
+      console.log('No valid saved tokens - user will need to log in when using Drive features');
     }
+  } else {
+    console.log('No saved Client ID - user will need to set up Drive on first use');
   }
+
+  console.log('✅ Google API ready (silent init complete)');
+  window.isGoogleApiLoaded = true;
+}
+
+// Create or recreate the token client with given Client ID
+async function createTokenClient(clientId) {
+  if (!clientId) return false;
 
   window.tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: clientId,
-    scope: 'https://www.googleapis.com/auth/drive.file', // Need write access for project sync
+    scope: 'https://www.googleapis.com/auth/drive.file',
     callback: (response) => {
       if (response.access_token) {
         window.accessToken = response.access_token;
         window.isSignedIn = true;
         window.tokenExpiry = Date.now() + (response.expires_in ? response.expires_in * 1000 : 3600000);
-        window.rememberMeEnabled = true; // Default to remembering login
+        window.rememberMeEnabled = true;
 
         console.log('✅ OAuth token received');
         console.log('Token expires at:', new Date(window.tokenExpiry).toLocaleString());
 
         // Save tokens to localStorage for persistence
         if (typeof saveTokens === 'function') {
-          saveTokens(true); // Force remember
+          saveTokens(true);
           console.log('Tokens saved to localStorage');
         }
 
@@ -336,8 +351,30 @@ async function initializeGoogleAPI() {
     }
   });
 
-  console.log('✅ Google Identity Services initialized');
-  window.isGoogleApiLoaded = true;
+  return true;
+}
+
+// Ensure Google API is initialized - called when user clicks G button or project sync
+async function ensureGoogleAPIInitialized() {
+  if (typeof google === 'undefined' || !google.accounts) {
+    alert('Google API inte laddat ännu. Vänta några sekunder och försök igen.');
+    return false;
+  }
+
+  // Check if we already have a token client
+  if (window.tokenClient) {
+    return true;
+  }
+
+  // No token client - we need a Client ID
+  const clientId = await getClientId();
+  if (!clientId) {
+    console.log('User cancelled Client ID dialog');
+    return false;
+  }
+
+  // Create token client with the Client ID
+  return await createTokenClient(clientId);
 }
 
 // Store pending picker request
@@ -352,10 +389,15 @@ function openPickerAfterAuth() {
 
 // ---- Import Images from Google Drive -----------------------------------
 async function importFromGoogleDrive() {
-  const apiKey = getApiKey();
+  // Ensure Google API is initialized (will ask for Client ID if needed)
+  const initialized = await ensureGoogleAPIInitialized();
+  if (!initialized) {
+    return; // User cancelled
+  }
+
+  const apiKey = await getApiKey();
   if (!apiKey) {
-    alert('Ingen API-nyckel angiven.');
-    return;
+    return; // User cancelled
   }
 
   // Check if we have a valid access token
@@ -376,7 +418,7 @@ async function importFromGoogleDrive() {
 
 // ---- Open Google Drive Picker ------------------------------------------
 async function openDrivePicker() {
-  const apiKey = getApiKey();
+  const apiKey = await getApiKey();
   if (!apiKey) return;
 
   // Wait for picker to load if not ready yet
@@ -664,4 +706,5 @@ async function loadFromGoogleDrive() {
 window.importFromGoogleDrive = importFromGoogleDrive;
 window.openDrivePicker = openDrivePicker;
 window.initializeGoogleAPI = initializeGoogleAPI;
+window.ensureGoogleAPIInitialized = ensureGoogleAPIInitialized;
 window.loadFromGoogleDrive = loadFromGoogleDrive;

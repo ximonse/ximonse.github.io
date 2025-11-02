@@ -8982,15 +8982,111 @@ function showRememberMeDialog() {
     });
 }
 
+// Show login prompt dialog with proper buttons
+function showLoginPromptDialog() {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0, 0, 0, 0.7); z-index: 10000;
+            display: flex; align-items: center; justify-content: center;
+        `;
+
+        const dialog = document.createElement('div');
+        dialog.style.cssText = `
+            background: white; border-radius: 12px; padding: 30px;
+            max-width: 400px; width: 90%;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        `;
+
+        dialog.innerHTML = `
+            <h2 style="margin: 0 0 15px 0; color: #333;">🔐 Google Drive-inloggning</h2>
+            <p style="margin: 0 0 20px 0; color: #666; line-height: 1.6;">
+                Du är inte inloggad på Google Drive.
+                <br><br>
+                Vill du logga in för att synka ditt projekt till molnet?
+            </p>
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button id="loginCancel" style="
+                    padding: 10px 20px; border: 1px solid #ddd;
+                    background: white; border-radius: 6px;
+                    cursor: pointer; font-size: 14px;
+                ">Avbryt</button>
+                <button id="loginConfirm" style="
+                    padding: 10px 20px; border: none;
+                    background: #4285f4; color: white;
+                    border-radius: 6px; cursor: pointer; font-size: 14px;
+                ">Logga in</button>
+            </div>
+        `;
+
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+
+        const cleanup = (result) => {
+            overlay.remove();
+            resolve(result);
+        };
+
+        document.getElementById('loginConfirm').onclick = () => cleanup(true);
+        document.getElementById('loginCancel').onclick = () => cleanup(false);
+
+        overlay.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') cleanup(false);
+        });
+    });
+}
+
 // Refresh token if needed before API calls
 async function ensureValidToken() {
+    // If not signed in, offer to log in with proper dialog
     if (!isSignedIn || !accessToken) {
-        throw new Error('Not signed in to Google Drive');
+        const shouldLogin = await showLoginPromptDialog();
+        if (!shouldLogin) {
+            throw new Error('User declined to sign in');
+        }
+
+        // Ensure Google API is initialized (will ask for Client ID if needed)
+        if (typeof ensureGoogleAPIInitialized === 'function') {
+            const initialized = await ensureGoogleAPIInitialized();
+            if (!initialized) {
+                throw new Error('Google API initialization failed');
+            }
+        }
+
+        // Request access token and wait for callback
+        return new Promise((resolve, reject) => {
+            if (window.tokenClient) {
+                console.log('Requesting Google Drive access token...');
+                window.tokenClient.requestAccessToken();
+
+                // Wait for token in the callback (set by google-drive.js)
+                let attempts = 0;
+                const maxAttempts = 60; // 30 seconds (60 * 500ms)
+
+                const checkInterval = setInterval(() => {
+                    attempts++;
+
+                    if (window.isSignedIn && window.accessToken) {
+                        clearInterval(checkInterval);
+                        console.log('✅ Successfully logged in to Google Drive');
+                        resolve();
+                    } else if (attempts >= maxAttempts) {
+                        clearInterval(checkInterval);
+                        console.error('Login timeout - user may have closed OAuth popup');
+                        reject(new Error('Inloggningen tog för lång tid eller avbröts'));
+                    }
+                }, 500);
+            } else {
+                reject(new Error('Token client not available'));
+            }
+        });
     }
-    
+
     if (isTokenExpiringSoon()) {
         console.log('Token expiring soon, requesting new token...');
-        
+
         return new Promise((resolve, reject) => {
             // Request new token
             tokenClient.requestAccessToken({
@@ -9012,7 +9108,7 @@ async function ensureValidToken() {
             });
         });
     }
-    
+
     return Promise.resolve();
 }
 
