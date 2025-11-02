@@ -219,7 +219,61 @@ function editCard(node) {
                         throw new Error('Ogiltigt svar från Gemini API.');
                     }
 
-                    const extractedText = response.candidates[0].content.parts[0].text;
+                    const rawText = response.candidates[0].content.parts[0].text;
+
+                    // Parse JSON response from Gemini (same logic as image import)
+                    let parsedData;
+                    try {
+                        // Try to extract JSON if wrapped in markdown code blocks
+                        const jsonMatch = rawText.match(/```json\s*([\s\S]*?)\s*```/) || rawText.match(/```\s*([\s\S]*?)\s*```/);
+                        const jsonText = jsonMatch ? jsonMatch[1] : rawText;
+                        parsedData = JSON.parse(jsonText.trim());
+                    } catch (parseError) {
+                        console.warn('Failed to parse JSON, falling back to raw text:', parseError);
+                        // Fallback: use raw text
+                        parsedData = {
+                            text: rawText,
+                            metadata: {},
+                            hashtags: []
+                        };
+                    }
+
+                    // Build visible text: transcription OR description + hashtags
+                    const hashtagText = parsedData.hashtags && parsedData.hashtags.length > 0
+                        ? '\n\n' + parsedData.hashtags.map(tag => tag.startsWith('#') ? tag : '#' + tag).join(' ')
+                        : '';
+
+                    // Use text if available, otherwise use description (for images without text)
+                    let mainContent = parsedData.text || '';
+                    if (!mainContent && parsedData.description) {
+                        mainContent = parsedData.description;
+                    }
+                    const extractedText = mainContent + hashtagText;
+
+                    // Save extracted metadata to node.data() (hidden from view, stored in JSON)
+                    if (parsedData.description) {
+                        node.data('imageDescription', parsedData.description);
+                    }
+                    if (parsedData.metadata) {
+                        if (parsedData.metadata.extractedDate) {
+                            node.data('extractedDate', parsedData.metadata.extractedDate);
+                        }
+                        if (parsedData.metadata.extractedTime) {
+                            node.data('extractedTime', parsedData.metadata.extractedTime);
+                        }
+                        if (parsedData.metadata.extractedDateTime) {
+                            node.data('extractedDateTime', parsedData.metadata.extractedDateTime);
+                        }
+                        if (parsedData.metadata.extractedPeople && parsedData.metadata.extractedPeople.length > 0) {
+                            node.data('extractedPeople', parsedData.metadata.extractedPeople);
+                        }
+                        if (parsedData.metadata.extractedPlaces && parsedData.metadata.extractedPlaces.length > 0) {
+                            node.data('extractedPlaces', parsedData.metadata.extractedPlaces);
+                        }
+                    }
+                    if (parsedData.hashtags && parsedData.hashtags.length > 0) {
+                        node.data('extractedHashtags', parsedData.hashtags);
+                    }
 
                     // Fill the textarea with extracted text
                     const textarea = document.getElementById('editCardText');
