@@ -9460,19 +9460,27 @@ async function saveToGoogleDriveWithStructure() {
                 card_index: node.data('card_index') || null
             })),
             edges: cy.edges().map(edge => ({
+                id: edge.id(),
                 source: edge.source().id(),
                 target: edge.target().id(),
-                // Save edge styling
-                lineColor: edge.style('line-color'),
-                targetArrowColor: edge.style('target-arrow-color'),
-                targetArrowShape: edge.style('target-arrow-shape'),
-                width: edge.style('width'),
-                arrowScale: edge.style('arrow-scale'),
-                curveStyle: edge.style('curve-style'),
-                // Save edge metadata
+                // Preserve all edge data
                 isAnnotation: edge.data('isAnnotation') || false,
                 annotationType: edge.data('annotationType') || null,
-                connectionType: edge.data('connectionType') || null
+                customColor: edge.data('customColor') || null,
+                connectionType: edge.data('connectionType') || null,
+                // Save all visual styling
+                style: {
+                    'line-color': edge.style('line-color'),
+                    'target-arrow-color': edge.style('target-arrow-color'),
+                    'target-arrow-shape': edge.style('target-arrow-shape'),
+                    'source-arrow-color': edge.style('source-arrow-color'),
+                    'source-arrow-shape': edge.style('source-arrow-shape'),
+                    'width': edge.style('width'),
+                    'curve-style': edge.style('curve-style'),
+                    'control-point-step-size': edge.style('control-point-step-size'),
+                    'arrow-scale': edge.style('arrow-scale'),
+                    'opacity': edge.style('opacity')
+                }
             })),
             metadata: {
                 total_cards: cy.nodes().length,
@@ -10059,19 +10067,27 @@ async function saveToGoogleDrive() {
                 card_index: node.data('card_index') || null
             })),
             edges: cy.edges().map(edge => ({
+                id: edge.id(),
                 source: edge.source().id(),
                 target: edge.target().id(),
-                // Save edge styling
-                lineColor: edge.style('line-color'),
-                targetArrowColor: edge.style('target-arrow-color'),
-                targetArrowShape: edge.style('target-arrow-shape'),
-                width: edge.style('width'),
-                arrowScale: edge.style('arrow-scale'),
-                curveStyle: edge.style('curve-style'),
-                // Save edge metadata
+                // Preserve all edge data
                 isAnnotation: edge.data('isAnnotation') || false,
                 annotationType: edge.data('annotationType') || null,
-                connectionType: edge.data('connectionType') || null
+                customColor: edge.data('customColor') || null,
+                connectionType: edge.data('connectionType') || null,
+                // Save all visual styling
+                style: {
+                    'line-color': edge.style('line-color'),
+                    'target-arrow-color': edge.style('target-arrow-color'),
+                    'target-arrow-shape': edge.style('target-arrow-shape'),
+                    'source-arrow-color': edge.style('source-arrow-color'),
+                    'source-arrow-shape': edge.style('source-arrow-shape'),
+                    'width': edge.style('width'),
+                    'curve-style': edge.style('curve-style'),
+                    'control-point-step-size': edge.style('control-point-step-size'),
+                    'arrow-scale': edge.style('arrow-scale'),
+                    'opacity': edge.style('opacity')
+                }
             })),
             timestamp: new Date().toISOString(),
             version: '2.0'

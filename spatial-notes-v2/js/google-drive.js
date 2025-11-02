@@ -720,16 +720,22 @@ async function loadFromGoogleDrive() {
               const newEdge = cy.add({
                 group: 'edges',
                 data: {
+                  id: edgeData.id || undefined,
                   source: edgeData.source,
                   target: edgeData.target,
                   isAnnotation: edgeData.isAnnotation || false,
                   annotationType: edgeData.annotationType || null,
+                  customColor: edgeData.customColor || null,
                   connectionType: edgeData.connectionType || null
                 }
               });
 
-              // Restore edge styling if available
-              if (edgeData.lineColor || edgeData.targetArrowColor) {
+              // Restore edge styling - support both new (style object) and old (flat) format
+              if (edgeData.style) {
+                // New format: nested style object
+                newEdge.style(edgeData.style);
+              } else if (edgeData.lineColor || edgeData.targetArrowColor) {
+                // Old format: flat properties (backwards compatibility)
                 newEdge.style({
                   'line-color': edgeData.lineColor || '#999',
                   'target-arrow-color': edgeData.targetArrowColor || '#999',
