@@ -681,15 +681,73 @@ async function readImageWithGemini(node) {
         console.log('DEBUG: Calling Gemini API...');
         const response = await callGeminiAPI(apiKey, imageData);
         console.log('DEBUG: Gemini API raw response:', response);
-        
+
         if (!response || !response.candidates || response.candidates.length === 0 || !response.candidates[0].content || !response.candidates[0].content.parts || response.candidates[0].content.parts.length === 0) {
             throw new Error('Invalid response structure from Gemini API.');
         }
-        const text = response.candidates[0].content.parts[0].text;
-        console.log('DEBUG: Gemini API extracted text:', text);
+        const rawText = response.candidates[0].content.parts[0].text;
+        console.log('DEBUG: Gemini API raw text:', rawText);
 
-        node.data('annotation', text);
-        node.data('searchableText', text.toLowerCase());
+        // Parse JSON response from Gemini
+        let parsedData;
+        try {
+            // Try to extract JSON if wrapped in markdown code blocks
+            const jsonMatch = rawText.match(/```json\s*([\s\S]*?)\s*```/) || rawText.match(/```\s*([\s\S]*?)\s*```/);
+            const jsonText = jsonMatch ? jsonMatch[1] : rawText;
+            parsedData = JSON.parse(jsonText.trim());
+        } catch (parseError) {
+            console.warn('Failed to parse JSON, falling back to raw text:', parseError);
+            // Fallback: use raw text
+            parsedData = {
+                text: rawText,
+                metadata: {},
+                hashtags: []
+            };
+        }
+
+        console.log('DEBUG: Parsed OCR data:', parsedData);
+
+        // Build visible text: transcription + hashtags
+        const hashtagText = parsedData.hashtags && parsedData.hashtags.length > 0
+            ? '\n\n' + parsedData.hashtags.map(tag => tag.startsWith('#') ? tag : '#' + tag).join(' ')
+            : '';
+        const visibleText = (parsedData.text || '') + hashtagText;
+
+        // Save visible text as annotation
+        node.data('annotation', visibleText);
+        node.data('searchableText', visibleText.toLowerCase());
+
+        // Save extracted metadata to node.data() (hidden from view, stored in JSON)
+        if (parsedData.metadata) {
+            if (parsedData.metadata.extractedDate) {
+                node.data('extractedDate', parsedData.metadata.extractedDate);
+            }
+            if (parsedData.metadata.extractedTime) {
+                node.data('extractedTime', parsedData.metadata.extractedTime);
+            }
+            if (parsedData.metadata.extractedDateTime) {
+                node.data('extractedDateTime', parsedData.metadata.extractedDateTime);
+            }
+            if (parsedData.metadata.extractedPeople && parsedData.metadata.extractedPeople.length > 0) {
+                node.data('extractedPeople', parsedData.metadata.extractedPeople);
+            }
+            if (parsedData.metadata.extractedPlaces && parsedData.metadata.extractedPlaces.length > 0) {
+                node.data('extractedPlaces', parsedData.metadata.extractedPlaces);
+            }
+        }
+
+        // Save hashtags separately for easy filtering
+        if (parsedData.hashtags && parsedData.hashtags.length > 0) {
+            node.data('extractedHashtags', parsedData.hashtags);
+        }
+
+        // TODO: Later we'll also add file metadata here:
+        // node.data('fileName', fileName);
+        // node.data('fileCreatedDate', exifDate);
+        // node.data('gpsLatitude', exifGPS.lat);
+        // node.data('gpsLongitude', exifGPS.lon);
+        // node.data('pdfAuthor', pdfMetadata.author);
+        // etc.
 
         if (statusDiv) {
             statusDiv.textContent = '✅ Image read successfully!';
@@ -700,7 +758,7 @@ async function readImageWithGemini(node) {
 
         // Refresh the card to show the new text
         cy.style().update();
-        console.log('DEBUG: Card updated with Gemini text.');
+        console.log('DEBUG: Card updated with parsed OCR data and metadata.');
 
     } catch (error) {
         console.error('DEBUG: Error in readImageWithGemini:', error);
@@ -722,31 +780,37 @@ async function callGeminiAPI(apiKey, imageData) {
         contents: [
             {
                 parts: [
-                    { text: `Transkribera texten från bilden exakt som den är skriven.
+                    { text: `Transkribera texten från bilden exakt som den är skriven och extrahera metadata.
 
-Efter transkriberingen, extrahera följande METADATA (om synligt i bilden):
-- DATUM: Skriv ut datum i format YYYY-MM-DD om du hittar det
-- TID: Skriv ut tid om synlig (HH:MM format)
-- PERSONER: Lista namn på personer som nämns
-- PLATSER: Lista platser/adresser som nämns
+VIKTIGT: Svara ENDAST med en JSON-struktur enligt detta format:
 
-Lägg sedan till relevanta HASHTAGS:
-1. Datumtaggar: Om du hittar datum, skapa #YYMMDD (ex: #250819 för 2025-08-19)
-2. Veckotaggar: Om du vet datum, skapa #YYvVV (ex: #25v44 för vecka 44, 2025)
-3. Kategoritaggar: Typ av innehåll (ex: #möte #anteckning #todo #faktura #kontrakt)
-4. Namntaggar: Personer som nämns (ex: #smith #jones)
+{
+  "text": "[transkriberad text här]",
+  "metadata": {
+    "extractedDate": "YYYY-MM-DD eller null",
+    "extractedTime": "HH:MM eller null",
+    "extractedDateTime": "YYYY-MM-DDTHH:MM eller null (kombinera datum+tid)",
+    "extractedPeople": ["person1", "person2"] eller [],
+    "extractedPlaces": ["plats1", "plats2"] eller []
+  },
+  "hashtags": ["tag1", "tag2", "tag3"]
+}
+
+HASHTAG-REGLER:
+1. Datumtaggar: Om datum hittas, skapa #YYMMDD (ex: #250819 för 2025-08-19)
+2. Veckotaggar: Om datum känt, skapa #YYvVV (ex: #25v44 för vecka 44, 2025)
+3. Kategoritaggar: #möte #anteckning #todo #faktura #kontrakt #brev #kvitto etc
+4. Namntaggar: Personer som nämns, normaliserade (ex: #smith #jones)
 5. Platstaggar: Platser som nämns (ex: #stockholm #kontoret)
 
-Format för svar:
-[Transkriberad text]
+METADATA-INSTRUKTIONER:
+- extractedDate: Extrahera datum från SYNLIG text i bilden (YYYY-MM-DD format)
+- extractedTime: Extrahera tid från SYNLIG text (HH:MM format)
+- extractedDateTime: Om både datum OCH tid finns, kombinera till ISO-format (YYYY-MM-DDTHH:MM)
+- extractedPeople: Lista alla personnamn som nämns i texten
+- extractedPlaces: Lista alla platser/adresser som nämns
 
-METADATA:
-Datum: [datum om hittat]
-Tid: [tid om hittat]
-Personer: [personer om hittade]
-Platser: [platser om hittade]
-
-#[relevanta hashtags separerade med mellanslag]` },
+OBS: Vi kommer senare även lägga till EXIF-metadata från filen (GPS, filskapare, originaldatum etc), så håll strukturen ren.` },
                     {
                         inline_data: {
                             mime_type: "image/jpeg", // Assuming JPEG, adjust if needed
