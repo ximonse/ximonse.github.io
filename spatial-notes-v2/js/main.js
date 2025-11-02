@@ -10112,13 +10112,14 @@ async function findSpatialNotesFile() {
 
 // Show project manager modal
 async function showProjectManager() {
-    if (!isSignedIn || !accessToken) {
-        alert('Please sign in to Google Drive first!');
+    try {
+        // Load latest projects (this will trigger login if needed via ensureValidToken)
+        await loadAvailableProjects();
+    } catch (error) {
+        // User cancelled login or login failed
+        console.log('Project manager cancelled or failed:', error.message);
         return;
     }
-    
-    // Load latest projects
-    await loadAvailableProjects();
     
     let html = `
         <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center;" onclick="closeProjectManager(event)">
