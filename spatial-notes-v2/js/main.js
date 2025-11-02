@@ -9266,31 +9266,21 @@ function createNewProject() {
 }
 
 // Show project list (simplified version)
-function showProjectList() {
+async function showProjectList() {
     const dropdown = document.getElementById('projectDropdown');
     dropdown.classList.remove('show');
-    
-    if (!isSignedIn || !accessToken) {
-        // Show local projects only
-        alert('Logga in på Google Drive för att se alla sparade projekt.\n\nFör närvarande arbetar du lokalt med projekt: "' + currentProject + '"');
-        return;
-    }
-    
-    // Use existing project manager
-    showProjectManager();
+
+    // showProjectManager will handle login if needed
+    await showProjectManager();
 }
 
 // Manage projects (same as existing function)
-function manageProjects() {
+async function manageProjects() {
     const dropdown = document.getElementById('projectDropdown');
     dropdown.classList.remove('show');
-    
-    if (!isSignedIn || !accessToken) {
-        alert('Logga in på Google Drive för att hantera projekt.\n\nFör närvarande arbetar du lokalt med projekt: "' + currentProject + '"');
-        return;
-    }
-    
-    showProjectManager();
+
+    // showProjectManager will handle login if needed
+    await showProjectManager();
 }
 
 // Initialize project name on page load
