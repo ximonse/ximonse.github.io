@@ -42,6 +42,43 @@ function saveBoard(filename = null, isAutosave = false) {
             annotation: node.data('annotation') || null, // Image annotation text
             searchableText: node.data('searchableText') || null, // Lowercased searchable text
             originalFileName: node.data('originalFileName') || null, // Original filename
+            imageWidth: node.data('imageWidth') || null,
+            imageHeight: node.data('imageHeight') || null,
+            displayWidth: node.data('displayWidth') || null,
+            displayHeight: node.data('displayHeight') || null,
+            // FILE METADATA - From file import
+            fileName: node.data('fileName') || null,
+            fileSize: node.data('fileSize') || null,
+            fileType: node.data('fileType') || null,
+            fileLastModified: node.data('fileLastModified') || null,
+            // EXIF METADATA - From image files
+            exifDateTime: node.data('exifDateTime') || null,
+            exifDateTimeOriginal: node.data('exifDateTimeOriginal') || null,
+            exifMake: node.data('exifMake') || null,
+            exifModel: node.data('exifModel') || null,
+            exifOrientation: node.data('exifOrientation') || null,
+            gpsLatitude: node.data('gpsLatitude') || null,
+            gpsLongitude: node.data('gpsLongitude') || null,
+            // PDF METADATA - From PDF files
+            pdfTitle: node.data('pdfTitle') || null,
+            pdfAuthor: node.data('pdfAuthor') || null,
+            pdfCreationDate: node.data('pdfCreationDate') || null,
+            pdfSubject: node.data('pdfSubject') || null,
+            pdfKeywords: node.data('pdfKeywords') || null,
+            pdfCreator: node.data('pdfCreator') || null,
+            pdfProducer: node.data('pdfProducer') || null,
+            pdfModificationDate: node.data('pdfModificationDate') || null,
+            pdfVersion: node.data('pdfVersion') || null,
+            pageNumber: node.data('pageNumber') || null,
+            totalPages: node.data('totalPages') || null,
+            // OCR EXTRACTED METADATA - From Gemini AI
+            imageDescription: node.data('imageDescription') || null,
+            extractedDate: node.data('extractedDate') || null,
+            extractedTime: node.data('extractedTime') || null,
+            extractedDateTime: node.data('extractedDateTime') || null,
+            extractedPeople: node.data('extractedPeople') || null,
+            extractedPlaces: node.data('extractedPlaces') || null,
+            extractedHashtags: node.data('extractedHashtags') || null,
             // ZOTERO LINK - Save link from Zotero imports
             zotero_url: node.data('zotero_url') || null
         })),
@@ -199,6 +236,43 @@ function loadBoardFromData(boardData) {
                     annotation: cardData.annotation || null, // Image annotation text
                     searchableText: cardData.searchableText || null, // Lowercased searchable text
                     originalFileName: cardData.originalFileName || null, // Original filename
+                    imageWidth: cardData.imageWidth || null,
+                    imageHeight: cardData.imageHeight || null,
+                    displayWidth: cardData.displayWidth || null,
+                    displayHeight: cardData.displayHeight || null,
+                    // FILE METADATA - Restore file info
+                    fileName: cardData.fileName || null,
+                    fileSize: cardData.fileSize || null,
+                    fileType: cardData.fileType || null,
+                    fileLastModified: cardData.fileLastModified || null,
+                    // EXIF METADATA - Restore EXIF data
+                    exifDateTime: cardData.exifDateTime || null,
+                    exifDateTimeOriginal: cardData.exifDateTimeOriginal || null,
+                    exifMake: cardData.exifMake || null,
+                    exifModel: cardData.exifModel || null,
+                    exifOrientation: cardData.exifOrientation || null,
+                    gpsLatitude: cardData.gpsLatitude || null,
+                    gpsLongitude: cardData.gpsLongitude || null,
+                    // PDF METADATA - Restore PDF data
+                    pdfTitle: cardData.pdfTitle || null,
+                    pdfAuthor: cardData.pdfAuthor || null,
+                    pdfCreationDate: cardData.pdfCreationDate || null,
+                    pdfSubject: cardData.pdfSubject || null,
+                    pdfKeywords: cardData.pdfKeywords || null,
+                    pdfCreator: cardData.pdfCreator || null,
+                    pdfProducer: cardData.pdfProducer || null,
+                    pdfModificationDate: cardData.pdfModificationDate || null,
+                    pdfVersion: cardData.pdfVersion || null,
+                    pageNumber: cardData.pageNumber || null,
+                    totalPages: cardData.totalPages || null,
+                    // OCR EXTRACTED METADATA - Restore AI-extracted data
+                    imageDescription: cardData.imageDescription || null,
+                    extractedDate: cardData.extractedDate || null,
+                    extractedTime: cardData.extractedTime || null,
+                    extractedDateTime: cardData.extractedDateTime || null,
+                    extractedPeople: cardData.extractedPeople || null,
+                    extractedPlaces: cardData.extractedPlaces || null,
+                    extractedHashtags: cardData.extractedHashtags || null,
                     // ZOTERO LINK - Restore link from saved data
                     zotero_url: cardData.zotero_url || null
                 },
@@ -547,7 +621,46 @@ function exportToJSON() {
                 imageData: node.data('imageData') || null, // Base64 image data
                 annotation: node.data('annotation') || null, // Image annotation text
                 searchableText: node.data('searchableText') || null, // Searchable text
-                originalFileName: node.data('originalFileName') || null // Original filename
+                originalFileName: node.data('originalFileName') || null, // Original filename
+                imageWidth: node.data('imageWidth') || null,
+                imageHeight: node.data('imageHeight') || null,
+                displayWidth: node.data('displayWidth') || null,
+                displayHeight: node.data('displayHeight') || null,
+                // FILE METADATA - From file import
+                fileName: node.data('fileName') || null,
+                fileSize: node.data('fileSize') || null,
+                fileType: node.data('fileType') || null,
+                fileLastModified: node.data('fileLastModified') || null,
+                // EXIF METADATA - From image files
+                exifDateTime: node.data('exifDateTime') || null,
+                exifDateTimeOriginal: node.data('exifDateTimeOriginal') || null,
+                exifMake: node.data('exifMake') || null,
+                exifModel: node.data('exifModel') || null,
+                exifOrientation: node.data('exifOrientation') || null,
+                gpsLatitude: node.data('gpsLatitude') || null,
+                gpsLongitude: node.data('gpsLongitude') || null,
+                // PDF METADATA - From PDF files
+                pdfTitle: node.data('pdfTitle') || null,
+                pdfAuthor: node.data('pdfAuthor') || null,
+                pdfCreationDate: node.data('pdfCreationDate') || null,
+                pdfSubject: node.data('pdfSubject') || null,
+                pdfKeywords: node.data('pdfKeywords') || null,
+                pdfCreator: node.data('pdfCreator') || null,
+                pdfProducer: node.data('pdfProducer') || null,
+                pdfModificationDate: node.data('pdfModificationDate') || null,
+                pdfVersion: node.data('pdfVersion') || null,
+                pageNumber: node.data('pageNumber') || null,
+                totalPages: node.data('totalPages') || null,
+                // OCR EXTRACTED METADATA - From Gemini AI
+                imageDescription: node.data('imageDescription') || null,
+                extractedDate: node.data('extractedDate') || null,
+                extractedTime: node.data('extractedTime') || null,
+                extractedDateTime: node.data('extractedDateTime') || null,
+                extractedPeople: node.data('extractedPeople') || null,
+                extractedPlaces: node.data('extractedPlaces') || null,
+                extractedHashtags: node.data('extractedHashtags') || null,
+                // ZOTERO LINK - Save link
+                zotero_url: node.data('zotero_url') || null
             })),
             edges: cy.edges().map(edge => ({
                 id: edge.id(),
@@ -713,7 +826,46 @@ function importFromJSON() {
                             imageData: cardData.imageData || null,
                             annotation: cardData.annotation || null,
                             searchableText: cardData.searchableText || null,
-                            originalFileName: cardData.originalFileName || null
+                            originalFileName: cardData.originalFileName || null,
+                            imageWidth: cardData.imageWidth || null,
+                            imageHeight: cardData.imageHeight || null,
+                            displayWidth: cardData.displayWidth || null,
+                            displayHeight: cardData.displayHeight || null,
+                            // FILE METADATA - Import file info
+                            fileName: cardData.fileName || null,
+                            fileSize: cardData.fileSize || null,
+                            fileType: cardData.fileType || null,
+                            fileLastModified: cardData.fileLastModified || null,
+                            // EXIF METADATA - Import EXIF data
+                            exifDateTime: cardData.exifDateTime || null,
+                            exifDateTimeOriginal: cardData.exifDateTimeOriginal || null,
+                            exifMake: cardData.exifMake || null,
+                            exifModel: cardData.exifModel || null,
+                            exifOrientation: cardData.exifOrientation || null,
+                            gpsLatitude: cardData.gpsLatitude || null,
+                            gpsLongitude: cardData.gpsLongitude || null,
+                            // PDF METADATA - Import PDF data
+                            pdfTitle: cardData.pdfTitle || null,
+                            pdfAuthor: cardData.pdfAuthor || null,
+                            pdfCreationDate: cardData.pdfCreationDate || null,
+                            pdfSubject: cardData.pdfSubject || null,
+                            pdfKeywords: cardData.pdfKeywords || null,
+                            pdfCreator: cardData.pdfCreator || null,
+                            pdfProducer: cardData.pdfProducer || null,
+                            pdfModificationDate: cardData.pdfModificationDate || null,
+                            pdfVersion: cardData.pdfVersion || null,
+                            pageNumber: cardData.pageNumber || null,
+                            totalPages: cardData.totalPages || null,
+                            // OCR EXTRACTED METADATA - Import AI-extracted data
+                            imageDescription: cardData.imageDescription || null,
+                            extractedDate: cardData.extractedDate || null,
+                            extractedTime: cardData.extractedTime || null,
+                            extractedDateTime: cardData.extractedDateTime || null,
+                            extractedPeople: cardData.extractedPeople || null,
+                            extractedPlaces: cardData.extractedPlaces || null,
+                            extractedHashtags: cardData.extractedHashtags || null,
+                            // ZOTERO LINK - Import link
+                            zotero_url: cardData.zotero_url || null
                         },
                         position: cardData.position || { x: Math.random() * 800 + 100, y: Math.random() * 600 + 100 }
                     });
