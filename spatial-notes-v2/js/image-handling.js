@@ -722,7 +722,31 @@ async function callGeminiAPI(apiKey, imageData) {
         contents: [
             {
                 parts: [
-                    { text: "Transkribera texten från bilden. Efter texten, lägg till relevanta hashtags för att kategorisera bildens innehåll. Exempel: #indexkort #anteckning #todo #samtal #smith" },
+                    { text: `Transkribera texten från bilden exakt som den är skriven.
+
+Efter transkriberingen, extrahera följande METADATA (om synligt i bilden):
+- DATUM: Skriv ut datum i format YYYY-MM-DD om du hittar det
+- TID: Skriv ut tid om synlig (HH:MM format)
+- PERSONER: Lista namn på personer som nämns
+- PLATSER: Lista platser/adresser som nämns
+
+Lägg sedan till relevanta HASHTAGS:
+1. Datumtaggar: Om du hittar datum, skapa #YYMMDD (ex: #250819 för 2025-08-19)
+2. Veckotaggar: Om du vet datum, skapa #YYvVV (ex: #25v44 för vecka 44, 2025)
+3. Kategoritaggar: Typ av innehåll (ex: #möte #anteckning #todo #faktura #kontrakt)
+4. Namntaggar: Personer som nämns (ex: #smith #jones)
+5. Platstaggar: Platser som nämns (ex: #stockholm #kontoret)
+
+Format för svar:
+[Transkriberad text]
+
+METADATA:
+Datum: [datum om hittat]
+Tid: [tid om hittat]
+Personer: [personer om hittade]
+Platser: [platser om hittade]
+
+#[relevanta hashtags separerade med mellanslag]` },
                     {
                         inline_data: {
                             mime_type: "image/jpeg", // Assuming JPEG, adjust if needed
