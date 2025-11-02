@@ -889,15 +889,26 @@ async function readImageWithGemini(node) {
 
         console.log('DEBUG: Parsed OCR data:', parsedData);
 
-        // Build visible text: transcription + hashtags
+        // Build visible text: transcription OR description + hashtags
         const hashtagText = parsedData.hashtags && parsedData.hashtags.length > 0
             ? '\n\n' + parsedData.hashtags.map(tag => tag.startsWith('#') ? tag : '#' + tag).join(' ')
             : '';
-        const visibleText = (parsedData.text || '') + hashtagText;
+
+        // Use text if available, otherwise use description (for images without text)
+        let mainContent = parsedData.text || '';
+        if (!mainContent && parsedData.description) {
+            mainContent = parsedData.description;
+        }
+        const visibleText = mainContent + hashtagText;
 
         // Save visible text as annotation
         node.data('annotation', visibleText);
         node.data('searchableText', visibleText.toLowerCase());
+
+        // Save description separately if present
+        if (parsedData.description) {
+            node.data('imageDescription', parsedData.description);
+        }
 
         // Save extracted metadata to node.data() (hidden from view, stored in JSON)
         if (parsedData.metadata) {
@@ -964,10 +975,13 @@ async function callGeminiAPI(apiKey, imageData) {
                 parts: [
                     { text: `Transkribera texten från bilden exakt som den är skriven och extrahera metadata.
 
+OM BILDEN INTE HAR NÅGON TEXT: Beskriv kort vad bilden visar (1-2 meningar).
+
 VIKTIGT: Svara ENDAST med en JSON-struktur enligt detta format:
 
 {
-  "text": "[transkriberad text här]",
+  "text": "[transkriberad text här, eller tom sträng om ingen text]",
+  "description": "[kort bildbeskrivning om ingen text finns, annars null]",
   "metadata": {
     "extractedDate": "YYYY-MM-DD eller null",
     "extractedTime": "HH:MM eller null",
@@ -981,7 +995,7 @@ VIKTIGT: Svara ENDAST med en JSON-struktur enligt detta format:
 HASHTAG-REGLER:
 1. Datumtaggar: Om datum hittas, skapa #YYMMDD (ex: #250819 för 2025-08-19)
 2. Veckotaggar: Om datum känt, skapa #YYvVV (ex: #25v44 för vecka 44, 2025)
-3. Kategoritaggar: #möte #anteckning #todo #faktura #kontrakt #brev #kvitto etc
+3. Kategoritaggar: #möte #anteckning #todo #faktura #kontrakt #brev #kvitto #foto etc
 4. Namntaggar: Personer som nämns, normaliserade (ex: #smith #jones)
 5. Platstaggar: Platser som nämns (ex: #stockholm #kontoret)
 
@@ -991,6 +1005,11 @@ METADATA-INSTRUKTIONER:
 - extractedDateTime: Om både datum OCH tid finns, kombinera till ISO-format (YYYY-MM-DDTHH:MM)
 - extractedPeople: Lista alla personnamn som nämns i texten
 - extractedPlaces: Lista alla platser/adresser som nämns
+
+BESKRIVNING-INSTRUKTIONER:
+- Om bilden INTE har någon läsbar text: Beskriv kort vad som visas (ex: "En solnedgång över havet", "En katt på en soffa")
+- Om bilden HAR text: Sätt description till null
+- Håll beskrivningen kort och koncis (max 2 meningar)
 
 OBS: Vi kommer senare även lägga till EXIF-metadata från filen (GPS, filskapare, originaldatum etc), så håll strukturen ren.` },
                     {
