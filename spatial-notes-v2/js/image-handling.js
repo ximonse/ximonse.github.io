@@ -110,11 +110,14 @@ function showGoogleAIAPIKeyDialog() {
 
 async function getGoogleAIAPIKey() {
     let apiKey = localStorage.getItem('googleAiApiKey');
-    if (apiKey) {
-        return apiKey;
+    if (!apiKey && typeof GOOGLE_AI_API_KEY !== 'undefined') {
+        // Use hardcoded Gemini API key as fallback
+        apiKey = GOOGLE_AI_API_KEY;
+        console.log('Using hardcoded Gemini API key');
     }
-    
-    apiKey = await showGoogleAIAPIKeyDialog();
+    if (!apiKey) {
+        apiKey = await showGoogleAIAPIKeyDialog();
+    }
     return apiKey;
 }
 

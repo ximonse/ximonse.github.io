@@ -75,7 +75,12 @@ const aiAssistantState = {
     sessionColors: new Map()
 };
 
-// Google Drive integration - credentials stored in localStorage (see google-drive.js)
+// Google Drive integration - hardcoded credentials
+// These will be used as fallback if not found in localStorage
+const GOOGLE_CLIENT_ID = '971005822021-8ebrpd92n1upsedg7s5fn80mnmvhou5d.apps.googleusercontent.com';
+const GOOGLE_API_KEY = 'AIzaSyC6JFXGlZaOqMPCaeodCY1UsXplT96TCSw'; // For Picker API
+const GOOGLE_AI_API_KEY = 'AIzaSyAoI05DK8P_fuWD0K_LPgWDJZwo_V4f0gc'; // For Gemini OCR
+
 // Make these globally accessible via window
 window.currentProject = localStorage.getItem('spatial-notes-project-name') || 'Nytt projekt';
 window.availableProjects = [];

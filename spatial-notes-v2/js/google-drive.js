@@ -244,6 +244,11 @@ function showClientIdDialog() {
 
 async function getApiKey() {
   let key = localStorage.getItem("googleApiKey");
+  if (!key && typeof GOOGLE_API_KEY !== 'undefined') {
+    // Use hardcoded key as fallback
+    key = GOOGLE_API_KEY;
+    console.log('Using hardcoded API key');
+  }
   if (!key) {
     key = await showApiKeyDialog();
   }
@@ -252,6 +257,11 @@ async function getApiKey() {
 
 async function getClientId() {
   let id = localStorage.getItem("googleClientId");
+  if (!id && typeof GOOGLE_CLIENT_ID !== 'undefined') {
+    // Use hardcoded Client ID as fallback
+    id = GOOGLE_CLIENT_ID;
+    console.log('Using hardcoded Client ID');
+  }
   if (!id) {
     id = await showClientIdDialog();
   }
@@ -287,7 +297,7 @@ async function initializeGoogleAPI() {
   }
 
   // SILENT token restoration: Only if we have BOTH clientId AND valid tokens
-  const savedClientId = localStorage.getItem('googleClientId');
+  const savedClientId = localStorage.getItem('googleClientId') || (typeof GOOGLE_CLIENT_ID !== 'undefined' ? GOOGLE_CLIENT_ID : null);
   if (savedClientId) {
     // First check if we have valid tokens
     let hasValidTokens = false;
@@ -305,9 +315,13 @@ async function initializeGoogleAPI() {
       }
     } else {
       console.log('No valid saved tokens - user will need to log in when using Drive features');
+      // Still create tokenClient with hardcoded/saved Client ID for future use
+      if (savedClientId) {
+        await createTokenClient(savedClientId);
+      }
     }
   } else {
-    console.log('No saved Client ID - user will need to set up Drive on first use');
+    console.log('No Client ID available - user will need to set up Drive on first use');
   }
 
   console.log('✅ Google API ready (silent init complete)');
