@@ -280,11 +280,47 @@ function applyConvolutionFilter(pixels, width, height, kernel) {
 
 function processImage(file) {
     return new Promise((resolve, reject) => {
+        // Extract basic file metadata
+        const fileMetadata = {
+            fileName: file.name,
+            fileSize: file.size,
+            fileType: file.type,
+            fileLastModified: file.lastModified ? new Date(file.lastModified).toISOString() : null
+        };
+
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         const img = new Image();
-        
-        img.onload = () => {
+
+        img.onload = async () => {
+            // Try to extract EXIF data if available
+            let exifData = null;
+            if (typeof EXIF !== 'undefined' && EXIF.getData) {
+                try {
+                    await new Promise((resolveExif) => {
+                        EXIF.getData(img, function() {
+                            const allTags = EXIF.getAllTags(this);
+                            if (Object.keys(allTags).length > 0) {
+                                exifData = {
+                                    dateTime: EXIF.getTag(this, 'DateTime') || EXIF.getTag(this, 'DateTimeOriginal') || null,
+                                    dateTimeOriginal: EXIF.getTag(this, 'DateTimeOriginal') || null,
+                                    make: EXIF.getTag(this, 'Make') || null,
+                                    model: EXIF.getTag(this, 'Model') || null,
+                                    gpsLatitude: EXIF.getTag(this, 'GPSLatitude') || null,
+                                    gpsLongitude: EXIF.getTag(this, 'GPSLongitude') || null,
+                                    gpsLatitudeRef: EXIF.getTag(this, 'GPSLatitudeRef') || null,
+                                    gpsLongitudeRef: EXIF.getTag(this, 'GPSLongitudeRef') || null,
+                                    orientation: EXIF.getTag(this, 'Orientation') || null
+                                };
+                                console.log('📷 EXIF data extracted:', exifData);
+                            }
+                            resolveExif();
+                        });
+                    });
+                } catch (exifError) {
+                    console.warn('EXIF extraction failed:', exifError);
+                }
+            }
             // Scale to 700px width for sharper text, maintain aspect ratio
             const ratio = 700 / img.width;
             canvas.width = 700;
@@ -374,15 +410,19 @@ function processImage(file) {
             }
             
             console.log(`📷 Using ${format} (${Math.round(base64.length/1024)} KB)`);
-            
+
             resolve({
                 data: base64,
                 width: canvas.width,
                 height: canvas.height,
-                originalName: file.name
+                originalName: file.name,
+                metadata: {
+                    ...fileMetadata,
+                    exif: exifData
+                }
             });
         };
-        
+
         img.onerror = () => reject('Image loading failed');
         img.src = URL.createObjectURL(file);
     });
@@ -399,29 +439,135 @@ function createImageNode(imageData, filename) {
     const displayHeight = Math.round(displayWidth * ratio);
     const calculatedHeight = displayHeight; // Keep for backwards compatibility
 
+    // Build visible text from metadata
+    let visibleText = '';
+
+    const nodeData = {
+        id: nodeId,
+        type: 'image', // New node type
+        imageData: imageData.data,
+        imageWidth: imageData.width,  // Store original dimensions
+        imageHeight: imageData.height, // Store original dimensions
+        displayWidth: displayWidth,    // Display width (can be changed by user)
+        displayHeight: displayHeight,  // Display height (maintains aspect ratio)
+        calculatedHeight: calculatedHeight, // Pre-calculated height for arrangement
+        annotation: '', // Will be set after metadata processing
+        searchableText: '',
+        originalFileName: filename,
+        title: '', // No visible title for images
+        text: '', // Keep consistent with existing structure
+        tags: [],
+        isManualCard: true // Integrate with existing categorization
+    };
+
+    // Add file metadata if available
+    if (imageData.metadata) {
+        if (imageData.metadata.fileName) nodeData.fileName = imageData.metadata.fileName;
+        if (imageData.metadata.fileSize) nodeData.fileSize = imageData.metadata.fileSize;
+        if (imageData.metadata.fileType) nodeData.fileType = imageData.metadata.fileType;
+        if (imageData.metadata.fileLastModified) nodeData.fileLastModified = imageData.metadata.fileLastModified;
+
+        // Add EXIF metadata if available (for images)
+        if (imageData.metadata.exif) {
+            const exif = imageData.metadata.exif;
+            if (exif.dateTime) {
+                nodeData.exifDateTime = exif.dateTime;
+                visibleText += `📅 ${exif.dateTime}\n`;
+            }
+            if (exif.dateTimeOriginal) {
+                nodeData.exifDateTimeOriginal = exif.dateTimeOriginal;
+                if (!exif.dateTime) { // Only add if dateTime wasn't already added
+                    visibleText += `📅 ${exif.dateTimeOriginal}\n`;
+                }
+            }
+            if (exif.make) nodeData.exifMake = exif.make;
+            if (exif.model) nodeData.exifModel = exif.model;
+            if (exif.orientation) nodeData.exifOrientation = exif.orientation;
+
+            // Convert GPS coordinates if available
+            if (exif.gpsLatitude && exif.gpsLongitude) {
+                nodeData.gpsLatitude = convertGPSToDecimal(exif.gpsLatitude, exif.gpsLatitudeRef);
+                nodeData.gpsLongitude = convertGPSToDecimal(exif.gpsLongitude, exif.gpsLongitudeRef);
+                visibleText += `📍 ${nodeData.gpsLatitude.toFixed(6)}, ${nodeData.gpsLongitude.toFixed(6)}\n`;
+                console.log(`📍 GPS coordinates: ${nodeData.gpsLatitude}, ${nodeData.gpsLongitude}`);
+            }
+        }
+
+        // Add PDF metadata if available (for PDFs)
+        if (imageData.metadata.pdf) {
+            const pdf = imageData.metadata.pdf;
+
+            // Add title to visible text
+            if (pdf.title) {
+                nodeData.pdfTitle = pdf.title;
+                visibleText += `📄 ${pdf.title}\n`;
+            }
+
+            // Add author to visible text
+            if (pdf.author) {
+                nodeData.pdfAuthor = pdf.author;
+                visibleText += `✍️ ${pdf.author}\n`;
+            }
+
+            // Extract and display year from creation date
+            if (pdf.creationDate) {
+                nodeData.pdfCreationDate = pdf.creationDate;
+                // PDF dates are in format: D:20240819143000+02'00' or similar
+                const yearMatch = pdf.creationDate.match(/D:(\d{4})/);
+                if (yearMatch) {
+                    visibleText += `📅 ${yearMatch[1]}\n`;
+                }
+            }
+
+            if (pdf.subject) nodeData.pdfSubject = pdf.subject;
+            if (pdf.keywords) nodeData.pdfKeywords = pdf.keywords;
+            if (pdf.creator) nodeData.pdfCreator = pdf.creator;
+            if (pdf.producer) nodeData.pdfProducer = pdf.producer;
+            if (pdf.modificationDate) nodeData.pdfModificationDate = pdf.modificationDate;
+            if (pdf.pdfVersion) nodeData.pdfVersion = pdf.pdfVersion;
+        }
+
+        // Add page information if from PDF
+        if (imageData.metadata.pageNumber) {
+            nodeData.pageNumber = imageData.metadata.pageNumber;
+            nodeData.totalPages = imageData.metadata.totalPages;
+        }
+    }
+
+    // Set the visible text as annotation and searchable text
+    if (visibleText.trim()) {
+        nodeData.annotation = visibleText.trim();
+        nodeData.searchableText = visibleText.toLowerCase();
+    }
+
     cy.add({
         group: 'nodes',
-        data: {
-            id: nodeId,
-            type: 'image', // New node type
-            imageData: imageData.data,
-            imageWidth: imageData.width,  // Store original dimensions
-            imageHeight: imageData.height, // Store original dimensions
-            displayWidth: displayWidth,    // Display width (can be changed by user)
-            displayHeight: displayHeight,  // Display height (maintains aspect ratio)
-            calculatedHeight: calculatedHeight, // Pre-calculated height for arrangement
-            annotation: '',
-            searchableText: '',
-            originalFileName: filename,
-            title: '', // No visible title for images
-            text: '', // Keep consistent with existing structure
-            tags: [],
-            isManualCard: true // Integrate with existing categorization
-        },
+        data: nodeData,
         position: position
     });
 
     console.log(`📷 Created image node: ${filename} (${Math.round(imageData.data.length/1024)} KB) - ${imageData.width}x${imageData.height} → ${displayWidth}x${displayHeight}`);
+    if (imageData.metadata) {
+        console.log(`📋 Metadata attached:`, imageData.metadata);
+    }
+}
+
+// Helper function to convert GPS coordinates from EXIF format to decimal
+function convertGPSToDecimal(gpsArray, ref) {
+    if (!gpsArray || gpsArray.length !== 3) return null;
+
+    const degrees = gpsArray[0];
+    const minutes = gpsArray[1];
+    const seconds = gpsArray[2];
+
+    let decimal = degrees + (minutes / 60) + (seconds / 3600);
+
+    // Apply direction (S and W are negative)
+    if (ref === 'S' || ref === 'W') {
+        decimal = -decimal;
+    }
+
+    return decimal;
 }
 
 // Process PDF file and convert all pages to image nodes
@@ -436,10 +582,40 @@ async function processPdfFile(file) {
     }
 
     try {
+        // Extract basic file metadata
+        const fileMetadata = {
+            fileName: file.name,
+            fileSize: file.size,
+            fileType: file.type,
+            fileLastModified: file.lastModified ? new Date(file.lastModified).toISOString() : null
+        };
+
         // Load the PDF file
         const arrayBuffer = await file.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
         const numPages = pdf.numPages;
+
+        // Extract PDF metadata
+        let pdfMetadata = null;
+        try {
+            const metadata = await pdf.getMetadata();
+            if (metadata && metadata.info) {
+                pdfMetadata = {
+                    title: metadata.info.Title || null,
+                    author: metadata.info.Author || null,
+                    subject: metadata.info.Subject || null,
+                    keywords: metadata.info.Keywords || null,
+                    creator: metadata.info.Creator || null,
+                    producer: metadata.info.Producer || null,
+                    creationDate: metadata.info.CreationDate || null,
+                    modificationDate: metadata.info.ModDate || null,
+                    pdfVersion: metadata.info.PDFFormatVersion || null
+                };
+                console.log('📄 PDF metadata extracted:', pdfMetadata);
+            }
+        } catch (metaError) {
+            console.warn('PDF metadata extraction failed:', metaError);
+        }
 
         if (searchInfo) {
             searchInfo.textContent = `📄 Konverterar ${numPages} sidor från ${file.name}...`;
@@ -490,12 +666,18 @@ async function processPdfFile(file) {
                 format = 'PNG';
             }
 
-            // Create image node for this page
+            // Create image node for this page with full metadata
             const imageData = {
                 data: base64,
                 width: finalCanvas.width,
                 height: finalCanvas.height,
-                originalName: `${file.name} - Sida ${pageNum}`
+                originalName: `${file.name} - Sida ${pageNum}`,
+                metadata: {
+                    ...fileMetadata,
+                    pdf: pdfMetadata,
+                    pageNumber: pageNum,
+                    totalPages: numPages
+                }
             };
 
             createImageNode(imageData, `${file.name} - Sida ${pageNum}/${numPages}`);
