@@ -456,6 +456,14 @@ function loadBoard() {
                     const boardData = JSON.parse(e.target.result);
                     loadBoardFromData(boardData);
                     console.log(`File loaded: ${boardData.cards.length} cards and ${(boardData.edges || []).length} edges`);
+
+                    // Show success message
+                    const searchInfo = document.getElementById('searchInfo');
+                    searchInfo.textContent = `📂 Laddade ${file.name}: ${boardData.cards.length} kort, ${(boardData.edges || []).length} pilar`;
+                    searchInfo.classList.add('visible');
+                    setTimeout(() => {
+                        searchInfo.classList.remove('visible');
+                    }, 3000);
                 } catch (error) {
                     alert('Fel vid laddning av fil: ' + error.message);
                 }
@@ -1035,7 +1043,7 @@ function importFromJSON() {
                 }
                 
                 // Show success message
-                let message = `📁 JSON-import lyckades: ${importedCount} kort`;
+                let message = `📁 JSON-import lyckades från ${file.name}: ${importedCount} kort`;
                 if (importedEdges > 0) {
                     message += `, ${importedEdges} pilar`;
                 }
