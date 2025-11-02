@@ -57,7 +57,7 @@ function showApiKeyDialog() {
       <p style="margin: 0 0 15px 0; color: #e67e22; font-size: 13px;">
         ⚠️ Din API-nyckel sparas endast lokalt i din webbläsare.
       </p>
-      <input type="password" id="googleApiKeyInput" autocomplete="off" placeholder="AIza..." style="
+      <input type="password" id="googleApiKeyInput" autocomplete="new-password" name="google-api-key-${Date.now()}" placeholder="AIza..." style="
         width: 100%;
         padding: 12px;
         border: 1px solid #ddd;
@@ -93,6 +93,13 @@ function showApiKeyDialog() {
 
     const input = document.getElementById('googleApiKeyInput');
     input.focus();
+
+    // Prevent ALL keyboard events from leaking through to underlying page
+    ['keydown', 'keyup', 'keypress', 'input'].forEach(eventType => {
+      overlay.addEventListener(eventType, (e) => {
+        e.stopPropagation();
+      }, true);
+    });
 
     const closeDialog = (key = null) => {
       overlay.remove();
@@ -168,7 +175,7 @@ function showClientIdDialog() {
       <p style="margin: 0 0 15px 0; color: #e67e22; font-size: 13px;">
         ⚠️ Ditt Client ID sparas endast lokalt i din webbläsare.
       </p>
-      <input type="password" id="googleClientIdInput" autocomplete="off" placeholder="123456789-xxx.apps.googleusercontent.com" style="
+      <input type="password" id="googleClientIdInput" autocomplete="new-password" name="google-client-id-${Date.now()}" placeholder="123456789-xxx.apps.googleusercontent.com" style="
         width: 100%;
         padding: 12px;
         border: 1px solid #ddd;
