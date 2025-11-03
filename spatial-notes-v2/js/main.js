@@ -9851,7 +9851,8 @@ async function switchProject(projectName) {
         
         // Update UI
         updateAuthStatus();
-        
+        updateProjectNameUI();  // Fix: Ensure project name button is updated
+
     } catch (error) {
         console.error('Error switching project:', error);
         updateSyncStatus('Failed to switch project', 'error');

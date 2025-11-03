@@ -384,10 +384,11 @@ function processImage(file) {
             let format = 'unknown';
             
             try {
-                // Try WebP first (best compression + quality) - higher quality for text
-                base64 = canvas.toDataURL('image/webp', 0.97);
+                // Try WebP first (best compression + quality)
+                // Lower quality is fine since image is already processed/filtered
+                base64 = canvas.toDataURL('image/webp', 0.70);
                 if (base64.startsWith('data:image/webp')) {
-                    format = 'WebP 97%';
+                    format = 'WebP 70%';
                 } else {
                     throw new Error('WebP not supported');
                 }
@@ -397,15 +398,16 @@ function processImage(file) {
                     base64 = canvas.toDataURL('image/png');
                     format = 'PNG (lossless)';
 
-                    // If PNG too large, use high quality JPEG
+                    // If PNG too large, use JPEG with reasonable quality
+                    // 70% is sufficient since image is already processed
                     if (base64.length > 350000) { // ~260KB in base64 (adjusted for 700px)
-                        base64 = canvas.toDataURL('image/jpeg', 0.95);
-                        format = 'JPEG 95%';
+                        base64 = canvas.toDataURL('image/jpeg', 0.70);
+                        format = 'JPEG 70%';
                     }
                 } catch {
                     // Final fallback
-                    base64 = canvas.toDataURL('image/jpeg', 0.95);
-                    format = 'JPEG 95%';
+                    base64 = canvas.toDataURL('image/jpeg', 0.70);
+                    format = 'JPEG 70%';
                 }
             }
             
@@ -655,9 +657,10 @@ async function processPdfFile(file) {
             let format = 'unknown';
 
             try {
-                base64 = finalCanvas.toDataURL('image/webp', 0.95);
+                // 70% quality is sufficient for PDF pages scaled to 800px
+                base64 = finalCanvas.toDataURL('image/webp', 0.70);
                 if (base64.startsWith('data:image/webp')) {
-                    format = 'WebP 95%';
+                    format = 'WebP 70%';
                 } else {
                     throw new Error('WebP not supported');
                 }
