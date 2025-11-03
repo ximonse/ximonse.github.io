@@ -74,6 +74,15 @@ document.addEventListener('DOMContentLoaded', () => {
         // AI & Tools
         { id: 'ai-chatgpt', category: 'AI & Tools', title: '🤖 ChatGPT Sorter', action: () => window.toggleAiPanel() },
         { id: 'ai-claude', category: 'AI & Tools', title: '🤖 Claude AI Assistant', action: () => window.toggleAIPanel() },
+        { id: 'batch-ocr-selected', category: 'AI & Tools', title: '📸 OCR Selected Images with Gemini', action: () => {
+            const selectedNodes = cy.$('node:selected');
+            const imageNodes = selectedNodes.filter(n => n.data('type') === 'image');
+            if (imageNodes.length > 0) {
+                batchGeminiOCR(imageNodes);
+            } else {
+                alert('Inga bildkort är markerade. Markera bildkort först.');
+            }
+        }},
         { id: 'reset-gemini-key', category: 'AI & Tools', title: '🔑 Reset Google AI API Key', action: () => { localStorage.removeItem('googleAiApiKey'); alert('Google AI API Key has been reset.'); } },
 
         // Annotation
