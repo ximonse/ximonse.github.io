@@ -274,59 +274,72 @@ function showQualityDialog(callback) {
         left: 0;
         width: 100%;
         height: 100%;
-        background: rgba(0, 0, 0, 0.5);
+        background: rgba(0, 0, 0, 0.6);
         display: flex;
         justify-content: center;
         align-items: center;
         z-index: 10000;
+        -webkit-tap-highlight-color: transparent;
     `;
 
     // Create dialog
     const dialog = document.createElement('div');
     dialog.style.cssText = `
         background: white;
-        padding: 30px;
-        border-radius: 10px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-        max-width: 400px;
-        width: 90%;
+        padding: 25px;
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        max-width: 420px;
+        width: 85%;
+        max-height: 90vh;
+        overflow-y: auto;
     `;
 
     dialog.innerHTML = `
-        <h3 style="margin-top: 0; margin-bottom: 20px; font-size: 18px; color: #333;">
+        <h3 style="margin: 0 0 20px 0; font-size: 20px; color: #333; font-weight: 600; text-align: center;">
             Välj bildkvalitet
         </h3>
-        <div style="margin-bottom: 20px;">
+        <div>
             <button id="quality-low" style="
                 width: 100%;
-                padding: 15px;
-                margin-bottom: 10px;
+                padding: 18px;
+                margin-bottom: 12px;
                 border: 2px solid #ddd;
-                border-radius: 5px;
+                border-radius: 8px;
                 background: white;
                 cursor: pointer;
-                font-size: 14px;
+                font-size: 15px;
                 text-align: left;
+                touch-action: manipulation;
+                user-select: none;
+                -webkit-tap-highlight-color: transparent;
+                transition: all 0.2s ease;
             ">
-                <strong>🔹 Låg kvalitet</strong><br>
-                <span style="color: #666; font-size: 12px;">
-                    Mindre filstorlek, snabbare laddning (700px bredd, 70% kvalitet)
-                </span>
+                <div style="font-weight: 600; margin-bottom: 4px;">🔹 Låg kvalitet</div>
+                <div style="color: #666; font-size: 13px; line-height: 1.4;">
+                    Mindre filstorlek, snabbare laddning<br>
+                    (700px bredd, 70% kvalitet)
+                </div>
             </button>
             <button id="quality-normal" style="
                 width: 100%;
-                padding: 15px;
+                padding: 18px;
                 border: 2px solid #4CAF50;
-                border-radius: 5px;
+                border-radius: 8px;
                 background: #f0f8f0;
                 cursor: pointer;
-                font-size: 14px;
+                font-size: 15px;
                 text-align: left;
+                touch-action: manipulation;
+                user-select: none;
+                -webkit-tap-highlight-color: transparent;
+                transition: all 0.2s ease;
             ">
-                <strong>✨ Normal kvalitet</strong><br>
-                <span style="color: #666; font-size: 12px;">
-                    Bättre kvalitet, större filstorlek (1200px bredd, 85% kvalitet)
-                </span>
+                <div style="font-weight: 600; margin-bottom: 4px;">✨ Normal kvalitet</div>
+                <div style="color: #666; font-size: 13px; line-height: 1.4;">
+                    Bättre kvalitet, större filstorlek<br>
+                    (1200px bredd, 85% kvalitet)
+                </div>
             </button>
         </div>
     `;
@@ -334,20 +347,60 @@ function showQualityDialog(callback) {
     overlay.appendChild(dialog);
     document.body.appendChild(overlay);
 
+    // Add active state styling for buttons
+    const addButtonEffects = (button) => {
+        button.addEventListener('touchstart', () => {
+            button.style.transform = 'scale(0.98)';
+            button.style.opacity = '0.8';
+        });
+        button.addEventListener('touchend', () => {
+            button.style.transform = 'scale(1)';
+            button.style.opacity = '1';
+        });
+        button.addEventListener('mousedown', () => {
+            button.style.transform = 'scale(0.98)';
+        });
+        button.addEventListener('mouseup', () => {
+            button.style.transform = 'scale(1)';
+        });
+    };
+
+    const lowBtn = dialog.querySelector('#quality-low');
+    const normalBtn = dialog.querySelector('#quality-normal');
+
+    addButtonEffects(lowBtn);
+    addButtonEffects(normalBtn);
+
     // Handle button clicks
     const handleChoice = (quality) => {
         document.body.removeChild(overlay);
         callback(quality);
     };
 
-    dialog.querySelector('#quality-low').onclick = () => handleChoice('low');
-    dialog.querySelector('#quality-normal').onclick = () => handleChoice('normal');
+    lowBtn.onclick = (e) => {
+        e.preventDefault();
+        handleChoice('low');
+    };
+    normalBtn.onclick = (e) => {
+        e.preventDefault();
+        handleChoice('normal');
+    };
 
     // Close on overlay click
     overlay.onclick = (e) => {
         if (e.target === overlay) {
             document.body.removeChild(overlay);
         }
+    };
+
+    // Prevent scrolling background
+    document.body.style.overflow = 'hidden';
+
+    // Restore scrolling when dialog closes
+    const originalRemove = overlay.remove.bind(overlay);
+    overlay.remove = function() {
+        document.body.style.overflow = '';
+        originalRemove();
     };
 }
 
@@ -1281,3 +1334,9 @@ async function batchGeminiOCR(nodes) {
         renderColumnViewDebounced();
     }
 }
+
+// ============================================================================
+// Global exports - Make functions available to other scripts
+// ============================================================================
+window.showQualityDialog = showQualityDialog;
+window.handleImageFiles = handleImageFiles;
