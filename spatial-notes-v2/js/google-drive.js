@@ -652,7 +652,11 @@ async function loadFromGoogleDrive() {
                 shape: card.shape || null,
                 isPinned: card.isPinned || false
               },
-              position: { x: card.x || 0, y: card.y || 0 }
+              // Handle both nested position object and flat x/y fields for compatibility
+              position: {
+                x: (card.position && card.position.x !== undefined) ? card.position.x : (card.x || 0),
+                y: (card.position && card.position.y !== undefined) ? card.position.y : (card.y || 0)
+              }
             });
 
             // Apply styling
