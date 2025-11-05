@@ -7431,13 +7431,7 @@ function createSimplifiedToolbar() {
     viewToggleBtn.style.cssText = 'padding: 8px 12px;';
     viewToggleBtn.onclick = toggleView;
 
-    // Toggle to full toolbar button
-    const expandBtn = document.createElement('button');
-    expandBtn.innerHTML = '⚙️ Meny';
-    expandBtn.className = 'toolbar-btn';
-    expandBtn.title = 'Visa hela menyn (Shift+T)';
-    expandBtn.style.cssText = 'padding: 8px 12px; margin-left: auto;';  // Push to right
-    expandBtn.onclick = toggleSimplifiedToolbar;
+    // No need for expand button here - using permanent toolbarToggleBtn instead
 
     simplifiedDiv.appendChild(importBtn);
     simplifiedDiv.appendChild(driveImagesBtn);
@@ -7445,7 +7439,6 @@ function createSimplifiedToolbar() {
     simplifiedDiv.appendChild(sortBtn);
     simplifiedDiv.appendChild(shortcutsBtn);
     simplifiedDiv.appendChild(viewToggleBtn);
-    simplifiedDiv.appendChild(expandBtn);
 
     toolbar.appendChild(simplifiedDiv);
 }
