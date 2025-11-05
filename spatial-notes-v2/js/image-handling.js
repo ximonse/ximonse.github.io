@@ -228,11 +228,15 @@ function showImageSourceMenu(clientX, clientY) {
 
 // Process uploaded images and PDFs
 function handleImageFiles(files, qualityPreset = null) {
+    // Convert FileList to Array immediately to prevent it from becoming invalid
+    const filesArray = Array.from(files);
+
     // If no quality preset provided, ask the user
     if (qualityPreset === null) {
         showQualityDialog((selectedQuality) => {
+            console.log('Quality selected:', selectedQuality);
             // Process files with selected quality
-            Array.from(files).forEach(file => {
+            filesArray.forEach(file => {
                 if (file && file.type.startsWith('image/')) {
                     processImage(file, selectedQuality).then(imageData => {
                         createImageNode(imageData, file.name);
@@ -248,7 +252,7 @@ function handleImageFiles(files, qualityPreset = null) {
         });
     } else {
         // Quality preset already provided, process directly
-        Array.from(files).forEach(file => {
+        filesArray.forEach(file => {
             if (file && file.type.startsWith('image/')) {
                 processImage(file, qualityPreset).then(imageData => {
                     createImageNode(imageData, file.name);
@@ -373,35 +377,40 @@ function showQualityDialog(callback) {
 
     // Handle button clicks
     const handleChoice = (quality) => {
-        document.body.removeChild(overlay);
+        console.log('handleChoice called with quality:', quality);
+        document.body.style.overflow = '';
+        try {
+            document.body.removeChild(overlay);
+        } catch (e) {
+            console.error('Error removing overlay:', e);
+        }
         callback(quality);
     };
 
     lowBtn.onclick = (e) => {
         e.preventDefault();
+        e.stopPropagation();
+        console.log('Low quality button clicked');
         handleChoice('low');
     };
+
     normalBtn.onclick = (e) => {
         e.preventDefault();
+        e.stopPropagation();
+        console.log('Normal quality button clicked');
         handleChoice('normal');
     };
 
-    // Close on overlay click
+    // Close on overlay click (cancel - default to low quality)
     overlay.onclick = (e) => {
         if (e.target === overlay) {
-            document.body.removeChild(overlay);
+            console.log('Overlay clicked - defaulting to low quality');
+            handleChoice('low');
         }
     };
 
     // Prevent scrolling background
     document.body.style.overflow = 'hidden';
-
-    // Restore scrolling when dialog closes
-    const originalRemove = overlay.remove.bind(overlay);
-    overlay.remove = function() {
-        document.body.style.overflow = '';
-        originalRemove();
-    };
 }
 
 // Process image to 800px width with S-curve + strong light-gray whitening for handwritten notes (~35-90 KB)
