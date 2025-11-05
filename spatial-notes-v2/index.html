@@ -32,7 +32,12 @@
         <button class="toolbar-btn mobile-only" id="mobileHamburgerBtn" onclick="toggleSimplifiedToolbar()" title="Växla till mini-meny" style="display: none; padding: 8px 12px;">
             ☰
         </button>
-        
+
+        <!-- Toolbar Toggle Button (always visible) -->
+        <button class="toolbar-btn simplified-keep" id="toolbarToggleBtn" onclick="event.stopPropagation(); toggleSimplifiedToolbar();" title="Växla mellan förenklad och full toolbar (Shift+T)" style="padding: 8px 12px;">
+            ☰ Toolbar
+        </button>
+
         <!-- Project Selector -->
         <div class="project-selector">
             <button class="project-button" id="projectButton" onclick="toggleProjectDropdown()">
