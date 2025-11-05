@@ -227,20 +227,181 @@ function showImageSourceMenu(clientX, clientY) {
 }
 
 // Process uploaded images and PDFs
-function handleImageFiles(files) {
-    Array.from(files).forEach(file => {
-        if (file && file.type.startsWith('image/')) {
-            processImage(file).then(imageData => {
-                createImageNode(imageData, file.name);
-            }).catch(err => {
-                console.error('Image processing failed:', err);
+function handleImageFiles(files, qualityPreset = null) {
+    // If no quality preset provided, ask the user
+    if (qualityPreset === null) {
+        showQualityDialog((selectedQuality) => {
+            // Process files with selected quality
+            Array.from(files).forEach(file => {
+                if (file && file.type.startsWith('image/')) {
+                    processImage(file, selectedQuality).then(imageData => {
+                        createImageNode(imageData, file.name);
+                    }).catch(err => {
+                        console.error('Image processing failed:', err);
+                    });
+                } else if (file && file.type === 'application/pdf') {
+                    processPdfFile(file, selectedQuality).catch(err => {
+                        console.error('PDF processing failed:', err);
+                    });
+                }
             });
-        } else if (file && file.type === 'application/pdf') {
-            processPdfFile(file).catch(err => {
-                console.error('PDF processing failed:', err);
-            });
+        });
+    } else {
+        // Quality preset already provided, process directly
+        Array.from(files).forEach(file => {
+            if (file && file.type.startsWith('image/')) {
+                processImage(file, qualityPreset).then(imageData => {
+                    createImageNode(imageData, file.name);
+                }).catch(err => {
+                    console.error('Image processing failed:', err);
+                });
+            } else if (file && file.type === 'application/pdf') {
+                processPdfFile(file, qualityPreset).catch(err => {
+                    console.error('PDF processing failed:', err);
+                });
+            }
+        });
+    }
+}
+
+// Show quality selection dialog
+function showQualityDialog(callback) {
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.6);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000;
+        -webkit-tap-highlight-color: transparent;
+    `;
+
+    // Create dialog
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+        background: white;
+        padding: 25px;
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        max-width: 420px;
+        width: 85%;
+        max-height: 90vh;
+        overflow-y: auto;
+    `;
+
+    dialog.innerHTML = `
+        <h3 style="margin: 0 0 20px 0; font-size: 20px; color: #333; font-weight: 600; text-align: center;">
+            Välj bildkvalitet
+        </h3>
+        <div>
+            <button id="quality-low" style="
+                width: 100%;
+                padding: 18px;
+                margin-bottom: 12px;
+                border: 2px solid #ddd;
+                border-radius: 8px;
+                background: white;
+                cursor: pointer;
+                font-size: 15px;
+                text-align: left;
+                touch-action: manipulation;
+                user-select: none;
+                -webkit-tap-highlight-color: transparent;
+                transition: all 0.2s ease;
+            ">
+                <div style="font-weight: 600; margin-bottom: 4px;">🔹 Låg kvalitet</div>
+                <div style="color: #666; font-size: 13px; line-height: 1.4;">
+                    Mindre filstorlek, snabbare laddning<br>
+                    (700px bredd, 70% kvalitet)
+                </div>
+            </button>
+            <button id="quality-normal" style="
+                width: 100%;
+                padding: 18px;
+                border: 2px solid #4CAF50;
+                border-radius: 8px;
+                background: #f0f8f0;
+                cursor: pointer;
+                font-size: 15px;
+                text-align: left;
+                touch-action: manipulation;
+                user-select: none;
+                -webkit-tap-highlight-color: transparent;
+                transition: all 0.2s ease;
+            ">
+                <div style="font-weight: 600; margin-bottom: 4px;">✨ Normal kvalitet</div>
+                <div style="color: #666; font-size: 13px; line-height: 1.4;">
+                    Bättre kvalitet, större filstorlek<br>
+                    (1200px bredd, 85% kvalitet)
+                </div>
+            </button>
+        </div>
+    `;
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    // Add active state styling for buttons
+    const addButtonEffects = (button) => {
+        button.addEventListener('touchstart', () => {
+            button.style.transform = 'scale(0.98)';
+            button.style.opacity = '0.8';
+        });
+        button.addEventListener('touchend', () => {
+            button.style.transform = 'scale(1)';
+            button.style.opacity = '1';
+        });
+        button.addEventListener('mousedown', () => {
+            button.style.transform = 'scale(0.98)';
+        });
+        button.addEventListener('mouseup', () => {
+            button.style.transform = 'scale(1)';
+        });
+    };
+
+    const lowBtn = dialog.querySelector('#quality-low');
+    const normalBtn = dialog.querySelector('#quality-normal');
+
+    addButtonEffects(lowBtn);
+    addButtonEffects(normalBtn);
+
+    // Handle button clicks
+    const handleChoice = (quality) => {
+        document.body.removeChild(overlay);
+        callback(quality);
+    };
+
+    lowBtn.onclick = (e) => {
+        e.preventDefault();
+        handleChoice('low');
+    };
+    normalBtn.onclick = (e) => {
+        e.preventDefault();
+        handleChoice('normal');
+    };
+
+    // Close on overlay click
+    overlay.onclick = (e) => {
+        if (e.target === overlay) {
+            document.body.removeChild(overlay);
         }
-    });
+    };
+
+    // Prevent scrolling background
+    document.body.style.overflow = 'hidden';
+
+    // Restore scrolling when dialog closes
+    const originalRemove = overlay.remove.bind(overlay);
+    overlay.remove = function() {
+        document.body.style.overflow = '';
+        originalRemove();
+    };
 }
 
 // Process image to 800px width with S-curve + strong light-gray whitening for handwritten notes (~35-90 KB)
@@ -278,8 +439,26 @@ function applyConvolutionFilter(pixels, width, height, kernel) {
     return output;
 }
 
-function processImage(file) {
+function processImage(file, qualityPreset = 'low') {
     return new Promise((resolve, reject) => {
+        // Quality settings based on preset
+        const qualitySettings = {
+            low: {
+                maxWidth: 700,
+                webpQuality: 0.70,
+                jpegQuality: 0.70,
+                pngSizeThreshold: 350000
+            },
+            normal: {
+                maxWidth: 1200,
+                webpQuality: 0.85,
+                jpegQuality: 0.85,
+                pngSizeThreshold: 600000
+            }
+        };
+
+        const settings = qualitySettings[qualityPreset] || qualitySettings.low;
+
         // Extract basic file metadata
         const fileMetadata = {
             fileName: file.name,
@@ -321,9 +500,9 @@ function processImage(file) {
                     console.warn('EXIF extraction failed:', exifError);
                 }
             }
-            // Scale to 700px width for sharper text, maintain aspect ratio
-            const ratio = 700 / img.width;
-            canvas.width = 700;
+            // Scale to configured width for sharper text, maintain aspect ratio
+            const ratio = settings.maxWidth / img.width;
+            canvas.width = settings.maxWidth;
             canvas.height = Math.round(img.height * ratio);
 
             // Use high-quality image smoothing for better text clarity
@@ -385,10 +564,9 @@ function processImage(file) {
             
             try {
                 // Try WebP first (best compression + quality)
-                // Lower quality is fine since image is already processed/filtered
-                base64 = canvas.toDataURL('image/webp', 0.70);
+                base64 = canvas.toDataURL('image/webp', settings.webpQuality);
                 if (base64.startsWith('data:image/webp')) {
-                    format = 'WebP 70%';
+                    format = `WebP ${Math.round(settings.webpQuality * 100)}%`;
                 } else {
                     throw new Error('WebP not supported');
                 }
@@ -398,16 +576,15 @@ function processImage(file) {
                     base64 = canvas.toDataURL('image/png');
                     format = 'PNG (lossless)';
 
-                    // If PNG too large, use JPEG with reasonable quality
-                    // 70% is sufficient since image is already processed
-                    if (base64.length > 350000) { // ~260KB in base64 (adjusted for 700px)
-                        base64 = canvas.toDataURL('image/jpeg', 0.70);
-                        format = 'JPEG 70%';
+                    // If PNG too large, use JPEG with quality from settings
+                    if (base64.length > settings.pngSizeThreshold) {
+                        base64 = canvas.toDataURL('image/jpeg', settings.jpegQuality);
+                        format = `JPEG ${Math.round(settings.jpegQuality * 100)}%`;
                     }
                 } catch {
                     // Final fallback
-                    base64 = canvas.toDataURL('image/jpeg', 0.70);
-                    format = 'JPEG 70%';
+                    base64 = canvas.toDataURL('image/jpeg', settings.jpegQuality);
+                    format = `JPEG ${Math.round(settings.jpegQuality * 100)}%`;
                 }
             }
             
@@ -573,7 +750,23 @@ function convertGPSToDecimal(gpsArray, ref) {
 }
 
 // Process PDF file and convert all pages to image nodes
-async function processPdfFile(file) {
+async function processPdfFile(file, qualityPreset = 'low') {
+    // Quality settings based on preset
+    const qualitySettings = {
+        low: {
+            scale: 2.0,
+            finalWidth: 800,
+            webpQuality: 0.70
+        },
+        normal: {
+            scale: 3.0,
+            finalWidth: 1400,
+            webpQuality: 0.85
+        }
+    };
+
+    const settings = qualitySettings[qualityPreset] || qualitySettings.low;
+
     // Configure PDF.js worker
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
@@ -628,8 +821,8 @@ async function processPdfFile(file) {
         for (let pageNum = 1; pageNum <= numPages; pageNum++) {
             const page = await pdf.getPage(pageNum);
 
-            // Get viewport with scale for good quality (2x for retina)
-            const viewport = page.getViewport({scale: 2.0});
+            // Get viewport with scale for good quality
+            const viewport = page.getViewport({scale: settings.scale});
 
             // Create canvas for rendering
             const canvas = document.createElement('canvas');
@@ -643,11 +836,11 @@ async function processPdfFile(file) {
                 viewport: viewport
             }).promise;
 
-            // Scale down to 800px width (same as images)
+            // Scale down to configured width
             const finalCanvas = document.createElement('canvas');
             const finalCtx = finalCanvas.getContext('2d');
-            const ratio = 800 / canvas.width;
-            finalCanvas.width = 800;
+            const ratio = settings.finalWidth / canvas.width;
+            finalCanvas.width = settings.finalWidth;
             finalCanvas.height = Math.round(canvas.height * ratio);
 
             finalCtx.drawImage(canvas, 0, 0, finalCanvas.width, finalCanvas.height);
@@ -657,10 +850,10 @@ async function processPdfFile(file) {
             let format = 'unknown';
 
             try {
-                // 70% quality is sufficient for PDF pages scaled to 800px
-                base64 = finalCanvas.toDataURL('image/webp', 0.70);
+                // Use quality from settings
+                base64 = finalCanvas.toDataURL('image/webp', settings.webpQuality);
                 if (base64.startsWith('data:image/webp')) {
-                    format = 'WebP 70%';
+                    format = `WebP ${Math.round(settings.webpQuality * 100)}%`;
                 } else {
                     throw new Error('WebP not supported');
                 }
@@ -1141,3 +1334,9 @@ async function batchGeminiOCR(nodes) {
         renderColumnViewDebounced();
     }
 }
+
+// ============================================================================
+// Global exports - Make functions available to other scripts
+// ============================================================================
+window.showQualityDialog = showQualityDialog;
+window.handleImageFiles = handleImageFiles;

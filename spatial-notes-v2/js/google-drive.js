@@ -478,64 +478,126 @@ async function pickerCallback(data) {
     console.log('✅ User picked files:', data.docs);
 
     const selectedFiles = data.docs;
-    let imported = 0;
-    let failed = 0;
 
-    for (const file of selectedFiles) {
-      try {
-        console.log(`Downloading ${file.name}...`);
+    // Ask for quality preference before processing
+    if (typeof showQualityDialog === 'function') {
+      showQualityDialog(async (selectedQuality) => {
+        let imported = 0;
+        let failed = 0;
 
-        // Download image from Drive
-        const response = await fetch(
-          `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,
-          {
-            headers: { 'Authorization': `Bearer ${window.accessToken}` }
+        for (const file of selectedFiles) {
+          try {
+            console.log(`Downloading ${file.name}...`);
+
+            // Download image from Drive
+            const response = await fetch(
+              `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,
+              {
+                headers: { 'Authorization': `Bearer ${window.accessToken}` }
+              }
+            );
+
+            if (!response.ok) {
+              console.error(`Failed to download ${file.name}:`, response.statusText);
+              failed++;
+              continue;
+            }
+
+            const blob = await response.blob();
+
+            // Convert to image data and create card with selected quality
+            if (typeof processImage === 'function' && typeof createImageNode === 'function') {
+              const imageData = await processImage(blob, selectedQuality);
+              createImageNode(imageData, file.name);
+              imported++;
+              console.log(`✅ Imported ${file.name}`);
+            } else {
+              console.error('processImage or createImageNode not found');
+              failed++;
+            }
+
+          } catch (error) {
+            console.error(`Error importing ${file.name}:`, error);
+            failed++;
           }
-        );
-
-        if (!response.ok) {
-          console.error(`Failed to download ${file.name}:`, response.statusText);
-          failed++;
-          continue;
         }
 
-        const blob = await response.blob();
+        // Show result
+        const message = failed > 0
+          ? `✅ Importerade ${imported} bilder (${failed} misslyckades)`
+          : `✅ Importerade ${imported} bilder från Drive`;
 
-        // Convert to image data and create card (assuming these functions exist)
-        if (typeof processImage === 'function' && typeof createImageNode === 'function') {
-          const imageData = await processImage(blob);
-          createImageNode(imageData, file.name);
-          imported++;
-          console.log(`✅ Imported ${file.name}`);
+        console.log(message);
+
+        // Use updateSyncStatus if available (from main.js), otherwise alert
+        if (typeof updateSyncStatus === 'function') {
+          updateSyncStatus(message, 'success');
+          setTimeout(() => updateSyncStatus('', ''), 3000);
         } else {
-          console.error('processImage or createImageNode not found');
+          alert(message);
+        }
+      });
+    } else {
+      // Fallback: no quality dialog, use low quality
+      let imported = 0;
+      let failed = 0;
+
+      for (const file of selectedFiles) {
+        try {
+          console.log(`Downloading ${file.name}...`);
+
+          // Download image from Drive
+          const response = await fetch(
+            `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,
+            {
+              headers: { 'Authorization': `Bearer ${window.accessToken}` }
+            }
+          );
+
+          if (!response.ok) {
+            console.error(`Failed to download ${file.name}:`, response.statusText);
+            failed++;
+            continue;
+          }
+
+          const blob = await response.blob();
+
+          // Convert to image data and create card (assuming these functions exist)
+          if (typeof processImage === 'function' && typeof createImageNode === 'function') {
+            const imageData = await processImage(blob, 'low');
+            createImageNode(imageData, file.name);
+            imported++;
+            console.log(`✅ Imported ${file.name}`);
+          } else {
+            console.error('processImage or createImageNode not found');
+            failed++;
+          }
+
+        } catch (error) {
+          console.error(`Error importing ${file.name}:`, error);
           failed++;
         }
-
-      } catch (error) {
-        console.error(`Error importing ${file.name}:`, error);
-        failed++;
       }
-    }
 
-    // Show result
-    const message = failed > 0
-      ? `✅ Importerade ${imported} bilder (${failed} misslyckades)`
-      : `✅ Importerade ${imported} bilder från Drive`;
+      // Show result
+      const message = failed > 0
+        ? `✅ Importerade ${imported} bilder (${failed} misslyckades)`
+        : `✅ Importerade ${imported} bilder från Drive`;
 
-    console.log(message);
+      console.log(message);
 
-    // Use updateSyncStatus if available (from main.js), otherwise alert
-    if (typeof updateSyncStatus === 'function') {
-      updateSyncStatus(message, 'success');
-      setTimeout(() => updateSyncStatus('', ''), 3000);
-    } else {
-      alert(message);
-    }
+      // Use updateSyncStatus if available (from main.js), otherwise alert
+      if (typeof updateSyncStatus === 'function') {
+        updateSyncStatus(message, 'success');
+        setTimeout(() => updateSyncStatus('', ''), 3000);
+      } else {
+        alert(message);
+      }
 
-    // Save board after import (if function exists)
-    if (typeof saveBoard === 'function') {
-      saveBoard();
+      // Save board after import (if function exists)
+      if (typeof saveBoard === 'function') {
+        saveBoard();
+      }
     }
 
   } else if (data.action === google.picker.Action.CANCEL) {
