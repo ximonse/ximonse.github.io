@@ -627,11 +627,25 @@ function createImageNode(imageData, filename) {
     const position = getArrangementPosition();
     const nodeId = generateCardId();
 
-    // Calculate proper aspect ratio height
-    const displayWidth = 300;
+    // Calculate display width based on image resolution
+    // Higher quality images get displayed larger to show the quality difference
+    let displayWidth;
+    if (imageData.width >= 1000) {
+        // High resolution image (normal quality) - display larger
+        displayWidth = 450;
+    } else if (imageData.width >= 700) {
+        // Medium resolution image - medium display
+        displayWidth = 350;
+    } else {
+        // Low resolution image - small display
+        displayWidth = 300;
+    }
+
     const ratio = imageData.height / imageData.width;
     const displayHeight = Math.round(displayWidth * ratio);
     const calculatedHeight = displayHeight; // Keep for backwards compatibility
+
+    console.log(`🖼️ Display size: ${displayWidth}x${displayHeight} for ${imageData.width}x${imageData.height} image`);
 
     // Build visible text from metadata
     let visibleText = '';
