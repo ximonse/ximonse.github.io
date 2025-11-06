@@ -468,6 +468,8 @@ function processImage(file, qualityPreset = 'low') {
 
         const settings = qualitySettings[qualityPreset] || qualitySettings.low;
 
+        console.log(`🖼️ Processing image with quality preset: "${qualityPreset}"`, settings);
+
         // Extract basic file metadata
         const fileMetadata = {
             fileName: file.name,
@@ -509,10 +511,14 @@ function processImage(file, qualityPreset = 'low') {
                     console.warn('EXIF extraction failed:', exifError);
                 }
             }
-            // Scale to configured width for sharper text, maintain aspect ratio
-            const ratio = settings.maxWidth / img.width;
-            canvas.width = settings.maxWidth;
+            // Scale to configured width (but don't upscale if image is smaller)
+            const targetWidth = Math.min(settings.maxWidth, img.width);
+            const ratio = targetWidth / img.width;
+            canvas.width = targetWidth;
             canvas.height = Math.round(img.height * ratio);
+
+            console.log(`📐 Image scaling: original ${img.width}x${img.height} → canvas ${canvas.width}x${canvas.height} (quality: ${qualityPreset})`);
+
 
             // Use high-quality image smoothing for better text clarity
             ctx.imageSmoothingEnabled = true;
@@ -776,6 +782,8 @@ async function processPdfFile(file, qualityPreset = 'low') {
 
     const settings = qualitySettings[qualityPreset] || qualitySettings.low;
 
+    console.log(`📄 Processing PDF with quality preset: "${qualityPreset}"`, settings);
+
     // Configure PDF.js worker
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
@@ -853,6 +861,8 @@ async function processPdfFile(file, qualityPreset = 'low') {
             finalCanvas.height = Math.round(canvas.height * ratio);
 
             finalCtx.drawImage(canvas, 0, 0, finalCanvas.width, finalCanvas.height);
+
+            console.log(`📄 PDF page ${pageNum}: rendered ${canvas.width}x${canvas.height} → final ${finalCanvas.width}x${finalCanvas.height} (scale: ${settings.scale}, quality: ${qualityPreset})`);
 
             // Convert to base64 (WebP or PNG)
             let base64;
