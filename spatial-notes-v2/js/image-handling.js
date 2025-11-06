@@ -526,52 +526,60 @@ function processImage(file, qualityPreset = 'low') {
 
             // Draw image to canvas
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            
-            // Enhance for handwritten notes - moderate contrast improvement
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const data = imageData.data;
-            
-            for (let i = 0; i < data.length; i += 4) {
-                // Simple contrast enhancement without aggressive processing
-                let r = data[i];
-                let g = data[i + 1];
-                let b = data[i + 2];
-                
-                // Calculate grayscale value for contrast enhancement
-                const gray = 0.299 * r + 0.587 * g + 0.114 * b;
-                
-                // Gentle contrast curve - improve readability without artifacts
-                let enhanced;
-                if (gray < 128) {
-                    // Darken text slightly
-                    enhanced = gray * 0.8;
-                } else {
-                    // Lighten background slightly
-                    enhanced = gray + (255 - gray) * 0.3;
-                }
-                
-                // Apply enhancement proportionally to preserve color balance
-                const factor = enhanced / Math.max(gray, 1);
-                
-                data[i] = Math.min(255, Math.max(0, r * factor));
-                data[i + 1] = Math.min(255, Math.max(0, g * factor));
-                data[i + 2] = Math.min(255, Math.max(0, b * factor));
-                // Alpha channel (data[i + 3]) remains unchanged
-            }
-            
-            // Apply the enhanced image data back to canvas
-            ctx.putImageData(imageData, 0, 0);
 
-            // Apply subtle sharpening for text clarity
-            const sharpenedData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const sharpenKernel = [
-                0, -0.5, 0,
-                -0.5, 3, -0.5,
-                0, -0.5, 0
-            ];
-            const sharpenedPixels = applyConvolutionFilter(imageData.data, canvas.width, canvas.height, sharpenKernel);
-            sharpenedData.data.set(sharpenedPixels);
-            ctx.putImageData(sharpenedData, 0, 0);
+            // Apply image enhancement ONLY for low quality (optimized for handwritten notes)
+            // Normal quality preserves original photo quality without processing
+            if (qualityPreset === 'low') {
+                console.log('📝 Applying image enhancement for handwritten notes (low quality only)');
+
+                // Enhance for handwritten notes - moderate contrast improvement
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const data = imageData.data;
+
+                for (let i = 0; i < data.length; i += 4) {
+                    // Simple contrast enhancement without aggressive processing
+                    let r = data[i];
+                    let g = data[i + 1];
+                    let b = data[i + 2];
+
+                    // Calculate grayscale value for contrast enhancement
+                    const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+
+                    // Gentle contrast curve - improve readability without artifacts
+                    let enhanced;
+                    if (gray < 128) {
+                        // Darken text slightly
+                        enhanced = gray * 0.8;
+                    } else {
+                        // Lighten background slightly
+                        enhanced = gray + (255 - gray) * 0.3;
+                    }
+
+                    // Apply enhancement proportionally to preserve color balance
+                    const factor = enhanced / Math.max(gray, 1);
+
+                    data[i] = Math.min(255, Math.max(0, r * factor));
+                    data[i + 1] = Math.min(255, Math.max(0, g * factor));
+                    data[i + 2] = Math.min(255, Math.max(0, b * factor));
+                    // Alpha channel (data[i + 3]) remains unchanged
+                }
+
+                // Apply the enhanced image data back to canvas
+                ctx.putImageData(imageData, 0, 0);
+
+                // Apply subtle sharpening for text clarity
+                const sharpenedData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const sharpenKernel = [
+                    0, -0.5, 0,
+                    -0.5, 3, -0.5,
+                    0, -0.5, 0
+                ];
+                const sharpenedPixels = applyConvolutionFilter(imageData.data, canvas.width, canvas.height, sharpenKernel);
+                sharpenedData.data.set(sharpenedPixels);
+                ctx.putImageData(sharpenedData, 0, 0);
+            } else {
+                console.log('📷 Preserving original photo quality (no enhancement for normal quality)');
+            }
 
             // Try WebP for best quality/size ratio, fallback to PNG, then JPEG
             let base64;
