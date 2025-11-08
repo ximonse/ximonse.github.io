@@ -127,29 +127,16 @@ function toggleView() {
  */
 async function handleImport() {
   if (state.currentView !== 'board') {
-    alert('Byt till Board-vy för att skapa kort');
+    alert('Byt till Board-vy för att lägga till bilder');
     return;
   }
 
-  // Show menu: text or image
-  const choice = prompt('Välj kort-typ:\n1 = Text\n2 = Bild\n3 = Kamera (mobile)', '2');
-
-  if (!choice) return;
-
-  if (choice === '1') {
-    // Text card
-    await addNewCard();
-  } else if (choice === '2' || choice === '3') {
-    // Image card
-    try {
-      const quality = prompt('Välj kvalitet:\n1 = Låg (700px)\n2 = Normal (1200px)\n3 = Hög (2000px)', '2');
-      const qualityMap = { '1': 'low', '2': 'normal', '3': 'high' };
-      const selectedQuality = qualityMap[quality] || 'normal';
-
-      await importImage(selectedQuality);
-    } catch (error) {
-      alert('Misslyckades att importera bild: ' + error.message);
-    }
+  // Open file picker directly (quality dialog shows after)
+  try {
+    await importImage();
+  } catch (error) {
+    console.error('Import failed:', error);
+    alert('Misslyckades att importera bild: ' + error.message);
   }
 }
 

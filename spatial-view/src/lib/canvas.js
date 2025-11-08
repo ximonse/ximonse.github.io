@@ -11,6 +11,11 @@ let layer = null;
 let isPanning = false;
 let cardGroups = new Map(); // Map cardId -> Konva.Group
 
+// Undo/redo stacks
+let undoStack = [];
+let redoStack = [];
+const MAX_UNDO_STACK = 50;
+
 /**
  * Initialize Konva canvas
  */
@@ -222,10 +227,19 @@ async function createNewCard(position) {
   const text = prompt('Skriv kortets text:');
   if (!text) return;
 
-  const cardId = await createCard({
+  const cardData = {
     text,
     tags: [],
     position
+  };
+
+  const cardId = await createCard(cardData);
+
+  // Add to undo stack
+  pushUndo({
+    type: 'create',
+    cardId,
+    card: cardData
   });
 
   // Reload canvas to show new card
@@ -241,6 +255,15 @@ async function openEditDialog(cardId) {
 
   const newText = prompt('Redigera text:', card.text);
   if (newText === null) return; // Cancelled
+  if (newText === card.text) return; // No change
+
+  // Add to undo stack
+  pushUndo({
+    type: 'update',
+    cardId,
+    oldData: { text: card.text },
+    newData: { text: newText }
+  });
 
   await updateCard(cardId, { text: newText });
   await reloadCanvas();
@@ -250,7 +273,17 @@ async function openEditDialog(cardId) {
  * Delete card
  */
 async function handleDeleteCard(cardId) {
-  if (!confirm('Vill du ta bort detta kort?')) return;
+  // Get card data before deletion (for undo)
+  const cards = await getAllCards();
+  const card = cards.find(c => c.id === cardId);
+
+  if (card) {
+    // Add to undo stack
+    pushUndo({
+      type: 'delete',
+      card: { ...card }
+    });
+  }
 
   await deleteCard(cardId);
 
@@ -273,6 +306,71 @@ async function reloadCanvas() {
 
   // Reload from storage
   await loadCards();
+}
+
+/**
+ * Undo/redo functions
+ */
+function pushUndo(action) {
+  undoStack.push(action);
+  if (undoStack.length > MAX_UNDO_STACK) {
+    undoStack.shift();
+  }
+  redoStack = []; // Clear redo stack on new action
+}
+
+async function undo() {
+  if (undoStack.length === 0) {
+    console.log('Nothing to undo');
+    return;
+  }
+
+  const action = undoStack.pop();
+  redoStack.push(action);
+
+  if (action.type === 'delete') {
+    // Restore deleted card
+    const cardId = await createCard(action.card);
+    await reloadCanvas();
+    console.log('Undo: Restored deleted card');
+  } else if (action.type === 'create') {
+    // Delete created card
+    await deleteCard(action.cardId);
+    await reloadCanvas();
+    console.log('Undo: Deleted created card');
+  } else if (action.type === 'update') {
+    // Restore old values
+    await updateCard(action.cardId, action.oldData);
+    await reloadCanvas();
+    console.log('Undo: Restored old card data');
+  }
+}
+
+async function redo() {
+  if (redoStack.length === 0) {
+    console.log('Nothing to redo');
+    return;
+  }
+
+  const action = redoStack.pop();
+  undoStack.push(action);
+
+  if (action.type === 'delete') {
+    // Re-delete card
+    await deleteCard(action.card.id);
+    await reloadCanvas();
+    console.log('Redo: Re-deleted card');
+  } else if (action.type === 'create') {
+    // Re-create card
+    const cardId = await createCard(action.card);
+    await reloadCanvas();
+    console.log('Redo: Re-created card');
+  } else if (action.type === 'update') {
+    // Re-apply new values
+    await updateCard(action.cardId, action.newData);
+    await reloadCanvas();
+    console.log('Redo: Re-applied new card data');
+  }
 }
 
 /**
@@ -361,16 +459,77 @@ function setupCanvasEvents() {
     }
   });
 
-  // Delete card with Delete key
-  window.addEventListener('keydown', (e) => {
+  // Global keyboard shortcuts
+  window.addEventListener('keydown', async (e) => {
+    // Ignore if typing in input/textarea
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+      return;
+    }
+
+    // Ctrl+Z - Undo
+    if (e.ctrlKey && e.key === 'z') {
+      e.preventDefault();
+      await undo();
+      return;
+    }
+
+    // Ctrl+Y - Redo
+    if (e.ctrlKey && e.key === 'y') {
+      e.preventDefault();
+      await redo();
+      return;
+    }
+
+    // S - Save (export)
+    if (e.key === 's' && !e.ctrlKey) {
+      e.preventDefault();
+      await exportCanvas();
+      console.log('Canvas exported');
+      return;
+    }
+
+    // N - New text card
+    if (e.key === 'n') {
+      e.preventDefault();
+      const pointer = stage.getPointerPosition() || { x: stage.width() / 2, y: stage.height() / 2 };
+      const scale = stage.scaleX();
+      const position = {
+        x: (pointer.x - stage.x()) / scale,
+        y: (pointer.y - stage.y()) / scale
+      };
+      await createNewCard(position);
+      return;
+    }
+
+    // I - Import image
+    if (e.key === 'i') {
+      e.preventDefault();
+      await importImage();
+      return;
+    }
+
+    // F - Focus search
+    if (e.key === 'f') {
+      e.preventDefault();
+      const searchInput = document.getElementById('search-input');
+      if (searchInput) {
+        searchInput.focus();
+        searchInput.select();
+      }
+      return;
+    }
+
+    // Delete/Backspace - Delete selected cards
     if (e.key === 'Delete' || e.key === 'Backspace') {
+      e.preventDefault();
       const selectedNodes = layer.find('.selected');
-      selectedNodes.forEach(async (node) => {
+      for (const node of selectedNodes) {
         if (node.getAttr('cardId')) {
           const cardId = node.getAttr('cardId');
           await handleDeleteCard(cardId);
         }
-      });
+      }
+      return;
     }
   });
 }
@@ -435,7 +594,7 @@ export async function exportCanvas() {
 /**
  * Import image and create card
  */
-export async function importImage(quality = 'normal') {
+export async function importImage() {
   return new Promise((resolve, reject) => {
     // Create file input
     const input = document.createElement('input');
@@ -452,6 +611,13 @@ export async function importImage(quality = 'normal') {
     input.onchange = async (e) => {
       const files = Array.from(e.target.files);
       if (files.length === 0) {
+        resolve([]);
+        return;
+      }
+
+      // Show quality selector dialog AFTER files are chosen
+      const quality = await showQualityDialog(files.length);
+      if (!quality) {
         resolve([]);
         return;
       }
@@ -504,6 +670,128 @@ export async function importImage(quality = 'normal') {
 }
 
 /**
+ * Show quality selector dialog
+ */
+function showQualityDialog(fileCount) {
+  return new Promise((resolve) => {
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+    `;
+
+    // Create dialog
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+      background: white;
+      border-radius: 12px;
+      padding: 32px;
+      max-width: 500px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    `;
+
+    dialog.innerHTML = `
+      <h2 style="margin: 0 0 16px 0; font-size: 24px; color: #1a1a1a;">
+        Välj kvalitet
+      </h2>
+      <p style="margin: 0 0 24px 0; color: #666; font-size: 16px;">
+        ${fileCount} ${fileCount === 1 ? 'bild vald' : 'bilder valda'}
+      </p>
+
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <button id="quality-normal" style="
+          padding: 20px;
+          background: #2196F3;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          font-size: 16px;
+          font-weight: 600;
+          cursor: pointer;
+          text-align: left;
+          transition: transform 0.1s;
+        ">
+          <div style="font-size: 18px; margin-bottom: 4px;">📸 Rimlig för stor skärm</div>
+          <div style="font-size: 14px; opacity: 0.9;">1200px, hög kvalitet (rekommenderad)</div>
+        </button>
+
+        <button id="quality-low" style="
+          padding: 20px;
+          background: #4CAF50;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          font-size: 16px;
+          font-weight: 600;
+          cursor: pointer;
+          text-align: left;
+          transition: transform 0.1s;
+        ">
+          <div style="font-size: 18px; margin-bottom: 4px;">✍️ Anpassad för anteckningar</div>
+          <div style="font-size: 14px; opacity: 0.9;">700px, optimerad för vit bakgrund</div>
+        </button>
+
+        <button id="quality-cancel" style="
+          padding: 12px;
+          background: transparent;
+          color: #666;
+          border: none;
+          border-radius: 8px;
+          font-size: 14px;
+          cursor: pointer;
+        ">
+          Avbryt
+        </button>
+      </div>
+    `;
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    // Add hover effects
+    const buttons = dialog.querySelectorAll('button[id^="quality-"]');
+    buttons.forEach(btn => {
+      if (btn.id !== 'quality-cancel') {
+        btn.addEventListener('mouseenter', () => {
+          btn.style.transform = 'scale(1.02)';
+        });
+        btn.addEventListener('mouseleave', () => {
+          btn.style.transform = 'scale(1)';
+        });
+      }
+    });
+
+    // Handle button clicks
+    const cleanup = (quality) => {
+      document.body.removeChild(overlay);
+      resolve(quality);
+    };
+
+    dialog.querySelector('#quality-normal').addEventListener('click', () => cleanup('normal'));
+    dialog.querySelector('#quality-low').addEventListener('click', () => cleanup('low'));
+    dialog.querySelector('#quality-cancel').addEventListener('click', () => cleanup(null));
+
+    // ESC to cancel
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') {
+        cleanup(null);
+        document.removeEventListener('keydown', handleEsc);
+      }
+    };
+    document.addEventListener('keydown', handleEsc);
+  });
+}
+
+/**
  * Setup drag-and-drop for images
  */
 export function setupImageDragDrop() {
@@ -533,7 +821,9 @@ export function setupImageDragDrop() {
     if (files.length === 0) return;
 
     try {
-      const quality = 'normal'; // TODO: Add quality selector dialog
+      // Show quality selector dialog
+      const quality = await showQualityDialog(files.length);
+      if (!quality) return;
 
       for (const file of files) {
         const processed = await processImage(file, quality);
