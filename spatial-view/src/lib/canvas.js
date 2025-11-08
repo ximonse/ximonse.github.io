@@ -48,6 +48,9 @@ export async function initCanvas() {
   // Setup image drag-and-drop
   setupImageDragDrop();
 
+  // Create "Fit All" button
+  createFitAllButton();
+
   console.log('Konva canvas initialized');
 }
 
@@ -506,7 +509,7 @@ function setupCanvasEvents() {
     }
   });
 
-  // Zoom with mouse wheel
+  // Zoom with mouse wheel (faster: 2x speed)
   stage.on('wheel', (e) => {
     e.evt.preventDefault();
 
@@ -518,7 +521,7 @@ function setupCanvasEvents() {
       y: (pointer.y - stage.y()) / oldScale,
     };
 
-    const scaleBy = 1.05;
+    const scaleBy = 1.1; // Was 1.05, now 1.1 for 2x faster zoom
     const newScale = e.evt.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy;
 
     // Limit zoom between 0.1x and 5x
@@ -1186,4 +1189,100 @@ export function setupImageDragDrop() {
   });
 
   console.log('Drag-and-drop enabled for images');
+}
+
+/**
+ * Fit all cards in view
+ */
+export function fitAllCards() {
+  const cards = layer.find('.selected').length > 0
+    ? layer.find('.selected')
+    : layer.getChildren();
+
+  if (cards.length === 0) {
+    console.log('No cards to fit');
+    return;
+  }
+
+  // Calculate bounding box for all cards
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+
+  cards.forEach(card => {
+    const box = card.getClientRect();
+    minX = Math.min(minX, box.x);
+    minY = Math.min(minY, box.y);
+    maxX = Math.max(maxX, box.x + box.width);
+    maxY = Math.max(maxY, box.y + box.height);
+  });
+
+  const width = maxX - minX;
+  const height = maxY - minY;
+
+  // Add padding (10%)
+  const padding = 0.1;
+  const paddedWidth = width * (1 + padding * 2);
+  const paddedHeight = height * (1 + padding * 2);
+
+  // Calculate scale to fit
+  const scaleX = stage.width() / paddedWidth;
+  const scaleY = stage.height() / paddedHeight;
+  const scale = Math.min(scaleX, scaleY, 1); // Don't zoom in beyond 1x
+
+  // Calculate center position
+  const centerX = minX + width / 2;
+  const centerY = minY + height / 2;
+
+  // Set new scale and position
+  stage.scale({ x: scale, y: scale });
+  stage.position({
+    x: stage.width() / 2 - centerX * scale,
+    y: stage.height() / 2 - centerY * scale
+  });
+
+  stage.batchDraw();
+  console.log('Fitted all cards in view');
+}
+
+/**
+ * Create "Fit All" button
+ */
+function createFitAllButton() {
+  const button = document.createElement('button');
+  button.id = 'fit-all-button';
+  button.innerHTML = '🔍 Visa alla';
+  button.style.cssText = `
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    padding: 12px 20px;
+    background: #2196F3;
+    color: white;
+    border: none;
+    border-radius: 24px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    transition: all 0.2s;
+    font-family: sans-serif;
+  `;
+
+  button.addEventListener('mouseenter', () => {
+    button.style.transform = 'scale(1.05)';
+    button.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.2)';
+  });
+
+  button.addEventListener('mouseleave', () => {
+    button.style.transform = 'scale(1)';
+    button.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+  });
+
+  button.addEventListener('click', fitAllCards);
+
+  document.body.appendChild(button);
+  console.log('Fit All button created');
 }
