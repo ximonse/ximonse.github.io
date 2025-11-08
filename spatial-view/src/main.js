@@ -4,7 +4,7 @@
  */
 
 import './styles.css';
-import { initCanvas, addNewCard, exportCanvas } from './lib/canvas.js';
+import { initCanvas, addNewCard, exportCanvas, importImage } from './lib/canvas.js';
 import { initStorage } from './lib/storage.js';
 
 // App state
@@ -126,12 +126,30 @@ function toggleView() {
  * Handle import action
  */
 async function handleImport() {
-  // For now, "Import" creates a new card
-  // TODO: Later implement actual file import
-  if (state.currentView === 'board') {
-    await addNewCard();
-  } else {
+  if (state.currentView !== 'board') {
     alert('Byt till Board-vy för att skapa kort');
+    return;
+  }
+
+  // Show menu: text or image
+  const choice = prompt('Välj kort-typ:\n1 = Text\n2 = Bild\n3 = Kamera (mobile)', '2');
+
+  if (!choice) return;
+
+  if (choice === '1') {
+    // Text card
+    await addNewCard();
+  } else if (choice === '2' || choice === '3') {
+    // Image card
+    try {
+      const quality = prompt('Välj kvalitet:\n1 = Låg (700px)\n2 = Normal (1200px)\n3 = Hög (2000px)', '2');
+      const qualityMap = { '1': 'low', '2': 'normal', '3': 'high' };
+      const selectedQuality = qualityMap[quality] || 'normal';
+
+      await importImage(selectedQuality);
+    } catch (error) {
+      alert('Misslyckades att importera bild: ' + error.message);
+    }
   }
 }
 
