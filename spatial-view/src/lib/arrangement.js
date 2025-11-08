@@ -236,6 +236,7 @@ export function arrangeGridHorizontal(cards, centerPos) {
 /**
  * Arrange cards in overlapping grid (Kanban-style, for showing titles)
  * Max 5 per row, cards overlap vertically to show ~120px of each
+ * Rows start at left edge
  */
 export function arrangeGridTopAligned(cards, centerPos) {
   const maxCols = 5;
@@ -253,9 +254,8 @@ export function arrangeGridTopAligned(cards, centerPos) {
   let currentY = centerPos.y - totalHeight / 2;
 
   rows.forEach(row => {
-    // Calculate row width based on actual card widths
-    const rowWidth = row.reduce((sum, card) => sum + (card.width || 200), 0) + (row.length - 1) * colSpacing;
-    let currentX = centerPos.x - rowWidth / 2;
+    // All rows start at the same X position (left-aligned)
+    let currentX = centerPos.x;
 
     row.forEach(card => {
       const width = card.width || 200;

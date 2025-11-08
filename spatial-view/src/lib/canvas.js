@@ -1009,27 +1009,37 @@ function setupCanvasEvents() {
     // G - Grid arrangement (or combo with next key)
     if (e.key === 'g' && !e.ctrlKey) {
       e.preventDefault();
+      console.log('G pressed, waiting for combo key...');
 
       // Wait for next key press within 500ms
       let nextKeyTimeout = null;
       const keyHandler = async (e2) => {
+        // Ignore if typing
+        if (e2.target.tagName === 'INPUT' || e2.target.tagName === 'TEXTAREA') {
+          return;
+        }
+
         clearTimeout(nextKeyTimeout);
         document.removeEventListener('keydown', keyHandler);
 
         if (e2.key === 'v') {
           // G+V = Grid Vertical Columns
           e2.preventDefault();
+          console.log('G+V pressed');
           await applyArrangement(arrangeGridVertical, 'Grid Vertical');
         } else if (e2.key === 'h') {
           // G+H = Grid Horizontal Packed
           e2.preventDefault();
+          console.log('G+H pressed');
           await applyArrangement(arrangeGridHorizontal, 'Grid Horizontal');
         } else if (e2.key === 't') {
           // G+T = Grid Top Aligned
           e2.preventDefault();
+          console.log('G+T pressed');
           await applyArrangement(arrangeGridTopAligned, 'Grid Top-Aligned');
         } else {
           // Just G = simple grid
+          console.log('G alone pressed');
           await applyArrangement(arrangeGrid, 'Grid');
         }
       };
@@ -1039,6 +1049,7 @@ function setupCanvasEvents() {
       // Timeout: if no second key, just do simple grid
       nextKeyTimeout = setTimeout(async () => {
         document.removeEventListener('keydown', keyHandler);
+        console.log('G timeout, applying simple grid');
         await applyArrangement(arrangeGrid, 'Grid');
       }, 500);
 
