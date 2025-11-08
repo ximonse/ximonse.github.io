@@ -4,7 +4,7 @@
  */
 
 import './styles.css';
-import { initCanvas, addNewCard, exportCanvas, importImage } from './lib/canvas.js';
+import { initCanvas, addNewCard, exportCanvas, importImage, searchCards } from './lib/canvas.js';
 import { initStorage } from './lib/storage.js';
 
 // App state
@@ -143,10 +143,9 @@ async function handleImport() {
 /**
  * Handle search input
  */
-function handleSearch(event) {
+async function handleSearch(event) {
   const query = event.target.value;
-  console.log('Search:', query);
-  // TODO: Implement search
+  await searchCards(query);
 }
 
 /**

@@ -5,11 +5,25 @@
 import Konva from 'konva';
 import { getAllCards, updateCard, createCard, deleteCard } from './storage.js';
 import { processImage } from '../utils/image-processing.js';
+import {
+  arrangeVertical,
+  arrangeHorizontal,
+  arrangeGrid,
+  arrangeCluster,
+  arrangeGridVertical,
+  arrangeGridHorizontal,
+  arrangeGridTopAligned
+} from './arrangement.js';
 
 let stage = null;
 let layer = null;
 let isPanning = false;
 let cardGroups = new Map(); // Map cardId -> Konva.Group
+
+// Selection rectangle
+let selectionRectangle = null;
+let selectionStartPos = null;
+let isSelecting = false;
 
 // Undo/redo stacks
 let undoStack = [];
@@ -38,18 +52,28 @@ export async function initCanvas() {
   // Create main layer
   layer = new Konva.Layer();
   stage.add(layer);
-  
+
+  // Create selection rectangle (hidden by default)
+  selectionRectangle = new Konva.Rect({
+    fill: 'rgba(33, 150, 243, 0.1)',
+    stroke: '#2196F3',
+    strokeWidth: 1,
+    visible: false
+  });
+  layer.add(selectionRectangle);
+
   // Load cards from storage
   await loadCards();
-  
+
   // Setup event listeners
   setupCanvasEvents();
 
   // Setup image drag-and-drop
   setupImageDragDrop();
 
-  // Create "Fit All" button
+  // Create floating buttons
   createFitAllButton();
+  createAddButton();
 
   console.log('Konva canvas initialized');
 }
@@ -89,21 +113,133 @@ function renderCard(cardData) {
   group.setAttr('cardId', cardData.id);
 
   // Click to select (for deletion)
-  const background = group.findOne('Rect');
   group.on('click', function() {
     const isSelected = this.hasName('selected');
+    const background = this.findOne('Rect');
 
     if (isSelected) {
       this.removeName('selected');
-      background.stroke('#e0e0e0');
-      background.strokeWidth(1);
+      if (background) {
+        background.stroke('#e0e0e0');
+        background.strokeWidth(1);
+      }
     } else {
       this.addName('selected');
-      background.stroke('#2196F3');
-      background.strokeWidth(3);
+      if (background) {
+        background.stroke('#2196F3');
+        background.strokeWidth(3);
+      }
     }
 
     layer.batchDraw();
+  });
+
+  // Touch long-press to flip image cards
+  if (cardData.image) {
+    let touchTimer = null;
+    let touchStartPos = null;
+
+    group.on('touchstart', function(e) {
+      const pos = this.position();
+      touchStartPos = { x: pos.x, y: pos.y };
+
+      touchTimer = setTimeout(async () => {
+        // Check if card hasn't moved (not dragging)
+        const currentPos = this.position();
+        const moved = Math.abs(currentPos.x - touchStartPos.x) > 5 ||
+                      Math.abs(currentPos.y - touchStartPos.y) > 5;
+
+        if (!moved) {
+          await flipCard(cardData.id);
+          touchTimer = null;
+        }
+      }, 500); // 500ms long press
+    });
+
+    group.on('touchend touchcancel', function() {
+      if (touchTimer) {
+        clearTimeout(touchTimer);
+        touchTimer = null;
+      }
+    });
+
+    group.on('dragstart', function() {
+      if (touchTimer) {
+        clearTimeout(touchTimer);
+        touchTimer = null;
+      }
+    });
+  }
+
+  // Group drag - move all selected cards together
+  let dragStartPositions = null;
+
+  group.on('dragstart', function() {
+    const isSelected = this.hasName('selected');
+
+    if (isSelected) {
+      // Save positions of all selected cards
+      dragStartPositions = new Map();
+      const selectedNodes = layer.find('.selected');
+
+      selectedNodes.forEach(node => {
+        if (node !== this && node.getAttr('cardId')) {
+          dragStartPositions.set(node, {
+            x: node.x(),
+            y: node.y()
+          });
+        }
+      });
+    }
+  });
+
+  group.on('dragmove', function() {
+    if (dragStartPositions && dragStartPositions.size > 0) {
+      // Calculate delta from this card's movement
+      const currentPos = this.position();
+      const startPos = { x: this.getAttr('startX'), y: this.getAttr('startY') };
+
+      // Store start position on first move
+      if (startPos.x === undefined) {
+        this.setAttr('startX', currentPos.x);
+        this.setAttr('startY', currentPos.y);
+        return;
+      }
+
+      const delta = {
+        x: currentPos.x - startPos.x,
+        y: currentPos.y - startPos.y
+      };
+
+      // Move all other selected cards by the same delta
+      dragStartPositions.forEach((originalPos, node) => {
+        node.position({
+          x: originalPos.x + delta.x,
+          y: originalPos.y + delta.y
+        });
+      });
+
+      layer.batchDraw();
+    }
+  });
+
+  group.on('dragend', function() {
+    if (dragStartPositions && dragStartPositions.size > 0) {
+      // Update all moved cards in database
+      dragStartPositions.forEach(async (originalPos, node) => {
+        const cardId = node.getAttr('cardId');
+        if (cardId) {
+          const position = { x: node.x(), y: node.y() };
+          await updateCard(cardId, { position });
+        }
+      });
+
+      dragStartPositions = null;
+    }
+
+    // Clear start position attributes
+    this.setAttr('startX', undefined);
+    this.setAttr('startY', undefined);
   });
 
   layer.add(group);
@@ -306,45 +442,102 @@ async function createNewCard(position) {
 }
 
 /**
- * Open edit dialog for card
+ * Inline text editor using HTML textarea overlay
  */
-async function openEditDialog(cardId) {
-  const card = await getAllCards().then(cards => cards.find(c => c.id === cardId));
-  if (!card) return;
+function createInlineEditor(cardId, group, currentText, isImageBack = false) {
+  const cardGroup = cardGroups.get(cardId);
+  if (!cardGroup) return;
 
-  // Check if it's an image card
-  if (card.image) {
-    // Image card - edit back side text
-    if (card.flipped) {
-      // Already flipped, edit back text
-      const newText = prompt('Redigera baksidans text:', card.backText || '');
-      if (newText === null) return; // Cancelled
+  // Get card position and dimensions
+  const background = group.findOne('Rect');
+  if (!background) return;
 
+  const width = background.width();
+  const height = background.height();
+
+  // Get absolute position on screen accounting for stage transform
+  const transform = group.getAbsoluteTransform();
+  const topLeft = transform.point({ x: 0, y: 0 });
+
+  // Get stage container position
+  const container = stage.container();
+  const containerRect = container.getBoundingClientRect();
+
+  const screenX = containerRect.left + topLeft.x;
+  const screenY = containerRect.top + topLeft.y;
+
+  const scale = stage.scaleX();
+
+  // Create textarea overlay
+  const textarea = document.createElement('textarea');
+  textarea.value = currentText || '';
+
+  const scaledWidth = width * scale;
+  const scaledHeight = height * scale;
+  const padding = 16;
+
+  textarea.style.cssText = `
+    position: fixed;
+    left: ${screenX + padding}px;
+    top: ${screenY + padding}px;
+    width: ${scaledWidth - padding * 2}px;
+    height: ${scaledHeight - 60}px;
+    padding: 8px;
+    font-size: 16px;
+    font-family: sans-serif;
+    border: 2px solid #2196F3;
+    border-radius: 6px;
+    resize: none;
+    z-index: 10000;
+    background: ${isImageBack ? '#fffacd' : '#ffffff'};
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  `;
+
+  // Create save button
+  const saveBtn = document.createElement('button');
+  saveBtn.textContent = isImageBack ? 'Spara & Vänd tillbaka' : 'Spara';
+  saveBtn.style.cssText = `
+    position: fixed;
+    left: ${screenX + padding}px;
+    top: ${screenY + scaledHeight - 44}px;
+    padding: 8px 16px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    z-index: 10001;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  `;
+
+  const cleanup = () => {
+    if (textarea.parentNode) document.body.removeChild(textarea);
+    if (saveBtn.parentNode) document.body.removeChild(saveBtn);
+  };
+
+  saveBtn.addEventListener('click', async () => {
+    const newText = textarea.value;
+
+    if (isImageBack) {
+      // Save back text and flip card back
       pushUndo({
         type: 'update',
         cardId,
-        oldData: { backText: card.backText },
+        oldData: { backText: currentText },
         newData: { backText: newText }
       });
 
       await updateCard(cardId, { backText: newText });
-      await reloadCanvas();
+      await flipCard(cardId); // Flip back to front
     } else {
-      // Not flipped, ask to flip
-      const choice = confirm('Vill du vända kortet för att skriva på baksidan?\n\nOK = Vänd kort\nAvbryt = Redigera filnamn');
-
-      if (choice) {
-        // Flip card
-        await flipCard(cardId);
-      } else {
-        // Edit filename
-        const newText = prompt('Redigera filnamn:', card.text);
-        if (newText === null || newText === card.text) return;
-
+      // Save text card content
+      if (newText !== currentText) {
         pushUndo({
           type: 'update',
           cardId,
-          oldData: { text: card.text },
+          oldData: { text: currentText },
           newData: { text: newText }
         });
 
@@ -352,21 +545,49 @@ async function openEditDialog(cardId) {
         await reloadCanvas();
       }
     }
+
+    cleanup();
+  });
+
+  // Close on Escape
+  const escHandler = (e) => {
+    if (e.key === 'Escape') {
+      cleanup();
+      document.removeEventListener('keydown', escHandler);
+    }
+  };
+  document.addEventListener('keydown', escHandler);
+
+  // Save on Ctrl+Enter
+  textarea.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.key === 'Enter') {
+      saveBtn.click();
+    }
+  });
+
+  document.body.appendChild(textarea);
+  document.body.appendChild(saveBtn);
+  textarea.focus();
+  textarea.select();
+}
+
+/**
+ * Open edit dialog for card
+ */
+async function openEditDialog(cardId) {
+  const cards = await getAllCards();
+  const card = cards.find(c => c.id === cardId);
+  if (!card) return;
+
+  const group = cardGroups.get(cardId);
+  if (!group) return;
+
+  if (card.image && card.flipped) {
+    // Flipped image card: inline edit back text
+    createInlineEditor(cardId, group, card.backText || '', true);
   } else {
-    // Text card - normal edit
-    const newText = prompt('Redigera text:', card.text);
-    if (newText === null) return; // Cancelled
-    if (newText === card.text) return; // No change
-
-    pushUndo({
-      type: 'update',
-      cardId,
-      oldData: { text: card.text },
-      newData: { text: newText }
-    });
-
-    await updateCard(cardId, { text: newText });
-    await reloadCanvas();
+    // Text card: inline edit
+    createInlineEditor(cardId, group, card.text || '', false);
   }
 }
 
@@ -390,6 +611,16 @@ async function flipCard(cardId) {
 
   await updateCard(cardId, { flipped: newFlipped });
   await reloadCanvas();
+
+  // If flipping to back side, open editor automatically
+  if (newFlipped) {
+    setTimeout(() => {
+      const group = cardGroups.get(cardId);
+      if (group) {
+        createInlineEditor(cardId, group, card.backText || '', true);
+      }
+    }, 100); // Small delay to let canvas reload
+  }
 }
 
 /**
@@ -497,6 +728,37 @@ async function redo() {
 }
 
 /**
+ * Update selection based on selection rectangle
+ */
+function updateSelection() {
+  const selBox = selectionRectangle.getClientRect();
+
+  layer.find('.selected').forEach(group => {
+    const background = group.findOne('Rect');
+    group.removeName('selected');
+    if (background) {
+      background.stroke('#e0e0e0');
+      background.strokeWidth(1);
+    }
+  });
+
+  const groups = layer.getChildren(node => node.getAttr('cardId'));
+  groups.forEach(group => {
+    const groupBox = group.getClientRect();
+
+    // Check if rectangles intersect
+    if (Konva.Util.haveIntersection(selBox, groupBox)) {
+      const background = group.findOne('Rect');
+      group.addName('selected');
+      if (background) {
+        background.stroke('#2196F3');
+        background.strokeWidth(3);
+      }
+    }
+  });
+}
+
+/**
  * Setup canvas events
  */
 function setupCanvasEvents() {
@@ -538,19 +800,71 @@ function setupCanvasEvents() {
     stage.batchDraw();
   });
 
-  // Pan with middle mouse or space+drag
+  // Pan with middle mouse or Ctrl+drag
+  // Selection rectangle with left-click drag on stage
   stage.on('mousedown', (e) => {
-    if (e.evt.button === 1 || (e.evt.button === 0 && e.evt.shiftKey)) {
+    // Ctrl+drag or middle mouse = pan
+    if (e.evt.button === 1 || (e.evt.button === 0 && e.evt.ctrlKey)) {
       isPanning = true;
       stage.draggable(true);
       stage.container().style.cursor = 'grabbing';
+      return;
+    }
+
+    // Left click on stage (not on card) = start selection
+    if (e.target === stage && e.evt.button === 0) {
+      isSelecting = true;
+      const pos = stage.getPointerPosition();
+      const scale = stage.scaleX();
+      selectionStartPos = {
+        x: (pos.x - stage.x()) / scale,
+        y: (pos.y - stage.y()) / scale
+      };
+      selectionRectangle.width(0);
+      selectionRectangle.height(0);
+      selectionRectangle.visible(true);
     }
   });
 
+  stage.on('mousemove', () => {
+    if (!isSelecting) return;
+
+    const pos = stage.getPointerPosition();
+    const scale = stage.scaleX();
+    const currentPos = {
+      x: (pos.x - stage.x()) / scale,
+      y: (pos.y - stage.y()) / scale
+    };
+
+    const x = Math.min(selectionStartPos.x, currentPos.x);
+    const y = Math.min(selectionStartPos.y, currentPos.y);
+    const width = Math.abs(currentPos.x - selectionStartPos.x);
+    const height = Math.abs(currentPos.y - selectionStartPos.y);
+
+    selectionRectangle.setAttrs({
+      x: x,
+      y: y,
+      width: width,
+      height: height
+    });
+
+    // Update selection
+    updateSelection();
+    layer.batchDraw();
+  });
+
   stage.on('mouseup', () => {
-    isPanning = false;
-    stage.draggable(false);
-    stage.container().style.cursor = 'default';
+    if (isPanning) {
+      isPanning = false;
+      stage.draggable(false);
+      stage.container().style.cursor = 'default';
+    }
+
+    if (isSelecting) {
+      isSelecting = false;
+      selectionRectangle.visible(false);
+      layer.batchDraw();
+    }
   });
 
   // Save card position when dragged
@@ -564,12 +878,25 @@ function setupCanvasEvents() {
     }
   });
 
-  // Double-click to edit card
-  stage.on('dblclick dbltap', (e) => {
+  // Double-click to edit card or flip image card
+  stage.on('dblclick dbltap', async (e) => {
     const target = e.target;
     if (target.parent && target.parent.getAttr('cardId')) {
       const cardId = target.parent.getAttr('cardId');
-      openEditDialog(cardId);
+
+      // Get card data to check if it's an image card
+      const cards = await getAllCards();
+      const card = cards.find(c => c.id === cardId);
+
+      if (!card) return;
+
+      if (card.image) {
+        // Image card: always flip on double-click (toggle)
+        await flipCard(cardId);
+      } else {
+        // Text card: open edit dialog
+        openEditDialog(cardId);
+      }
     } else if (target === stage) {
       // Double-click on canvas to create new card
       const pointer = stage.getPointerPosition();
@@ -600,6 +927,22 @@ function setupCanvasEvents() {
     if (e.ctrlKey && e.key === 'y') {
       e.preventDefault();
       await redo();
+      return;
+    }
+
+    // Ctrl+A - Select all cards
+    if (e.ctrlKey && e.key === 'a') {
+      e.preventDefault();
+      const allCards = layer.getChildren(node => node.getAttr('cardId'));
+      allCards.forEach(group => {
+        const background = group.findOne('Rect');
+        group.addName('selected');
+        if (background) {
+          background.stroke('#2196F3');
+          background.strokeWidth(3);
+        }
+      });
+      layer.batchDraw();
       return;
     }
 
@@ -649,16 +992,63 @@ function setupCanvasEvents() {
       return;
     }
 
-    // V - Flip selected image cards
-    if (e.key === 'v') {
+    // V - Vertical arrangement
+    if (e.key === 'v' && !e.ctrlKey) {
       e.preventDefault();
-      const selectedNodes = layer.find('.selected');
-      for (const node of selectedNodes) {
-        if (node.getAttr('cardId')) {
-          const cardId = node.getAttr('cardId');
-          await flipCard(cardId);
+      await applyArrangement(arrangeVertical, 'Vertical');
+      return;
+    }
+
+    // H - Horizontal arrangement
+    if (e.key === 'h' && !e.ctrlKey) {
+      e.preventDefault();
+      await applyArrangement(arrangeHorizontal, 'Horizontal');
+      return;
+    }
+
+    // G - Grid arrangement (or combo with next key)
+    if (e.key === 'g' && !e.ctrlKey) {
+      e.preventDefault();
+
+      // Wait for next key press within 500ms
+      let nextKeyTimeout = null;
+      const keyHandler = async (e2) => {
+        clearTimeout(nextKeyTimeout);
+        document.removeEventListener('keydown', keyHandler);
+
+        if (e2.key === 'v') {
+          // G+V = Grid Vertical Columns
+          e2.preventDefault();
+          await applyArrangement(arrangeGridVertical, 'Grid Vertical');
+        } else if (e2.key === 'h') {
+          // G+H = Grid Horizontal Packed
+          e2.preventDefault();
+          await applyArrangement(arrangeGridHorizontal, 'Grid Horizontal');
+        } else if (e2.key === 't') {
+          // G+T = Grid Top Aligned
+          e2.preventDefault();
+          await applyArrangement(arrangeGridTopAligned, 'Grid Top-Aligned');
+        } else {
+          // Just G = simple grid
+          await applyArrangement(arrangeGrid, 'Grid');
         }
-      }
+      };
+
+      document.addEventListener('keydown', keyHandler);
+
+      // Timeout: if no second key, just do simple grid
+      nextKeyTimeout = setTimeout(async () => {
+        document.removeEventListener('keydown', keyHandler);
+        await applyArrangement(arrangeGrid, 'Grid');
+      }, 500);
+
+      return;
+    }
+
+    // Q - Cluster arrangement
+    if (e.key === 'q' && !e.ctrlKey) {
+      e.preventDefault();
+      await applyArrangement(arrangeCluster, 'Cluster');
       return;
     }
 
@@ -834,15 +1224,6 @@ function showCommandPalette() {
       if (searchInput) {
         searchInput.focus();
         searchInput.select();
-      }
-    }},
-    { key: 'V', icon: '🔄', name: 'Vänd bildkort', desc: 'Vänd markerade bildkort för att skriva på baksidan', action: async () => {
-      const selectedNodes = layer.find('.selected');
-      for (const node of selectedNodes) {
-        if (node.getAttr('cardId')) {
-          const cardId = node.getAttr('cardId');
-          await flipCard(cardId);
-        }
       }
     }},
     { key: 'S', icon: '💾', name: 'Spara/Exportera', desc: 'Exportera canvas till JSON-fil', action: async () => {
@@ -1247,32 +1628,103 @@ export function fitAllCards() {
 }
 
 /**
+ * Search and highlight cards
+ * @param {string} query - Search query
+ */
+export async function searchCards(query) {
+  if (!layer) return;
+
+  const allCards = await getAllCards();
+  const allGroups = layer.getChildren(node => node.getAttr('cardId'));
+
+  if (!query || query.trim() === '') {
+    // Clear search - reset all cards
+    allGroups.forEach(group => {
+      group.opacity(1);
+      const background = group.findOne('Rect');
+      if (!group.hasName('selected')) {
+        if (background) {
+          background.stroke('#e0e0e0');
+          background.strokeWidth(1);
+        }
+      }
+    });
+    layer.batchDraw();
+    return;
+  }
+
+  const lowerQuery = query.toLowerCase();
+  const matchingCards = new Set();
+
+  // Find matching cards
+  allCards.forEach(card => {
+    const text = (card.text || '').toLowerCase();
+    const backText = (card.backText || '').toLowerCase();
+
+    if (text.includes(lowerQuery) || backText.includes(lowerQuery)) {
+      matchingCards.add(card.id);
+    }
+  });
+
+  // Apply visual effects
+  allGroups.forEach(group => {
+    const cardId = group.getAttr('cardId');
+    const background = group.findOne('Rect');
+    const isMatch = matchingCards.has(cardId);
+
+    if (isMatch) {
+      // Matching card: mark and full opacity
+      group.opacity(1);
+      group.addName('selected');
+      if (background) {
+        background.stroke('#2196F3');
+        background.strokeWidth(3);
+      }
+    } else {
+      // Non-matching card: fade and remove selection
+      group.opacity(0.3);
+      group.removeName('selected');
+      if (background) {
+        background.stroke('#e0e0e0');
+        background.strokeWidth(1);
+      }
+    }
+  });
+
+  layer.batchDraw();
+  console.log(`Search: found ${matchingCards.size} matches for "${query}"`);
+}
+
+/**
  * Create "Fit All" button
  */
 function createFitAllButton() {
   const button = document.createElement('button');
   button.id = 'fit-all-button';
-  button.innerHTML = '🔍 Visa alla';
+  button.innerHTML = '🔍';
+  button.title = 'Visa alla kort';
   button.style.cssText = `
     position: fixed;
     bottom: 24px;
     right: 24px;
-    padding: 12px 20px;
+    width: 56px;
+    height: 56px;
     background: #2196F3;
     color: white;
     border: none;
-    border-radius: 24px;
-    font-size: 14px;
-    font-weight: 600;
+    border-radius: 50%;
+    font-size: 24px;
     cursor: pointer;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     z-index: 1000;
     transition: all 0.2s;
-    font-family: sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   `;
 
   button.addEventListener('mouseenter', () => {
-    button.style.transform = 'scale(1.05)';
+    button.style.transform = 'scale(1.1)';
     button.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.2)';
   });
 
@@ -1285,4 +1737,352 @@ function createFitAllButton() {
 
   document.body.appendChild(button);
   console.log('Fit All button created');
+}
+
+/**
+ * Create floating add button
+ */
+function createAddButton() {
+  const button = document.createElement('button');
+  button.id = 'add-button';
+  button.innerHTML = '+';
+  button.title = 'Nytt kort (N) | Långpress: Importera bild (I) | Extra lång: Command (C)';
+  button.style.cssText = `
+    position: fixed;
+    bottom: 96px;
+    right: 24px;
+    width: 56px;
+    height: 56px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    font-size: 32px;
+    font-weight: 300;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  `;
+
+  let pressStartTime = null;
+
+  const onPressStart = () => {
+    pressStartTime = Date.now();
+    button.style.transform = 'scale(0.95)';
+  };
+
+  const onPressEnd = () => {
+    const pressDuration = Date.now() - pressStartTime;
+    button.style.transform = 'scale(1)';
+
+    // Determine action based on press duration
+    if (pressDuration >= 1500) {
+      // Extra long press = Command palette
+      showCommandPalette();
+    } else if (pressDuration >= 500) {
+      // Long press = Import image
+      importImage();
+    } else {
+      // Short press = Create new card
+      const pointer = stage.getPointerPosition();
+      const scale = stage.scaleX();
+      const position = pointer ? {
+        x: (pointer.x - stage.x()) / scale,
+        y: (pointer.y - stage.y()) / scale
+      } : { x: 100, y: 100 };
+      createNewCard(position);
+    }
+  };
+
+  let isPressed = false;
+
+  button.addEventListener('mousedown', () => {
+    isPressed = true;
+    onPressStart();
+  });
+
+  button.addEventListener('mouseup', () => {
+    if (isPressed) {
+      isPressed = false;
+      onPressEnd();
+    }
+  });
+
+  button.addEventListener('mouseleave', () => {
+    if (isPressed) {
+      isPressed = false;
+      button.style.transform = 'scale(1)';
+    }
+  });
+
+  button.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    isPressed = true;
+    onPressStart();
+  });
+
+  button.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    if (isPressed) {
+      isPressed = false;
+      onPressEnd();
+    }
+  });
+
+  button.addEventListener('mouseenter', () => {
+    if (!isPressed) {
+      button.style.transform = 'scale(1.1)';
+      button.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.2)';
+    }
+  });
+
+  button.addEventListener('mouseleave', () => {
+    if (!isPressed) {
+      button.style.transform = 'scale(1)';
+      button.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+    }
+  });
+
+  document.body.appendChild(button);
+  console.log('Add button created');
+}
+
+/**
+ * Apply arrangement to selected cards with animation
+ */
+async function applyArrangement(arrangeFn, arrangeName) {
+  const selectedGroups = layer.find('.selected');
+  if (selectedGroups.length === 0) {
+    console.log('No cards selected for arrangement');
+    return;
+  }
+
+  // Get mouse/center position
+  const pointer = stage.getPointerPosition();
+  const scale = stage.scaleX();
+  const centerPos = pointer ? {
+    x: (pointer.x - stage.x()) / scale,
+    y: (pointer.y - stage.y()) / scale
+  } : {
+    x: 0,
+    y: 0
+  };
+
+  // Prepare card data for arrangement
+  const cardsData = await Promise.all(
+    selectedGroups.map(async group => {
+      const cardId = group.getAttr('cardId');
+      const cards = await getAllCards();
+      const card = cards.find(c => c.id === cardId);
+      const background = group.findOne('Rect');
+
+      return {
+        id: cardId,
+        width: background ? background.width() : 200,
+        height: background ? background.height() : 150,
+        card: card
+      };
+    })
+  );
+
+  // Calculate new positions
+  const newPositions = arrangeFn(cardsData, centerPos);
+
+  // Animate cards to new positions
+  newPositions.forEach(({ id, x, y }) => {
+    const group = cardGroups.get(id);
+    if (!group) return;
+
+    // Animate with Konva
+    group.to({
+      x: x,
+      y: y,
+      duration: 0.3,
+      easing: Konva.Easings.EaseOut
+    });
+
+    // Update database
+    updateCard(id, { position: { x, y } });
+  });
+
+  layer.batchDraw();
+  console.log(`Arranged ${newPositions.length} cards: ${arrangeName}`);
+}
+
+/**
+ * Custom modal dialog (replaces prompt)
+ */
+function showTextInputDialog(title, defaultValue = '') {
+  return new Promise((resolve) => {
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      backdrop-filter: blur(4px);
+    `;
+
+    // Create dialog
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      padding: 24px;
+      width: 90%;
+      max-width: 500px;
+      animation: slideDown 0.2s ease-out;
+    `;
+
+    // Add animation keyframe
+    if (!document.getElementById('dialog-animation-style')) {
+      const style = document.createElement('style');
+      style.id = 'dialog-animation-style';
+      style.textContent = `
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            transform: translateY(-20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    // Title
+    const titleEl = document.createElement('h3');
+    titleEl.textContent = title;
+    titleEl.style.cssText = `
+      margin: 0 0 16px 0;
+      font-size: 18px;
+      font-weight: 600;
+      color: #1a1a1a;
+    `;
+
+    // Input
+    const input = document.createElement('textarea');
+    input.value = defaultValue;
+    input.style.cssText = `
+      width: 100%;
+      min-height: 100px;
+      padding: 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 16px;
+      font-family: sans-serif;
+      resize: vertical;
+      margin-bottom: 16px;
+      transition: border-color 0.2s;
+    `;
+    input.addEventListener('focus', () => {
+      input.style.borderColor = '#2196F3';
+    });
+    input.addEventListener('blur', () => {
+      input.style.borderColor = '#e0e0e0';
+    });
+
+    // Buttons container
+    const buttons = document.createElement('div');
+    buttons.style.cssText = `
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    `;
+
+    // Cancel button
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Avbryt';
+    cancelBtn.style.cssText = `
+      padding: 10px 20px;
+      background: #f5f5f5;
+      color: #666;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background 0.2s;
+    `;
+    cancelBtn.addEventListener('mouseenter', () => {
+      cancelBtn.style.background = '#e0e0e0';
+    });
+    cancelBtn.addEventListener('mouseleave', () => {
+      cancelBtn.style.background = '#f5f5f5';
+    });
+    cancelBtn.addEventListener('click', () => {
+      document.body.removeChild(overlay);
+      resolve(null);
+    });
+
+    // OK button
+    const okBtn = document.createElement('button');
+    okBtn.textContent = 'OK';
+    okBtn.style.cssText = `
+      padding: 10px 20px;
+      background: #2196F3;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    `;
+    okBtn.addEventListener('mouseenter', () => {
+      okBtn.style.background = '#1976D2';
+    });
+    okBtn.addEventListener('mouseleave', () => {
+      okBtn.style.background = '#2196F3';
+    });
+    okBtn.addEventListener('click', () => {
+      document.body.removeChild(overlay);
+      resolve(input.value);
+    });
+
+    // Build dialog
+    buttons.appendChild(cancelBtn);
+    buttons.appendChild(okBtn);
+    dialog.appendChild(titleEl);
+    dialog.appendChild(input);
+    dialog.appendChild(buttons);
+    overlay.appendChild(dialog);
+
+    // Handle escape key
+    const escapeHandler = (e) => {
+      if (e.key === 'Escape') {
+        document.body.removeChild(overlay);
+        document.removeEventListener('keydown', escapeHandler);
+        resolve(null);
+      }
+    };
+    document.addEventListener('keydown', escapeHandler);
+
+    // Handle enter key (submit)
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.ctrlKey) {
+        okBtn.click();
+      }
+    });
+
+    // Show dialog
+    document.body.appendChild(overlay);
+    input.focus();
+    input.select();
+  });
 }
