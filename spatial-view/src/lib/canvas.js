@@ -147,6 +147,7 @@ function renderTextCard(group, cardData) {
 function renderImageCard(group, cardData) {
   const imageObj = new Image();
   const imageData = cardData.image;
+  const isFlipped = cardData.flipped || false;
 
   imageObj.onload = function() {
     // Calculate card dimensions (maintain aspect ratio)
@@ -161,57 +162,112 @@ function renderImageCard(group, cardData) {
       height = height * ratio;
     }
 
-    // Background/border
-    const background = new Konva.Rect({
-      width: width,
-      height: height,
-      fill: '#ffffff',
-      stroke: '#e0e0e0',
-      strokeWidth: 1,
-      cornerRadius: 8,
-      shadowColor: 'black',
-      shadowBlur: 10,
-      shadowOpacity: 0.1,
-      shadowOffset: { x: 0, y: 2 }
-    });
+    // Store dimensions on group for flip
+    group.setAttr('cardWidth', width);
+    group.setAttr('cardHeight', height);
 
-    // Image
-    const konvaImage = new Konva.Image({
-      image: imageObj,
-      width: width,
-      height: height,
-      cornerRadius: 8
-    });
-
-    // Text overlay if exists
-    if (cardData.text) {
-      const textBg = new Konva.Rect({
-        y: height - 40,
+    if (isFlipped) {
+      // Show back side (text)
+      const background = new Konva.Rect({
         width: width,
-        height: 40,
-        fill: 'rgba(0, 0, 0, 0.7)',
-        cornerRadius: [0, 0, 8, 8]
+        height: height,
+        fill: '#fffacd',
+        stroke: '#e0e0e0',
+        strokeWidth: 1,
+        cornerRadius: 8,
+        shadowColor: 'black',
+        shadowBlur: 10,
+        shadowOpacity: 0.1,
+        shadowOffset: { x: 0, y: 2 }
       });
 
       const text = new Konva.Text({
-        text: cardData.text,
-        y: height - 35,
-        x: 10,
-        width: width - 20,
+        text: cardData.backText || 'Dubbelklicka för att redigera baksidan...',
+        x: 16,
+        y: 16,
+        width: width - 32,
+        height: height - 32,
         fontSize: 14,
         fontFamily: 'sans-serif',
-        fill: '#ffffff',
+        fill: '#1a1a1a',
         wrap: 'word',
-        ellipsis: true
+        align: 'left',
+        verticalAlign: 'top'
+      });
+
+      group.add(background);
+      group.add(text);
+    } else {
+      // Show front side (image)
+      const background = new Konva.Rect({
+        width: width,
+        height: height,
+        fill: '#ffffff',
+        stroke: '#e0e0e0',
+        strokeWidth: 1,
+        cornerRadius: 8,
+        shadowColor: 'black',
+        shadowBlur: 10,
+        shadowOpacity: 0.1,
+        shadowOffset: { x: 0, y: 2 }
+      });
+
+      const konvaImage = new Konva.Image({
+        image: imageObj,
+        width: width,
+        height: height,
+        cornerRadius: 8
       });
 
       group.add(background);
       group.add(konvaImage);
-      group.add(textBg);
-      group.add(text);
-    } else {
-      group.add(background);
-      group.add(konvaImage);
+
+      // Tooltip on hover (show filename)
+      group.on('mouseenter', function() {
+        document.body.style.cursor = 'pointer';
+
+        // Show tooltip
+        const tooltip = document.createElement('div');
+        tooltip.id = 'card-tooltip';
+        tooltip.style.cssText = `
+          position: fixed;
+          background: rgba(0, 0, 0, 0.8);
+          color: white;
+          padding: 8px 12px;
+          border-radius: 6px;
+          font-size: 14px;
+          z-index: 10001;
+          pointer-events: none;
+          font-family: sans-serif;
+        `;
+        tooltip.textContent = cardData.text || 'Bild';
+        document.body.appendChild(tooltip);
+
+        // Update tooltip position on mouse move
+        const updateTooltip = (e) => {
+          tooltip.style.left = (e.clientX + 10) + 'px';
+          tooltip.style.top = (e.clientY + 10) + 'px';
+        };
+
+        stage.on('mousemove', updateTooltip);
+        group.setAttr('tooltipHandler', updateTooltip);
+      });
+
+      group.on('mouseleave', function() {
+        document.body.style.cursor = 'default';
+
+        // Remove tooltip
+        const tooltip = document.getElementById('card-tooltip');
+        if (tooltip) {
+          document.body.removeChild(tooltip);
+        }
+
+        // Remove mousemove handler
+        const handler = group.getAttr('tooltipHandler');
+        if (handler) {
+          stage.off('mousemove', handler);
+        }
+      });
     }
 
     layer.batchDraw();
@@ -253,19 +309,83 @@ async function openEditDialog(cardId) {
   const card = await getAllCards().then(cards => cards.find(c => c.id === cardId));
   if (!card) return;
 
-  const newText = prompt('Redigera text:', card.text);
-  if (newText === null) return; // Cancelled
-  if (newText === card.text) return; // No change
+  // Check if it's an image card
+  if (card.image) {
+    // Image card - edit back side text
+    if (card.flipped) {
+      // Already flipped, edit back text
+      const newText = prompt('Redigera baksidans text:', card.backText || '');
+      if (newText === null) return; // Cancelled
 
-  // Add to undo stack
+      pushUndo({
+        type: 'update',
+        cardId,
+        oldData: { backText: card.backText },
+        newData: { backText: newText }
+      });
+
+      await updateCard(cardId, { backText: newText });
+      await reloadCanvas();
+    } else {
+      // Not flipped, ask to flip
+      const choice = confirm('Vill du vända kortet för att skriva på baksidan?\n\nOK = Vänd kort\nAvbryt = Redigera filnamn');
+
+      if (choice) {
+        // Flip card
+        await flipCard(cardId);
+      } else {
+        // Edit filename
+        const newText = prompt('Redigera filnamn:', card.text);
+        if (newText === null || newText === card.text) return;
+
+        pushUndo({
+          type: 'update',
+          cardId,
+          oldData: { text: card.text },
+          newData: { text: newText }
+        });
+
+        await updateCard(cardId, { text: newText });
+        await reloadCanvas();
+      }
+    }
+  } else {
+    // Text card - normal edit
+    const newText = prompt('Redigera text:', card.text);
+    if (newText === null) return; // Cancelled
+    if (newText === card.text) return; // No change
+
+    pushUndo({
+      type: 'update',
+      cardId,
+      oldData: { text: card.text },
+      newData: { text: newText }
+    });
+
+    await updateCard(cardId, { text: newText });
+    await reloadCanvas();
+  }
+}
+
+/**
+ * Flip image card
+ */
+async function flipCard(cardId) {
+  const cards = await getAllCards();
+  const card = cards.find(c => c.id === cardId);
+
+  if (!card || !card.image) return;
+
+  const newFlipped = !card.flipped;
+
   pushUndo({
     type: 'update',
     cardId,
-    oldData: { text: card.text },
-    newData: { text: newText }
+    oldData: { flipped: card.flipped },
+    newData: { flipped: newFlipped }
   });
 
-  await updateCard(cardId, { text: newText });
+  await updateCard(cardId, { flipped: newFlipped });
   await reloadCanvas();
 }
 
@@ -526,6 +646,19 @@ function setupCanvasEvents() {
       return;
     }
 
+    // V - Flip selected image cards
+    if (e.key === 'v') {
+      e.preventDefault();
+      const selectedNodes = layer.find('.selected');
+      for (const node of selectedNodes) {
+        if (node.getAttr('cardId')) {
+          const cardId = node.getAttr('cardId');
+          await flipCard(cardId);
+        }
+      }
+      return;
+    }
+
     // Delete/Backspace - Delete selected cards
     if (e.key === 'Delete' || e.key === 'Backspace') {
       e.preventDefault();
@@ -698,6 +831,15 @@ function showCommandPalette() {
       if (searchInput) {
         searchInput.focus();
         searchInput.select();
+      }
+    }},
+    { key: 'V', icon: '🔄', name: 'Vänd bildkort', desc: 'Vänd markerade bildkort för att skriva på baksidan', action: async () => {
+      const selectedNodes = layer.find('.selected');
+      for (const node of selectedNodes) {
+        if (node.getAttr('cardId')) {
+          const cardId = node.getAttr('cardId');
+          await flipCard(cardId);
+        }
       }
     }},
     { key: 'S', icon: '💾', name: 'Spara/Exportera', desc: 'Exportera canvas till JSON-fil', action: async () => {
