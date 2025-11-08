@@ -130,23 +130,35 @@ export function arrangeCluster(cards, centerPos) {
 
 /**
  * Arrange cards in vertical columns (grid variant)
- * Based on v2's arrangeSelectedGridVerticalColumns
+ * Max 5 columns, 20px gaps both ways
  */
 export function arrangeGridVertical(cards, centerPos) {
-  const maxCols = 6;
-  const colSpacing = 350; // Horizontal spacing
-  const rowGap = 80; // Vertical gap between cards
+  const maxCols = 5;
+  const gap = 20;
   const positions = [];
 
   const cols = Math.min(maxCols, Math.ceil(Math.sqrt(cards.length)));
   const cardsPerCol = Math.ceil(cards.length / cols);
 
-  // Calculate total grid dimensions
-  const gridWidth = cols * colSpacing;
+  // Calculate column widths (max card width in each column)
+  const columnWidths = [];
+  for (let col = 0; col < cols; col++) {
+    let maxWidth = 200; // default
+    for (let row = 0; row < cardsPerCol; row++) {
+      const index = col * cardsPerCol + row;
+      if (index < cards.length) {
+        maxWidth = Math.max(maxWidth, cards[index].width || 200);
+      }
+    }
+    columnWidths.push(maxWidth);
+  }
+
+  // Calculate total grid width
+  const totalWidth = columnWidths.reduce((sum, w) => sum + w, 0) + (cols - 1) * gap;
 
   // Start position
-  const startX = centerPos.x - gridWidth / 2;
-  const startY = centerPos.y; // Top-aligned
+  let currentX = centerPos.x - totalWidth / 2;
+  const startY = centerPos.y;
 
   let cardIndex = 0;
   for (let col = 0; col < cols && cardIndex < cards.length; col++) {
@@ -158,26 +170,27 @@ export function arrangeGridVertical(cards, centerPos) {
 
       positions.push({
         id: card.id,
-        x: startX + col * colSpacing,
+        x: currentX,
         y: currentY
       });
 
-      currentY += height + rowGap;
+      currentY += height + gap;
       cardIndex++;
     }
+
+    currentX += columnWidths[col] + gap;
   }
 
   return positions;
 }
 
 /**
- * Arrange cards in packed rows (grid variant)
- * Based on v2's arrangeSelectedGridHorizontalPacked
+ * Arrange cards in packed rows
+ * Max 5 per row, top-aligned within row, tight vertical packing
  */
 export function arrangeGridHorizontal(cards, centerPos) {
-  const maxCols = 6;
-  const colSpacing = 360; // Horizontal spacing (gives 60px gap for 300px cards)
-  const rowPadding = 95; // Vertical padding
+  const maxCols = 5;
+  const gap = 20;
   const positions = [];
 
   // Group cards into rows
@@ -186,43 +199,48 @@ export function arrangeGridHorizontal(cards, centerPos) {
     rows.push(cards.slice(i, i + maxCols));
   }
 
-  // Calculate row heights (max card height in each row)
+  // Calculate row heights (tallest card in each row)
   const rowHeights = rows.map(row => {
     return Math.max(...row.map(card => card.height || 150));
   });
 
-  const totalHeight = rowHeights.reduce((sum, h) => sum + h + rowPadding, -rowPadding);
+  // Calculate total grid height
+  const totalHeight = rowHeights.reduce((sum, h) => sum + h, 0) + (rows.length - 1) * gap;
 
   let currentY = centerPos.y - totalHeight / 2;
 
   rows.forEach((row, rowIndex) => {
-    const rowWidth = row.length * colSpacing;
+    // Calculate row width
+    const rowWidth = row.reduce((sum, card) => sum + (card.width || 200), 0) + (row.length - 1) * gap;
     let currentX = centerPos.x - rowWidth / 2;
 
     row.forEach(card => {
+      const width = card.width || 200;
+
       positions.push({
         id: card.id,
         x: currentX,
-        y: currentY
+        y: currentY // Top-aligned within row
       });
 
-      currentX += colSpacing;
+      currentX += width + gap;
     });
 
-    currentY += rowHeights[rowIndex] + rowPadding;
+    // Next row starts at bottom of tallest card in current row + gap
+    currentY += rowHeights[rowIndex] + gap;
   });
 
   return positions;
 }
 
 /**
- * Arrange cards in overlapping grid (for showing titles)
- * Based on v2's arrangeSelectedGridTopAligned
+ * Arrange cards in overlapping grid (Kanban-style, for showing titles)
+ * Max 5 per row, cards overlap vertically to show ~120px of each
  */
 export function arrangeGridTopAligned(cards, centerPos) {
-  const maxCols = 6;
-  const colSpacing = 15; // 5% of 300px - very tight
-  const rowSpacing = 120; // Cards overlap, show 120px of each
+  const maxCols = 5;
+  const colSpacing = 15; // Tight horizontal spacing
+  const rowSpacing = 120; // Vertical overlap - show 120px of each card
   const positions = [];
 
   // Group into rows
@@ -235,20 +253,23 @@ export function arrangeGridTopAligned(cards, centerPos) {
   let currentY = centerPos.y - totalHeight / 2;
 
   rows.forEach(row => {
-    const rowWidth = row.length * (300 + colSpacing);
+    // Calculate row width based on actual card widths
+    const rowWidth = row.reduce((sum, card) => sum + (card.width || 200), 0) + (row.length - 1) * colSpacing;
     let currentX = centerPos.x - rowWidth / 2;
 
     row.forEach(card => {
+      const width = card.width || 200;
+
       positions.push({
         id: card.id,
         x: currentX,
         y: currentY
       });
 
-      currentX += 300 + colSpacing;
+      currentX += width + colSpacing;
     });
 
-    currentY += rowSpacing;
+    currentY += rowSpacing; // Overlapping rows
   });
 
   return positions;
