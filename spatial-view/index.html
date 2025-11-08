@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="description" content="Spatial View - Visual Second Brain för handskrivna anteckningar">
+  <meta name="theme-color" content="#ffffff">
+  <title>Spatial View</title>
+  <link rel="stylesheet" href="/src/styles.css">
+</head>
+<body>
+  <div id="app">
+    <header id="toolbar">
+      <h1>Spatial View</h1>
+      <div id="toolbar-actions">
+        <button id="btn-import">Importera</button>
+        <button id="btn-view-toggle">Kolumn</button>
+        <input type="search" id="search-input" placeholder="Sök kort...">
+      </div>
+    </header>
+    
+    <main id="main-container">
+      <!-- Board View (Konva canvas) -->
+      <div id="board-view" class="view active">
+        <div id="canvas-container"></div>
+      </div>
+      
+      <!-- Column View (scrollable list) -->
+      <div id="column-view" class="view">
+        <div id="card-list"></div>
+      </div>
+    </main>
+  </div>
+  
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
