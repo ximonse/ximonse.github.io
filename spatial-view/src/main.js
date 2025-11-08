@@ -4,7 +4,7 @@
  */
 
 import './styles.css';
-import { initCanvas } from './lib/canvas.js';
+import { initCanvas, addNewCard, exportCanvas } from './lib/canvas.js';
 import { initStorage } from './lib/storage.js';
 
 // App state
@@ -125,9 +125,14 @@ function toggleView() {
 /**
  * Handle import action
  */
-function handleImport() {
-  console.log('Import clicked');
-  // TODO: Implement import dialog
+async function handleImport() {
+  // For now, "Import" creates a new card
+  // TODO: Later implement actual file import
+  if (state.currentView === 'board') {
+    await addNewCard();
+  } else {
+    alert('Byt till Board-vy för att skapa kort');
+  }
 }
 
 /**

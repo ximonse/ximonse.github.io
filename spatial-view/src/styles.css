@@ -3,6 +3,12 @@
  * Base styles
  */
 
+/* Import themes first (CSS requirement) */
+@import './assets/theme-dark.css';
+@import './assets/theme-sepia.css';
+@import './assets/theme-eink.css';
+@import './assets/cards-colors.css';
+
 /* CSS Reset */
 *, *::before, *::after {
   box-sizing: border-box;
@@ -189,9 +195,3 @@ button:active {
   animation: none !important;
   transition: none !important;
 }
-
-/* Import themes */
-@import './assets/theme-dark.css';
-@import './assets/theme-sepia.css';
-@import './assets/theme-eink.css';
-@import './assets/cards-colors.css';
