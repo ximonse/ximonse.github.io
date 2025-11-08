@@ -519,6 +519,13 @@ function setupCanvasEvents() {
       return;
     }
 
+    // C - Command palette
+    if (e.key === 'c') {
+      e.preventDefault();
+      showCommandPalette();
+      return;
+    }
+
     // Delete/Backspace - Delete selected cards
     if (e.key === 'Delete' || e.key === 'Backspace') {
       e.preventDefault();
@@ -666,6 +673,185 @@ export async function importImage() {
     };
 
     input.click();
+  });
+}
+
+/**
+ * Show command palette
+ */
+function showCommandPalette() {
+  const commands = [
+    { key: 'N', icon: '📝', name: 'Nytt text-kort', desc: 'Skapa nytt text-kort vid muspekare', action: async () => {
+      const pointer = stage.getPointerPosition() || { x: stage.width() / 2, y: stage.height() / 2 };
+      const scale = stage.scaleX();
+      const position = {
+        x: (pointer.x - stage.x()) / scale,
+        y: (pointer.y - stage.y()) / scale
+      };
+      await createNewCard(position);
+    }},
+    { key: 'I', icon: '🖼️', name: 'Importera bild', desc: 'Öppna filväljare för att importera bilder', action: async () => {
+      await importImage();
+    }},
+    { key: 'F', icon: '🔍', name: 'Sök kort', desc: 'Fokusera sökfältet', action: () => {
+      const searchInput = document.getElementById('search-input');
+      if (searchInput) {
+        searchInput.focus();
+        searchInput.select();
+      }
+    }},
+    { key: 'S', icon: '💾', name: 'Spara/Exportera', desc: 'Exportera canvas till JSON-fil', action: async () => {
+      await exportCanvas();
+    }},
+    { key: 'Delete', icon: '🗑️', name: 'Ta bort kort', desc: 'Ta bort markerade kort', action: async () => {
+      const selectedNodes = layer.find('.selected');
+      for (const node of selectedNodes) {
+        if (node.getAttr('cardId')) {
+          const cardId = node.getAttr('cardId');
+          await handleDeleteCard(cardId);
+        }
+      }
+    }},
+    { key: 'Ctrl+Z', icon: '↶', name: 'Ångra', desc: 'Ångra senaste ändring', action: async () => {
+      await undo();
+    }},
+    { key: 'Ctrl+Y', icon: '↷', name: 'Gör om', desc: 'Gör om ångrad ändring', action: async () => {
+      await redo();
+    }},
+    { key: 'Scroll', icon: '🔍', name: 'Zooma', desc: 'Zooma in/ut med mushjulet', action: null },
+    { key: 'Shift+Drag', icon: '✋', name: 'Panorera', desc: 'Panorera canvas genom att hålla Shift och dra', action: null },
+    { key: 'Double-click', icon: '✏️', name: 'Redigera kort', desc: 'Dubbelklicka på kort för att redigera', action: null },
+    { key: 'Drag', icon: '🔄', name: 'Flytta kort', desc: 'Dra kort för att flytta dem', action: null },
+  ];
+
+  // Create modal overlay
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    z-index: 10000;
+    padding-top: 80px;
+    overflow-y: auto;
+  `;
+
+  // Create command palette
+  const palette = document.createElement('div');
+  palette.style.cssText = `
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 600px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    max-height: 80vh;
+    overflow-y: auto;
+  `;
+
+  palette.innerHTML = `
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+      <h2 style="margin: 0; font-size: 24px; color: #1a1a1a;">
+        ⌘ Command Palette
+      </h2>
+      <span style="color: #999; font-size: 14px;">Tryck ESC för att stänga</span>
+    </div>
+
+    <div id="command-list" style="display: flex; flex-direction: column; gap: 8px;">
+      ${commands.map((cmd, idx) => `
+        <div class="command-item" data-index="${idx}" style="
+          padding: 16px;
+          background: ${cmd.action ? '#f5f5f5' : '#fafafa'};
+          border-radius: 8px;
+          cursor: ${cmd.action ? 'pointer' : 'default'};
+          transition: all 0.15s;
+          border: 2px solid transparent;
+          display: flex;
+          align-items: center;
+          gap: 16px;
+        ">
+          <div style="font-size: 24px; flex-shrink: 0;">
+            ${cmd.icon}
+          </div>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-weight: 600; font-size: 16px; color: #1a1a1a; margin-bottom: 2px;">
+              ${cmd.name}
+            </div>
+            <div style="font-size: 13px; color: #666;">
+              ${cmd.desc}
+            </div>
+          </div>
+          <div style="
+            background: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #666;
+            font-family: monospace;
+            white-space: nowrap;
+            flex-shrink: 0;
+          ">
+            ${cmd.key}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  overlay.appendChild(palette);
+  document.body.appendChild(overlay);
+
+  // Add hover and click effects
+  const commandItems = palette.querySelectorAll('.command-item');
+  commandItems.forEach((item, idx) => {
+    const cmd = commands[idx];
+
+    if (cmd.action) {
+      item.addEventListener('mouseenter', () => {
+        item.style.background = '#e3f2fd';
+        item.style.borderColor = '#2196F3';
+        item.style.transform = 'scale(1.01)';
+      });
+
+      item.addEventListener('mouseleave', () => {
+        item.style.background = '#f5f5f5';
+        item.style.borderColor = 'transparent';
+        item.style.transform = 'scale(1)';
+      });
+
+      item.addEventListener('click', async () => {
+        cleanup();
+        await cmd.action();
+      });
+    }
+  });
+
+  // Cleanup function
+  const cleanup = () => {
+    document.body.removeChild(overlay);
+  };
+
+  // ESC to close
+  const handleEsc = (e) => {
+    if (e.key === 'Escape') {
+      cleanup();
+      document.removeEventListener('keydown', handleEsc);
+    }
+  };
+  document.addEventListener('keydown', handleEsc);
+
+  // Click overlay to close
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) {
+      cleanup();
+      document.removeEventListener('keydown', handleEsc);
+    }
   });
 }
 
