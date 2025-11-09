@@ -1933,6 +1933,7 @@ function setupCanvasEvents() {
   let stageTouchStart = null;
   let lastCenter = null;
   let lastDist = 0;
+  let isTouchPanning = false;
 
   function getDistance(p1, p2) {
     return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
@@ -1952,6 +1953,8 @@ function setupCanvasEvents() {
     if (touch1 && touch2) {
       // Two fingers - prepare for pinch/pan
       e.evt.preventDefault();
+      isTouchPanning = false;
+      stage.draggable(false);
       lastCenter = getCenter(
         { x: touch1.clientX, y: touch1.clientY },
         { x: touch2.clientX, y: touch2.clientY }
@@ -1961,6 +1964,12 @@ function setupCanvasEvents() {
         { x: touch2.clientX, y: touch2.clientY }
       );
       return;
+    }
+
+    // Single finger on empty canvas - enable panning
+    if (e.target === stage) {
+      isTouchPanning = true;
+      stage.draggable(true);
     }
 
     if (e.target !== stage) return; // Only on empty canvas
@@ -2042,6 +2051,10 @@ function setupCanvasEvents() {
     if (stageTouchTimer) {
       clearTimeout(stageTouchTimer);
       stageTouchTimer = null;
+    }
+    if (isTouchPanning) {
+      stage.draggable(false);
+      isTouchPanning = false;
     }
     lastCenter = null;
     lastDist = 0;
@@ -2565,7 +2578,24 @@ function showCommandPalette() {
     { key: '-', icon: '🔄', name: 'Byt vy', desc: 'Växla mellan bräd-vy och kolumn-vy', action: () => {
       window.dispatchEvent(new CustomEvent('toggleView'));
     }},
-    { key: 'Ctrl+A', icon: '☑', name: 'Markera alla', desc: 'Markera alla kort på canvas', action: null },
+    { key: 'Ctrl+A', icon: '☑', name: 'Markera alla', desc: 'Markera alla kort på canvas', action: () => {
+      const isEink = document.body.classList.contains('eink-theme');
+      const allCards = layer.getChildren(node => node.getAttr('cardId'));
+      allCards.forEach(group => {
+        const background = group.findOne('Rect');
+        group.addName('selected');
+        if (background) {
+          if (isEink) {
+            background.stroke('#000000');
+            background.strokeWidth(4);
+          } else {
+            background.stroke('#2196F3');
+            background.strokeWidth(3);
+          }
+        }
+      });
+      layer.batchDraw();
+    }},
     { key: 'Scroll', icon: '🔍', name: 'Zooma', desc: 'Zooma in/ut med mushjulet', action: null },
     { key: 'Ctrl+Drag', icon: '✋', name: 'Panorera', desc: 'Panorera canvas genom att hålla Ctrl och dra', action: null },
     { key: 'Double-click', icon: '✏️', name: 'Redigera kort', desc: 'Dubbelklicka på kort för att redigera', action: null },
