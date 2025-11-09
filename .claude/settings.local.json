@@ -25,7 +25,9 @@
       "Bash(git branch:*)",
       "Bash(npm run dev:*)",
       "Bash(git reset:*)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(npm run build:*)",
+      "Bash(.gitignore)"
     ],
     "deny": [],
     "ask": []
