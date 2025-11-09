@@ -262,20 +262,53 @@ async function renderColumnView() {
     return timeB - timeA;
   });
 
+  // Check themes
+  const isEink = document.body.classList.contains('eink-theme');
+  const isDark = document.body.classList.contains('dark-theme');
+
   // Render each card
   sortedCards.forEach(card => {
     const cardElement = document.createElement('div');
     cardElement.className = 'column-card';
-    cardElement.style.cssText = `
-      background: white;
-      border: 1px solid #e0e0e0;
-      border-radius: 8px;
-      padding: 16px;
-      margin-bottom: 16px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      cursor: pointer;
-      transition: all 0.2s;
-    `;
+
+    if (isEink) {
+      // E-ink: white card, black border, NO shadows, rounded corners
+      cardElement.style.cssText = `
+        background: white;
+        border: 2px solid #000;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 16px;
+        box-shadow: none;
+        cursor: pointer;
+        transition: none;
+      `;
+    } else if (isDark) {
+      // Dark theme: blue card, white text
+      cardElement.style.cssText = `
+        background: #2d3748;
+        border: 1px solid #4a5568;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 16px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        cursor: pointer;
+        transition: all 0.2s;
+        color: #e0e0e0;
+      `;
+    } else {
+      // Light theme
+      cardElement.style.cssText = `
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 16px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        cursor: pointer;
+        transition: all 0.2s;
+      `;
+    }
 
     if (card.image) {
       // Image card
@@ -316,7 +349,7 @@ async function renderColumnView() {
         text.textContent = card.backText || card.text || '';
         text.style.cssText = `
           font-size: 14px;
-          color: #666;
+          color: ${isDark ? '#e0e0e0' : '#666'};
           line-height: 1.5;
           white-space: pre-wrap;
         `;
@@ -328,7 +361,7 @@ async function renderColumnView() {
       text.textContent = card.text || 'Tomt kort';
       text.style.cssText = `
         font-size: 16px;
-        color: #1a1a1a;
+        color: ${isDark ? '#e0e0e0' : '#1a1a1a'};
         line-height: 1.6;
         white-space: pre-wrap;
       `;
@@ -337,18 +370,119 @@ async function renderColumnView() {
 
     // Hover effect
     cardElement.addEventListener('mouseenter', () => {
-      cardElement.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
-      cardElement.style.transform = 'translateY(-2px)';
+      if (isEink) {
+        // E-ink: thicker border on hover
+        cardElement.style.border = '3px solid #000';
+      } else if (isDark) {
+        // Dark theme
+        cardElement.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.5)';
+        cardElement.style.transform = 'translateY(-2px)';
+      } else {
+        // Light theme
+        cardElement.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+        cardElement.style.transform = 'translateY(-2px)';
+      }
     });
 
     cardElement.addEventListener('mouseleave', () => {
-      cardElement.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)';
-      cardElement.style.transform = 'translateY(0)';
+      if (isEink) {
+        // E-ink: back to normal border
+        cardElement.style.border = '2px solid #000';
+      } else if (isDark) {
+        // Dark theme
+        cardElement.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.3)';
+        cardElement.style.transform = 'translateY(0)';
+      } else {
+        // Light theme
+        cardElement.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)';
+        cardElement.style.transform = 'translateY(0)';
+      }
     });
 
-    // Click to edit in column view
+    // Click to select (same as board view)
     cardElement.addEventListener('click', () => {
+      const isSelected = cardElement.classList.contains('selected');
+
+      if (isSelected) {
+        cardElement.classList.remove('selected');
+        if (isEink) {
+          cardElement.style.border = '2px solid #000';
+        } else if (isDark) {
+          cardElement.style.border = '1px solid #4a5568';
+        } else {
+          cardElement.style.border = '1px solid #e0e0e0';
+        }
+      } else {
+        cardElement.classList.add('selected');
+        if (isEink) {
+          cardElement.style.border = '4px solid #000';
+        } else {
+          cardElement.style.border = '3px solid #2196F3';
+        }
+      }
+    });
+
+    // Double-click to edit (same as board view)
+    cardElement.addEventListener('dblclick', () => {
       showColumnEditDialog(card, cardElement);
+    });
+
+    // Right-click context menu (same as board view)
+    cardElement.addEventListener('contextmenu', async (e) => {
+      e.preventDefault();
+      // Import context menu function from canvas
+      const { showContextMenu } = await import('./lib/canvas.js');
+      showContextMenu(e.clientX, e.clientY, card.id, cardElement);
+    });
+
+    // Touch handlers (same as board view)
+    let touchTimer = null;
+    let touchStartY = null;
+    let hasMoved = false;
+
+    cardElement.addEventListener('touchstart', (e) => {
+      touchStartY = e.touches[0].clientY;
+      hasMoved = false;
+
+      // Long press timer
+      touchTimer = setTimeout(async () => {
+        if (!hasMoved) {
+          // Long press detected
+          const selectedCards = cardList.querySelectorAll('.column-card.selected');
+
+          if (selectedCards.length > 1 && cardElement.classList.contains('selected')) {
+            // Multiple cards selected: show bulk menu
+            const { showTouchBulkMenu } = await import('./lib/canvas.js');
+            await showTouchBulkMenu(e.touches[0].clientX, e.touches[0].clientY);
+          } else {
+            // Single card: open editor
+            showColumnEditDialog(card, cardElement);
+          }
+          touchTimer = null;
+        }
+      }, 600); // 600ms long press
+    });
+
+    cardElement.addEventListener('touchmove', (e) => {
+      const currentY = e.touches[0].clientY;
+      const moved = Math.abs(currentY - touchStartY) > 5;
+      if (moved) {
+        hasMoved = true;
+      }
+    });
+
+    cardElement.addEventListener('touchend', () => {
+      if (touchTimer) {
+        clearTimeout(touchTimer);
+        touchTimer = null;
+      }
+    });
+
+    cardElement.addEventListener('touchcancel', () => {
+      if (touchTimer) {
+        clearTimeout(touchTimer);
+        touchTimer = null;
+      }
     });
 
     cardList.appendChild(cardElement);

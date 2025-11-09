@@ -174,18 +174,33 @@ function renderCard(cardData) {
   group.on('click', function() {
     const isSelected = this.hasName('selected');
     const background = this.findOne('Rect');
+    const isEink = document.body.classList.contains('eink-theme');
+    const isDark = document.body.classList.contains('dark-theme');
 
     if (isSelected) {
       this.removeName('selected');
       if (background) {
-        background.stroke('#e0e0e0');
-        background.strokeWidth(1);
+        if (isEink) {
+          background.stroke('#000000');
+          background.strokeWidth(2);
+        } else if (isDark) {
+          background.stroke('#4a5568');
+          background.strokeWidth(1);
+        } else {
+          background.stroke('#e0e0e0');
+          background.strokeWidth(1);
+        }
       }
     } else {
       this.addName('selected');
       if (background) {
-        background.stroke('#2196F3');
-        background.strokeWidth(3);
+        if (isEink) {
+          background.stroke('#000000');
+          background.strokeWidth(4);
+        } else {
+          background.stroke('#2196F3');
+          background.strokeWidth(3);
+        }
       }
     }
 
@@ -350,17 +365,38 @@ function renderTextCard(group, cardData) {
   // Get card color
   const cardColor = getCardColor(cardData.cardColor);
 
-  // Check if e-ink theme is active
+  // Check themes
   const isEink = document.body.classList.contains('eink-theme');
+  const isDark = document.body.classList.contains('dark-theme');
+
+  // E-ink: white with light tint if colored, otherwise white
+  let fillColor = cardColor;
+  if (isEink) {
+    if (cardData.cardColor && cardData.cardColor !== 'yellow') {
+      // Light tint based on card color
+      const colorMap = {
+        blue: '#e6f2ff',
+        green: '#e6ffe6',
+        pink: '#ffe6f2',
+        purple: '#f2e6ff',
+        orange: '#fff2e6'
+      };
+      fillColor = colorMap[cardData.cardColor] || '#ffffff';
+    } else {
+      fillColor = '#ffffff';
+    }
+  } else if (isDark) {
+    fillColor = '#2d3748';
+  }
 
   // Background
   const background = new Konva.Rect({
     width: 200,
     height: 150,
-    fill: isEink ? '#ffffff' : cardColor,
-    stroke: isEink ? '#000000' : '#e0e0e0',
+    fill: fillColor,
+    stroke: isEink ? '#000000' : (isDark ? '#4a5568' : '#e0e0e0'),
     strokeWidth: isEink ? 2 : 1,
-    cornerRadius: isEink ? 0 : 8,
+    cornerRadius: 8,
     shadowColor: isEink ? 'transparent' : 'black',
     shadowBlur: isEink ? 0 : 10,
     shadowOpacity: isEink ? 0 : 0.1,
@@ -375,7 +411,7 @@ function renderTextCard(group, cardData) {
     width: 168,
     fontSize: 16,
     fontFamily: 'sans-serif',
-    fill: '#1a1a1a',
+    fill: isDark ? '#e0e0e0' : '#1a1a1a',
     wrap: 'word'
   });
 
@@ -392,8 +428,9 @@ function renderImageCard(group, cardData) {
   const isFlipped = cardData.flipped || false;
 
   imageObj.onload = function() {
-    // Check if e-ink theme is active
+    // Check themes
     const isEink = document.body.classList.contains('eink-theme');
+    const isDark = document.body.classList.contains('dark-theme');
 
     // Calculate card dimensions (maintain aspect ratio)
     // Standard width: 200px for aligned columns
@@ -417,10 +454,10 @@ function renderImageCard(group, cardData) {
       const background = new Konva.Rect({
         width: width,
         height: height,
-        fill: isEink ? '#ffffff' : '#fffacd',
-        stroke: isEink ? '#000000' : '#e0e0e0',
+        fill: isEink ? '#ffffff' : (isDark ? '#2d3748' : '#fffacd'),
+        stroke: isEink ? '#000000' : (isDark ? '#4a5568' : '#e0e0e0'),
         strokeWidth: isEink ? 2 : 1,
-        cornerRadius: isEink ? 0 : 8,
+        cornerRadius: 8,
         shadowColor: isEink ? 'transparent' : 'black',
         shadowBlur: isEink ? 0 : 10,
         shadowOpacity: isEink ? 0 : 0.1,
@@ -435,7 +472,7 @@ function renderImageCard(group, cardData) {
         height: height - 32,
         fontSize: 16,
         fontFamily: 'sans-serif',
-        fill: '#1a1a1a',
+        fill: isDark ? '#e0e0e0' : '#1a1a1a',
         wrap: 'word',
         align: 'left',
         verticalAlign: 'top'
@@ -449,9 +486,9 @@ function renderImageCard(group, cardData) {
         width: width,
         height: height,
         fill: '#ffffff',
-        stroke: isEink ? '#000000' : '#e0e0e0',
+        stroke: isEink ? '#000000' : (isDark ? '#4a5568' : '#e0e0e0'),
         strokeWidth: isEink ? 2 : 1,
-        cornerRadius: isEink ? 0 : 8,
+        cornerRadius: 8,
         shadowColor: isEink ? 'transparent' : 'black',
         shadowBlur: isEink ? 0 : 10,
         shadowOpacity: isEink ? 0 : 0.1,
@@ -462,7 +499,7 @@ function renderImageCard(group, cardData) {
         image: imageObj,
         width: width,
         height: height,
-        cornerRadius: isEink ? 0 : 8
+        cornerRadius: 8
       });
 
       group.add(background);
@@ -1063,7 +1100,7 @@ async function showTouchPasteMenu(x, y, position) {
 /**
  * Show touch bulk menu (for long-press on selected cards)
  */
-async function showTouchBulkMenu(x, y) {
+export async function showTouchBulkMenu(x, y) {
   const selectedGroups = layer.find('.selected');
   const selectedIds = selectedGroups.map(g => g.getAttr('cardId')).filter(id => id);
 
@@ -1918,6 +1955,9 @@ function setupCanvasEvents() {
     }
   });
 
+  // Track if 'g' key is currently held down for simultaneous combos
+  let gKeyHeld = false;
+
   // Global keyboard shortcuts
   window.addEventListener('keydown', async (e) => {
     // Ignore if typing in input/textarea
@@ -1977,6 +2017,25 @@ function setupCanvasEvents() {
       return;
     }
 
+    // L - Load (import JSON)
+    if (e.key === 'l' && !e.ctrlKey) {
+      e.preventDefault();
+      await importCanvas();
+      console.log('Canvas import initiated');
+      return;
+    }
+
+    // B - Backup (download zip with all cards and images)
+    if (e.key === 'b' && !e.ctrlKey) {
+      e.preventDefault();
+      const downloadBtn = document.getElementById('btn-download');
+      if (downloadBtn) {
+        downloadBtn.click();
+        console.log('Backup download initiated');
+      }
+      return;
+    }
+
     // K - Toggle view
     if (e.key === 'k') {
       e.preventDefault();
@@ -2022,57 +2081,53 @@ function setupCanvasEvents() {
       return;
     }
 
-    // G - Grid arrangement (or combo with next key)
+    // V - Vertical arrangement (or G+V if 'g' is held)
+    if (e.key === 'v' && !e.ctrlKey) {
+      e.preventDefault();
+      if (gKeyHeld) {
+        // G+V = Grid Vertical
+        console.log('G+V pressed (simultaneous)');
+        if (clipboard.length > 0) {
+          await pasteCardsWithArrangement(arrangeGridVertical, 'Grid Vertical');
+        } else {
+          await applyArrangement(arrangeGridVertical, 'Grid Vertical');
+        }
+      } else {
+        // V alone = Vertical
+        console.log('V pressed');
+        await applyArrangement(arrangeVertical, 'Vertical');
+      }
+      return;
+    }
+
+    // H - Horizontal arrangement (or G+H if 'g' is held)
+    if (e.key === 'h' && !e.ctrlKey) {
+      e.preventDefault();
+      if (gKeyHeld) {
+        // G+H = Grid Horizontal
+        console.log('G+H pressed (simultaneous)');
+        await applyArrangement(arrangeGridHorizontal, 'Grid Horizontal');
+      } else {
+        // H alone = Horizontal
+        console.log('H pressed');
+        await applyArrangement(arrangeHorizontal, 'Horizontal');
+      }
+      return;
+    }
+
+    // T - Grid Top-Aligned (only when G is held)
+    if (e.key === 't' && !e.ctrlKey && gKeyHeld) {
+      e.preventDefault();
+      console.log('G+T pressed (simultaneous)');
+      await applyArrangement(arrangeGridTopAligned, 'Grid Top-Aligned');
+      return;
+    }
+
+    // G - Set flag for combos (G+V, G+H, G+T)
     if (e.key === 'g' && !e.ctrlKey) {
       e.preventDefault();
-      console.log('G pressed, waiting for combo key...');
-
-      // Wait for next key press within 500ms
-      let nextKeyTimeout = null;
-      const keyHandler = async (e2) => {
-        // Ignore if typing
-        if (e2.target.tagName === 'INPUT' || e2.target.tagName === 'TEXTAREA') {
-          return;
-        }
-
-        clearTimeout(nextKeyTimeout);
-        document.removeEventListener('keydown', keyHandler);
-
-        if (e2.key === 'v') {
-          // G+V = Paste and arrange in Grid Vertical (if clipboard has cards), otherwise arrange selected
-          e2.preventDefault();
-          console.log('G+V pressed');
-          if (clipboard.length > 0) {
-            await pasteCardsWithArrangement(arrangeGridVertical, 'Grid Vertical');
-          } else {
-            await applyArrangement(arrangeGridVertical, 'Grid Vertical');
-          }
-        } else if (e2.key === 'h') {
-          // G+H = Grid Horizontal Packed
-          e2.preventDefault();
-          console.log('G+H pressed');
-          await applyArrangement(arrangeGridHorizontal, 'Grid Horizontal');
-        } else if (e2.key === 't') {
-          // G+T = Grid Top Aligned
-          e2.preventDefault();
-          console.log('G+T pressed');
-          await applyArrangement(arrangeGridTopAligned, 'Grid Top-Aligned');
-        } else {
-          // Just G = simple grid
-          console.log('G alone pressed');
-          await applyArrangement(arrangeGrid, 'Grid');
-        }
-      };
-
-      document.addEventListener('keydown', keyHandler);
-
-      // Timeout: if no second key, just do simple grid
-      nextKeyTimeout = setTimeout(async () => {
-        document.removeEventListener('keydown', keyHandler);
-        console.log('G timeout, applying simple grid');
-        await applyArrangement(arrangeGrid, 'Grid');
-      }, 500);
-
+      gKeyHeld = true;
+      console.log('G pressed (waiting for combo)');
       return;
     }
 
@@ -2105,6 +2160,14 @@ function setupCanvasEvents() {
         }
       }
       return;
+    }
+  });
+
+  // Reset gKeyHeld flag when 'g' is released
+  window.addEventListener('keyup', (e) => {
+    if (e.key === 'g') {
+      gKeyHeld = false;
+      console.log('G released');
     }
   });
 }
@@ -2383,9 +2446,6 @@ function showCommandPalette() {
     }},
     { key: 'H', icon: '↔️', name: 'Arrangera horisontellt', desc: 'Arrangera markerade kort i horisontell rad', action: async () => {
       await applyArrangement(arrangeHorizontal, 'Horizontal');
-    }},
-    { key: 'G', icon: '⊞', name: 'Arrangera grid', desc: 'Arrangera markerade kort i grid', action: async () => {
-      await applyArrangement(arrangeGrid, 'Grid');
     }},
     { key: 'Q', icon: '◉', name: 'Arrangera cirkel', desc: 'Klistra in och arrangera i cirkel (om kopierade kort), annars arrangera markerade', action: async () => {
       if (clipboard.length > 0) {
@@ -3039,7 +3099,7 @@ export async function searchCards(query) {
 /**
  * Show context menu for card
  */
-function showContextMenu(x, y, cardId, group) {
+export function showContextMenu(x, y, cardId, group) {
   // Remove any existing context menu
   const existingMenu = document.getElementById('card-context-menu');
   if (existingMenu) {

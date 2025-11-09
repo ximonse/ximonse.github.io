@@ -47,7 +47,7 @@ body.dark-theme {
 
 /* Column view */
 .dark-theme #column-view {
-    background: var(--bg-secondary);
+    background: var(--bg-primary);
 }
 
 .dark-theme .column-card {
