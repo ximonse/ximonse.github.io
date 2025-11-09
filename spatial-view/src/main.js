@@ -239,13 +239,13 @@ async function toggleView() {
 /**
  * Render cards in column view
  */
-async function renderColumnView() {
+async function renderColumnView(searchQuery = '') {
   const cardList = document.getElementById('card-list');
   if (!cardList) return;
 
   // Import storage to get cards
   const { getAllCards } = await import('./lib/storage.js');
-  const cards = await getAllCards();
+  let cards = await getAllCards();
 
   // Clear existing content
   cardList.innerHTML = '';
@@ -253,6 +253,28 @@ async function renderColumnView() {
   if (cards.length === 0) {
     cardList.innerHTML = '<div style="padding: 40px; text-align: center; color: #999;">Inga kort ännu. Klicka på "+ Lägg till" för att skapa ett kort.</div>';
     return;
+  }
+
+  // Filter by search query if provided
+  if (searchQuery && searchQuery.trim()) {
+    const query = searchQuery.trim().toLowerCase();
+
+    // Import boolean search function
+    const { evaluateBooleanQuery } = await import('./lib/canvas.js');
+
+    cards = cards.filter(card => {
+      const text = card.text || '';
+      const backText = card.backText || '';
+      const combinedText = (text + ' ' + backText).toLowerCase();
+
+      // Use boolean search (same as board view)
+      return evaluateBooleanQuery(query, combinedText);
+    });
+
+    if (cards.length === 0) {
+      cardList.innerHTML = `<div style="padding: 40px; text-align: center; color: #999;">Inga kort matchade "${searchQuery}"</div>`;
+      return;
+    }
   }
 
   // Sort cards by last modified (newest first)
@@ -935,7 +957,8 @@ async function handleSearch(event) {
   if (state.currentView === 'board') {
     await searchCards(query);
   } else {
-    console.log('[main.js] Search only works in board view');
+    // Column view - filter cards
+    await renderColumnView(query);
   }
 }
 

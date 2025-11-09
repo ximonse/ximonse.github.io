@@ -68,6 +68,7 @@ let clipboard = [];
  */
 function getCardColor(cardColor) {
   const colorMap = {
+    // Format: card-color-X
     'card-color-1': '#d4f2d4', // Grön
     'card-color-2': '#ffe4b3', // Orange
     'card-color-3': '#ffc1cc', // Röd
@@ -75,7 +76,19 @@ function getCardColor(cardColor) {
     'card-color-5': '#f3e5f5', // Lila
     'card-color-6': '#c7e7ff', // Blå
     'card-color-7': '#e0e0e0', // Grå
-    'card-color-8': '#ffffff'  // Vit
+    'card-color-8': '#ffffff', // Vit
+
+    // Format: color names (för bakåtkompatibilitet och import)
+    'green': '#d4f2d4',
+    'orange': '#ffe4b3',
+    'pink': '#ffc1cc',
+    'red': '#ffc1cc',
+    'yellow': '#fff7b3',
+    'purple': '#f3e5f5',
+    'blue': '#c7e7ff',
+    'gray': '#e0e0e0',
+    'grey': '#e0e0e0',
+    'white': '#ffffff'
   };
 
   return colorMap[cardColor] || '#ffffff'; // Default white
@@ -1918,8 +1931,38 @@ function setupCanvasEvents() {
   // Touch long-press on empty canvas to paste image
   let stageTouchTimer = null;
   let stageTouchStart = null;
+  let lastCenter = null;
+  let lastDist = 0;
+
+  function getDistance(p1, p2) {
+    return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+  }
+
+  function getCenter(p1, p2) {
+    return {
+      x: (p1.x + p2.x) / 2,
+      y: (p1.y + p2.y) / 2
+    };
+  }
 
   stage.on('touchstart', (e) => {
+    const touch1 = e.evt.touches[0];
+    const touch2 = e.evt.touches[1];
+
+    if (touch1 && touch2) {
+      // Two fingers - prepare for pinch/pan
+      e.evt.preventDefault();
+      lastCenter = getCenter(
+        { x: touch1.clientX, y: touch1.clientY },
+        { x: touch2.clientX, y: touch2.clientY }
+      );
+      lastDist = getDistance(
+        { x: touch1.clientX, y: touch1.clientY },
+        { x: touch2.clientX, y: touch2.clientY }
+      );
+      return;
+    }
+
     if (e.target !== stage) return; // Only on empty canvas
 
     stageTouchStart = Date.now();
@@ -1942,6 +1985,53 @@ function setupCanvasEvents() {
   });
 
   stage.on('touchmove', (e) => {
+    const touch1 = e.evt.touches[0];
+    const touch2 = e.evt.touches[1];
+
+    if (touch1 && touch2) {
+      // Two fingers - pinch to zoom and pan
+      e.evt.preventDefault();
+
+      if (stageTouchTimer) {
+        clearTimeout(stageTouchTimer);
+        stageTouchTimer = null;
+      }
+
+      const newCenter = getCenter(
+        { x: touch1.clientX, y: touch1.clientY },
+        { x: touch2.clientX, y: touch2.clientY }
+      );
+      const newDist = getDistance(
+        { x: touch1.clientX, y: touch1.clientY },
+        { x: touch2.clientX, y: touch2.clientY }
+      );
+
+      const oldScale = stage.scaleX();
+      const pointTo = {
+        x: (newCenter.x - stage.x()) / oldScale,
+        y: (newCenter.y - stage.y()) / oldScale
+      };
+
+      // Zoom
+      const scale = Math.max(0.1, Math.min(5, oldScale * (newDist / lastDist)));
+      stage.scale({ x: scale, y: scale });
+
+      // Pan
+      const dx = newCenter.x - lastCenter.x;
+      const dy = newCenter.y - lastCenter.y;
+      const newPos = {
+        x: newCenter.x - pointTo.x * scale + dx,
+        y: newCenter.y - pointTo.y * scale + dy
+      };
+
+      stage.position(newPos);
+      stage.batchDraw();
+
+      lastDist = newDist;
+      lastCenter = newCenter;
+      return;
+    }
+
     if (stageTouchTimer && e.target === stage) {
       clearTimeout(stageTouchTimer);
       stageTouchTimer = null;
@@ -1953,6 +2043,8 @@ function setupCanvasEvents() {
       clearTimeout(stageTouchTimer);
       stageTouchTimer = null;
     }
+    lastCenter = null;
+    lastDist = 0;
   });
 
   // Track if 'g' key is currently held down for simultaneous combos
@@ -2866,7 +2958,7 @@ export function fitAllCards() {
 /**
  * Check if term matches with wildcard support
  */
-function matchWithWildcard(term, searchableText) {
+export function matchWithWildcard(term, searchableText) {
   if (term.includes('*')) {
     // Convert wildcard to regex
     const regexPattern = term.replace(/\*/g, '.*');
@@ -2879,7 +2971,7 @@ function matchWithWildcard(term, searchableText) {
 /**
  * Check proximity search (NEAR/x or N/x)
  */
-function checkProximity(query, searchableText) {
+export function checkProximity(query, searchableText) {
   // Match patterns like "word1 near/5 word2" or "word1 n/5 word2"
   const proximityMatch = query.match(/(.+?)\s+(near|n)\/(\d+)\s+(.+)/i);
   if (!proximityMatch) return false;
@@ -2916,7 +3008,7 @@ function checkProximity(query, searchableText) {
  * Evaluate boolean search query
  * Supports: OR, AND, NOT, "exact phrases", *, ( ), NEAR/x, N/x
  */
-function evaluateBooleanQuery(query, searchableText) {
+export function evaluateBooleanQuery(query, searchableText) {
   // Handle different boolean operators
   console.log('[evaluateBooleanQuery] Query:', query, 'SearchableText:', searchableText.substring(0, 50));
 

@@ -198,6 +198,47 @@ button:active {
   width: 150px;
 }
 
+/* Mobile responsive */
+@media (max-width: 768px) {
+  #toolbar {
+    padding: 0 var(--spacing-sm);
+  }
+
+  #toolbar-actions {
+    gap: var(--spacing-sm);
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+
+  button {
+    padding: var(--spacing-sm);
+    font-size: 14px;
+    white-space: nowrap;
+    min-width: auto;
+  }
+
+  #search-input {
+    width: 120px;
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  button {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+
+  #search-input {
+    width: 80px;
+    font-size: 12px;
+  }
+
+  #toolbar-actions {
+    gap: 4px;
+  }
+}
+
 .device-eink {
   /* E-ink optimizations */
   --transition-fast: 0ms;
