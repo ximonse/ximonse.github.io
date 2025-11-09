@@ -1,7 +1,17 @@
 # Spatial View - Funktioner
 
 ## Översikt
-Visual Second Brain för handskrivna anteckningar med Konva.js canvas-rendering.
+En digital **visuospatial sketchpad** för handskrivna anteckningar med Konva.js canvas-rendering.
+
+### Vad är en visuospatial sketchpad?
+I kognitiv psykologi refererar [visuospatial sketchpad](https://dictionary.apa.org/visuospatial-sketchpad) till arbetsminnets komponent som hanterar och manipulerar visuell och spatial information. Spatial View efterliknar denna kognitiva funktion digitalt - den låter dig:
+
+- **Organisera visuellt**: Placera kort fritt i 2D-rummet baserat på relationer och samband
+- **Spatial memory**: Kom ihåg var saker finns genom deras position
+- **Manipulera fritt**: Dra, gruppera och arrangera information som på en fysisk whiteboard
+- **Visuell association**: Se mönster och relationer genom spatial närhet
+
+Precis som arbetsminnets visuospatiala komponent är Spatial View din digitala canvas för att tänka visuellt och spatialt.
 
 ## Nyligen tillagda funktioner (2025-11-09)
 

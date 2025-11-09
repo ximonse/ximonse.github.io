@@ -6,10 +6,10 @@
   <meta name="description" content="Spatial View - Visual Second Brain för handskrivna anteckningar">
   <meta name="theme-color" content="#ffffff">
   <title>Spatial View</title>
-  <script type="module" crossorigin src="/spatial-view/assets/index-DMo5UYHp.js"></script>
+  <script type="module" crossorigin src="/spatial-view/assets/index-LcNBoaaS.js"></script>
   <link rel="modulepreload" crossorigin href="/spatial-view/assets/konva-DF021KA-.js">
   <link rel="modulepreload" crossorigin href="/spatial-view/assets/dexie-nOSQWKqj.js">
-  <link rel="stylesheet" crossorigin href="/spatial-view/assets/index-CqbjZ6uK.css">
+  <link rel="stylesheet" crossorigin href="/spatial-view/assets/index-BUGGLiiJ.css">
 </head>
 <body>
   <!-- Floating header - always visible -->
@@ -22,7 +22,7 @@
       <h2>Spatial View</h2>
 
       <div class="info-section">
-        <p>En digital <strong>visuospatial sketchpad</strong> för dina handskrivna anteckningar och idéer. Precis som arbetsminnets visuospatiala komponent låter Spatial View dig organisera och manipulera visuell information fritt i rummet.</p>
+        <p>En visuell second brain för dina handskrivna anteckningar och idéer.</p>
         <p><strong>Skapad av:</strong> ximonse och Claude</p>
         <p><strong>⚠️ Beta-version:</strong> Detta är en tidig version som kan vara ostabil. Ladda ner dina kort regelbundet om arbetet är viktigt!</p>
       </div>
@@ -54,16 +54,6 @@
             <span class="tip-icon">🔍</span>
             <span><strong>Sök:</strong> Boolean search med AND, OR, NOT och wildcards</span>
           </li>
-        </ul>
-      </div>
-
-      <div class="info-section">
-        <h3>Sorteringsmöjligheter</h3>
-        <ul class="tip-list">
-          <li><span class="tip-icon">🔢</span><span><strong>Spatial:</strong> Kom ihåg var saker finns genom position</span></li>
-          <li><span class="tip-icon">📅</span><span><strong>Temporal:</strong> Kolumnvy sorterar efter senast ändrad</span></li>
-          <li><span class="tip-icon">🏷️</span><span><strong>Kategorisk:</strong> Använd färger för gruppering</span></li>
-          <li><span class="tip-icon">🔍</span><span><strong>Boolean search:</strong> Filtrera med AND, OR, NOT</span></li>
         </ul>
       </div>
 

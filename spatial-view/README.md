@@ -1,153 +1,187 @@
 # Spatial View
 
-> **Visual Second Brain för handskrivna anteckningar**
+> En digital visuospatial sketchpad för dina handskrivna anteckningar
 
-Spatial View är en modern omskrivning av spatial-notes-v2 med fokus på performance, enkelhet och skalbarhet.
+[![Live Demo](https://img.shields.io/badge/demo-live-success)](https://ximonse.github.io/spatial-view/)
+[![Status](https://img.shields.io/badge/status-beta-orange)]()
+[![Built with Vite](https://img.shields.io/badge/built%20with-Vite-646CFF)]()
 
-## ✨ Features (v1.0 Roadmap)
+## Vad är Spatial View?
 
-- ✅ **Modern arkitektur**: Konva.js canvas + IndexedDB storage
-- ✅ **Device-optimerad**: Automatisk anpassning för desktop, mobile och e-ink
-- 🚧 **OCR Integration**: Gemini 2.5 Flash för handskrivna anteckningar
-- 🚧 **Incremental Sync**: Delta-baserad export/import mellan enheter
-- 🚧 **Visual Organization**: Drag-drop canvas med arrangemang-kommandon
-- 🚧 **Themes**: Light, Dark, Sepia, E-ink
+Spatial View är en digital implementering av arbetsminnets [visuospatiala sketchpad](https://dictionary.apa.org/visuospatial-sketchpad) - den kognitiva komponent som hanterar visuell och spatial information.
 
-## 🏗️ Tech Stack
+### Varför spatial organisering?
 
-- **Canvas**: Konva.js (WebGL rendering)
-- **Storage**: IndexedDB via Dexie.js
-- **Build**: Vite
-- **AI**: Google Gemini 2.5 Flash
-- **Hosting**: GitHub Pages (v1.0), Cloudflare Pages (future)
+I kognitiv psykologi vet vi att:
+- **Spatial memory** är starkare än linjär minne
+- **Visuell association** genom närhet skapar naturliga samband
+- **Fri manipulation** i 2D-rum speglar hur vi tänker
 
-## 🚀 Getting Started
+Spatial View tar dessa principer och skapar en digital arbetsyta där du kan:
+
+✨ **Organisera visuellt**: Placera kort fritt baserat på relationer
+🧠 **Tänka spatialt**: Hitta information genom position, inte sök
+🎨 **Skapa mönster**: Se samband genom spatial gruppering
+📸 **Integrera bilder**: Importera foton av handskrivna anteckningar
+
+## Snabbstart
+
+### Online (rekommenderat)
+Öppna direkt i webbläsaren: **[ximonse.github.io/spatial-view](https://ximonse.github.io/spatial-view/)**
+
+Ingen installation krävs. All data sparas lokalt i din webbläsare.
+
+### Lokalt (development)
 
 ```bash
-# Install dependencies
+# Klona repo
+git clone https://github.com/ximonse/ximonse.github.io.git
+cd ximonse.github.io/spatial-view
+
+# Installera dependencies
 npm install
 
-# Start development server
+# Starta dev server
 npm run dev
+```
 
-# Build for production
+## Nyckel-funktioner
+
+### 🎯 Spatial Canvas
+- Fri positionering av kort på 2D-canvas
+- Touch-optimerad (pinch-to-zoom, swipe)
+- Smooth Konva.js rendering
+
+### 📝 Kort-typer
+- **Text-kort**: Snabba anteckningar (Markdown-stöd)
+- **Bild-kort**: Importera foton av handskrivet
+- **Dubbelsidiga**: Text på baksidan av bilder
+
+### 🔍 Boolean Search
+```
+(python OR javascript) AND NOT tutorial*
+ord1 NEAR/5 ord2
+```
+
+### 🎨 Arrangering
+- Vertikal/Horisontell
+- Grid (flera varianter)
+- Cirkel/Cluster
+- Kanban-stil (överlappande)
+
+### 💾 Backup
+Ladda ner komplett backup:
+- Alla kort som JSON
+- Alla bilder som PNG
+- Packade i zip-fil
+
+### 🌓 Teman
+- ☀️ Ljust
+- 🌙 Mörkt
+- 📄 E-ink (optimerat för e-papper)
+
+### ⚙️ UI-lägen
+1. **Full**: Alla knappar synliga
+2. **Minimal**: Endast kommandopalett + toggle
+3. **Micro**: Endast toggle-knapp
+
+## Tangentbordsgenvägar
+
+### Essentiella
+- `Space` - Kommandopalett (visar alla kommandon)
+- `K` - Toggle brädvy/kolumnvy
+- `N` - Nytt kort
+- `I` - Importera bild
+
+### Editing
+- `Dubbelklick` - Redigera kort
+- `Ctrl+C/V` - Kopiera/Klistra in
+- `Ctrl+Z/Y` - Ångra/Gör om
+
+### Arrangering
+- `V/H/G` - Vertikal/Horisontell/Grid
+- `Q` - Cirkel
+- `P` - Pinna kort (lås position)
+
+### Data
+- `B` - Backup (ladda ner zip)
+- `S` - Exportera JSON
+- `L` - Importera JSON
+
+## Teknisk stack
+
+- **[Konva.js](https://konvajs.org/)** - Canvas rendering
+- **[Dexie.js](https://dexie.org/)** - IndexedDB wrapper
+- **[Vite](https://vitejs.dev/)** - Build tool
+- **[JSZip](https://stuk.github.io/jszip/)** - Backup zip-filer
+- **[browser-image-compression](https://github.com/Donaldcwl/browser-image-compression)** - Bildkomprimering
+
+## Byggning för production
+
+```bash
+# Bygg
 npm run build
 
-# Preview production build
-npm run preview
+# Kopiera till root för GitHub Pages
+cp dist/index.html index.html
+cp -r dist/assets assets
+
+# Commit och push
+git add -A
+git commit -m "Build production version"
+git push origin master
 ```
 
-## 📁 Project Structure
+Se [BUILD.md](BUILD.md) för detaljerad guide.
 
-```
-spatial-view/
-├── src/
-│   ├── lib/           # Core modules
-│   │   ├── canvas.js      # Konva canvas handling
-│   │   ├── storage.js     # IndexedDB with Dexie
-│   │   └── gemini.js      # OCR integration
-│   ├── views/         # View components
-│   │   ├── board-view.js  # Canvas view
-│   │   └── column-view.js # List view
-│   ├── utils/         # Utilities
-│   │   ├── image-processing.js
-│   │   └── delta-sync.js
-│   ├── assets/        # Themes and styles
-│   ├── main.js        # Entry point
-│   └── styles.css     # Base styles
-├── docs/              # Architecture Decision Records
-│   ├── ADR-001-why-konva.md
-│   ├── ADR-002-indexeddb-storage.md
-│   └── ADR-003-incremental-sync.md
-└── index.html
-```
+## Vetenskaplig bakgrund
 
-## 📋 Development Phases
+### Visuospatial Sketchpad (Baddeley & Hitch, 1974)
 
-### Phase 1: Core Canvas (1 vecka)
-- Konva stage med zoom/pan
-- Drag-drop kort
-- Save/load från IndexedDB
+I Alan Baddeleys klassiska modell av arbetsminne är den visuospatiala sketchpaden ansvarig för:
 
-### Phase 2: Image Import (1 vecka)
-- Camera API
-- Image compression
-- EXIF metadata
+1. **Visuell cache**: Tillfällig lagring av visuell information
+2. **Inner scribe**: Spatial och movement-planering
+3. **Spatial manipulation**: Rotation och transformation av objekt
 
-### Phase 3: Gemini OCR (3 dagar)
-- OCR integration
-- Metadata extraction
-- Batch processing
+Spatial View digitaliserar dessa funktioner:
+- **Visual cache** → Kort med text/bilder
+- **Inner scribe** → Dra, arrangera, gruppera
+- **Spatial manipulation** → Arrangerings-algoritmer
 
-### Phase 4: Views & Devices (1 vecka)
-- Column view
-- Device detection
-- E-ink optimizations
+### Varför det fungerar
 
-### Phase 5: Search & Sort (3 dagar)
-- Boolean search
-- Temporal sorting
-- Tag filtering
+**Spatial memory** (O'Keefe & Nadel, 1978):
+> "Platsceller i hippocampus skapar kognitiva kartor som är starkare än sekventiella minnen"
 
-### Phase 6: Arrangement (3 dagar)
-- Visual layouts (V, H, G, Q)
-- Command palette
+**Dual Coding Theory** (Paivio, 1971):
+> "Information kodad både visuellt och verbalt ger starkare minnesförmåga"
 
-### Phase 7: Polish & PWA (1 vecka)
-- Offline mode
-- Service worker
-- Install prompt
+Spatial View kombinerar dessa principer för optimalt lärande och minne.
 
-### Phase 8: Migration (3 dagar)
-- Import from v2
-- Data migration tool
+## Status: Beta
 
-## 🎯 Success Metrics
+⚠️ Detta är en beta-version. **Ladda ner backup regelbundet** om arbetet är viktigt.
 
-- Load 100 kort: **<2s** (vs >10s i v2)
-- Memory usage: **<100MB** (vs >300MB i v2)
-- Bundle size: **<200KB** gzipped
-- Code size: **<10,000 lines** (vs 28k i v2)
+Använd 💾 Backup-knappen för att exportera alla kort och bilder.
 
-## 🔍 Key Improvements from v2
+## Dokumentation
 
-### Architecture
-- ❌ Cytoscape.js (graf-visualisering) → ✅ Konva.js (canvas)
-- ❌ localStorage (5-10MB) → ✅ IndexedDB (unlimited)
-- ❌ 80+ metadata fields → ✅ 15 fields
-- ❌ 28k lines code → ✅ <10k lines
+- [FEATURES.md](FEATURES.md) - Komplett funktionslista
+- [BUILD.md](BUILD.md) - Build-instruktioner
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Kod-organisation
 
-### Performance
-- ✅ Async I/O (no UI blocking)
-- ✅ Blob storage (no base64 overhead)
-- ✅ Indexed queries
-- ✅ Lazy loading
-- ✅ Web Workers (OCR, search)
+## Licens
 
-### UX
-- ✅ Device-specific optimizations
-- ✅ Simplified metadata
-- ✅ Faster load times
-- ✅ Smooth animations
+MIT License - skapad av ximonse och Claude
 
-## 📖 Documentation
+## Referenser
 
-- [ADR-001: Why Konva.js](docs/ADR-001-why-konva.md)
-- [ADR-002: IndexedDB Storage](docs/ADR-002-indexeddb-storage.md)
-- [ADR-003: Incremental Sync](docs/ADR-003-incremental-sync.md)
-
-## 📄 License
-
-MIT License - see LICENSE file
-
-## 🙏 Credits
-
-Built with:
-- [Konva.js](https://konvajs.org/)
-- [Dexie.js](https://dexie.org/)
-- [Vite](https://vitejs.dev/)
-- [Google Gemini](https://ai.google.dev/)
+- [Visuospatial Sketchpad (APA Dictionary)](https://dictionary.apa.org/visuospatial-sketchpad)
+- Baddeley, A. D., & Hitch, G. (1974). Working Memory. *Psychology of Learning and Motivation*, 8, 47-89.
+- O'Keefe, J., & Nadel, L. (1978). *The Hippocampus as a Cognitive Map*. Oxford University Press.
+- Paivio, A. (1971). *Imagery and Verbal Processes*. Holt, Rinehart and Winston.
 
 ---
 
-**Status**: 🚧 Phase 0 Complete - Ready for Phase 1 development
+**[Live Demo →](https://ximonse.github.io/spatial-view/)**
