@@ -25,8 +25,9 @@
  */
 
 import Konva from 'konva';
-import { getAllCards, updateCard, createCard, deleteCard } from './storage.js';
+import { getAllCards, updateCard, createCard, deleteCard, getCard } from './storage.js';
 import { processImage } from '../utils/image-processing.js';
+import { readImageWithGemini } from './gemini.js';
 import {
   arrangeVertical,
   arrangeHorizontal,
@@ -437,10 +438,15 @@ function renderTextCard(group, cardData) {
  */
 function renderImageCard(group, cardData) {
   const imageObj = new Image();
-  const imageData = cardData.image;
+  const imageData = cardData.image; // This is the object { base64, width, height, quality }
   const isFlipped = cardData.flipped || false;
 
+  console.log('DEBUG: renderImageCard - cardData.image:', imageData);
+
   imageObj.onload = function() {
+    console.log('DEBUG: renderImageCard - imageObj loaded. naturalWidth:', imageObj.naturalWidth, 'naturalHeight:', imageObj.naturalHeight);
+    console.log('DEBUG: renderImageCard - imageData.base64 (truncated):', imageData.base64 ? imageData.base64.substring(0, 100) + '...' : 'N/A');
+
     // Check themes
     const isEink = document.body.classList.contains('eink-theme');
     const isDark = document.body.classList.contains('dark-theme');
@@ -452,11 +458,20 @@ function renderImageCard(group, cardData) {
     let width = imageObj.naturalWidth;
     let height = imageObj.naturalHeight;
 
+    // If natural dimensions are 0, use stored dimensions if available, or fallback
+    if (width === 0 || height === 0) {
+        console.warn('WARNING: Image natural dimensions are 0. Falling back to stored dimensions or default.');
+        width = imageData.width || 200;
+        height = imageData.height || 150;
+    }
+
     if (width > maxWidth || height > maxHeight) {
       const ratio = Math.min(maxWidth / width, maxHeight / height);
       width = width * ratio;
       height = height * ratio;
     }
+
+    console.log('DEBUG: renderImageCard - Final calculated width:', width, 'height:', height);
 
     // Store dimensions on group for flip
     group.setAttr('cardWidth', width);
@@ -567,6 +582,10 @@ function renderImageCard(group, cardData) {
     }
 
     layer.batchDraw();
+  };
+
+  imageObj.onerror = function() {
+      console.error('ERROR: renderImageCard - Failed to load image from base64. imageData:', imageData);
   };
 
   imageObj.src = imageData.base64;
@@ -1461,7 +1480,7 @@ async function handleDeleteCard(cardId) {
 /**
  * Reload canvas from storage
  */
-async function reloadCanvas() {
+export async function reloadCanvas() {
   // Clear existing cards
   cardGroups.forEach(group => group.destroy());
   cardGroups.clear();
@@ -3415,13 +3434,15 @@ export async function searchCards(query) {
 /**
  * Show context menu for card
  */
-export function showContextMenu(x, y, cardId, group) {
+export async function showContextMenu(x, y, cardId, group) {
   // Remove any existing context menu
   const existingMenu = document.getElementById('card-context-menu');
   if (existingMenu) {
     existingMenu.remove();
   }
 
+  const selectedGroups = layer.find('.selected');
+  const isBulkOperation = selectedGroups.length > 1 && group.hasName('selected');
   const isLocked = group.getAttr('locked') || false;
 
   // Create menu
@@ -3431,65 +3452,74 @@ export function showContextMenu(x, y, cardId, group) {
     position: fixed;
     left: ${x}px;
     top: ${y}px;
-    background: white;
-    border: 1px solid #e0e0e0;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
     border-radius: 6px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     z-index: 10001;
-    min-width: 150px;
+    min-width: 180px;
     overflow: hidden;
   `;
 
-  const menuItems = [
-    {
-      label: isLocked ? '📌 Avpinna kort' : '📌 Pinna kort',
-      action: () => toggleLockCard(cardId, group)
-    },
-    {
-      label: '✏️ Redigera',
-      action: () => {
-        if (group.getAttr('cardId')) {
-          const cards = cardGroups.get(cardId);
-          if (cards) {
-            getAllCards().then(allCards => {
-              const card = allCards.find(c => c.id === cardId);
-              if (card && card.image) {
-                flipCard(cardId);
-              } else {
-                openEditDialog(cardId);
-              }
-            });
+  let menuItems = [];
+
+  if (isBulkOperation) {
+    const selectedIds = selectedGroups.map(g => g.getAttr('cardId'));
+    menu.innerHTML = `<div style="padding: 8px 12px; font-weight: 600; border-bottom: 1px solid var(--border-color); margin-bottom: 4px; color: var(--text-primary);">${selectedIds.length} kort markerade</div>`;
+    menuItems = [
+      {
+        label: '🎨 Ändra färg',
+        action: () => showQuickColorPicker(x, y, selectedIds)
+      },
+      {
+        label: '✏️ Redigera alla',
+        action: () => createBulkEditor(selectedIds)
+      },
+      {
+        label: '🗑️ Ta bort alla',
+        action: () => {
+          if (confirm(`Är du säker på att du vill ta bort ${selectedIds.length} kort?`)) {
+            selectedIds.forEach(id => handleDeleteCard(id));
           }
         }
       }
-    },
-    {
-      label: '🗑️ Ta bort',
-      action: () => deleteCard(cardId)
-    }
-  ];
+    ];
+    renderMenuItems(menu, menuItems, true);
+  } else {
+    // Single card menu
+    const card = await getCard(cardId);
+    menuItems = [
+      {
+        label: isLocked ? '📌 Avpinna kort' : '📌 Pinna kort',
+        action: () => toggleLockCard(cardId, group)
+      },
+      {
+        label: '✏️ Redigera',
+        action: () => {
+          if (card && card.image) {
+            flipCard(cardId);
+          } else {
+            openEditDialog(cardId);
+          }
+        }
+      }
+    ];
 
-  menuItems.forEach(item => {
-    const menuItem = document.createElement('div');
-    menuItem.textContent = item.label;
-    menuItem.style.cssText = `
-      padding: 10px 16px;
-      cursor: pointer;
-      font-size: 14px;
-      transition: background 0.2s;
-    `;
-    menuItem.addEventListener('mouseenter', () => {
-      menuItem.style.background = '#f5f5f5';
+    if (card && card.image) {
+      menuItems.push({
+        label: '✨ Läs med AI',
+        action: () => readImageWithGemini(cardId)
+      });
+    }
+
+    menuItems.push({
+      label: '🗑️ Ta bort',
+      action: () => handleDeleteCard(cardId)
     });
-    menuItem.addEventListener('mouseleave', () => {
-      menuItem.style.background = 'white';
-    });
-    menuItem.addEventListener('click', () => {
-      item.action();
-      menu.remove();
-    });
-    menu.appendChild(menuItem);
-  });
+
+    renderMenuItems(menu, menuItems, false);
+  }
 
   document.body.appendChild(menu);
 
@@ -3501,6 +3531,37 @@ export function showContextMenu(x, y, cardId, group) {
     }
   };
   setTimeout(() => document.addEventListener('click', closeMenu), 10);
+}
+
+function renderMenuItems(menu, items, isBulk) {
+    if (!isBulk) {
+        menu.innerHTML = ''; // Clear loading placeholder
+    }
+
+    items.forEach(item => {
+        const menuItem = document.createElement('div');
+        menuItem.textContent = item.label;
+        menuItem.style.cssText = `
+          padding: 10px 16px;
+          cursor: pointer;
+          font-size: 14px;
+          transition: background 0.2s;
+          color: var(--text-primary);
+        `;
+        menuItem.addEventListener('mouseenter', () => {
+          menuItem.style.background = 'var(--bg-secondary)';
+        });
+        menuItem.addEventListener('mouseleave', () => {
+          menuItem.style.background = 'var(--bg-primary)';
+        });
+        menuItem.addEventListener('click', (e) => {
+          e.stopPropagation();
+          item.action();
+          const contextMenu = document.getElementById('card-context-menu');
+          if (contextMenu) contextMenu.remove();
+        });
+        menu.appendChild(menuItem);
+    });
 }
 
 /**

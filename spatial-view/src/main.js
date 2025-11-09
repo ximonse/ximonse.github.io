@@ -1,3 +1,5 @@
+import './styles.css';
+
 /**
  * Spatial View v1.0
  * Main entry point
