@@ -124,17 +124,6 @@ function applySavedTheme() {
     state.theme = savedTheme;
     console.log('Applied saved theme:', savedTheme);
   }
-
-  // Update theme button text
-  const themeBtn = document.getElementById('btn-theme-toggle');
-  const themeNames = {
-    'light': '☀️ Ljust',
-    'dark': '🌙 Mörkt',
-    'eink': '📄 E-ink'
-  };
-  if (themeBtn) {
-    themeBtn.textContent = themeNames[savedTheme] || '🎨 Tema';
-  }
 }
 
 /**
