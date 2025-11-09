@@ -954,9 +954,10 @@ async function toggleTheme() {
   }
 
   // Update card appearances based on new theme
-  const { updateCardShadows, updateCardFills } = await import('./lib/canvas.js');
+  const { updateCardShadows, updateCardFills, updateCardStrokes } = await import('./lib/canvas.js');
   updateCardShadows();
   await updateCardFills(); // Use await since it's an async function
+  updateCardStrokes();
 
   console.log(`Theme changed to: ${nextTheme}`);
 }

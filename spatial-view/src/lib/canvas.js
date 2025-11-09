@@ -1564,6 +1564,49 @@ export async function updateCardFills() {
 }
 
 /**
+ * Update stroke on all cards based on current theme.
+ * Called when theme changes.
+ */
+export function updateCardStrokes() {
+    const isEink = document.body.classList.contains('eink-theme');
+    const isDark = document.body.classList.contains('dark-theme');
+
+    cardGroups.forEach(group => {
+        const background = group.findOne('Rect');
+        if (background) {
+            const isSelected = group.hasName('selected');
+
+            if (isSelected) {
+                // Keep selection stroke color if selected
+                if (isEink) {
+                    background.stroke('#000000');
+                    background.strokeWidth(4);
+                } else {
+                    background.stroke('#2196F3');
+                    background.strokeWidth(3);
+                }
+            } else {
+                // Apply theme-specific stroke for non-selected cards
+                if (isEink) {
+                    background.stroke('#000000');
+                    background.strokeWidth(2);
+                } else if (isDark) {
+                    background.stroke('#4a5568');
+                    background.strokeWidth(1);
+                } else {
+                    background.stroke('#e0e0e0');
+                    background.strokeWidth(1);
+                }
+            }
+        }
+    });
+
+    if (layer) {
+        layer.batchDraw();
+    }
+}
+
+/**
  * Undo/redo functions
  */
 function pushUndo(action) {
