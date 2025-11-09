@@ -148,6 +148,10 @@ function setupEventListeners() {
   const importBtn = document.getElementById('btn-import');
   importBtn?.addEventListener('click', handleImport);
 
+  // Download button
+  const downloadBtn = document.getElementById('btn-download');
+  downloadBtn?.addEventListener('click', handleDownloadBackup);
+
   // Search
   const searchInput = document.getElementById('search-input');
   searchInput?.addEventListener('input', debounce(handleSearch, 300));
@@ -666,6 +670,83 @@ async function handleImport() {
   } catch (error) {
     console.error('Import failed:', error);
     alert('Misslyckades att importera bild: ' + error.message);
+  }
+}
+
+/**
+ * Handle download backup
+ */
+async function handleDownloadBackup() {
+  try {
+    const JSZip = (await import('jszip')).default;
+    const { getAllCards } = await import('./lib/storage.js');
+
+    console.log('Creating backup...');
+    const zip = new JSZip();
+
+    // Get all cards
+    const cards = await getAllCards();
+
+    // Create JSON export
+    const jsonData = {
+      version: '1.0',
+      exportDate: new Date().toISOString(),
+      cards: cards
+    };
+
+    zip.file('cards.json', JSON.stringify(jsonData, null, 2));
+
+    // Add images folder
+    const imagesFolder = zip.folder('images');
+    let imageCount = 0;
+
+    // Extract and save images
+    for (const card of cards) {
+      if (card.image) {
+        try {
+          // Handle both direct base64 string and object format
+          const imageSrc = typeof card.image === 'string' ? card.image : card.image.base64;
+
+          // Extract base64 data (remove data:image/png;base64, prefix)
+          const base64Data = imageSrc.split(',')[1];
+
+          if (base64Data) {
+            // Use card ID as filename
+            const filename = `card_${card.id}.png`;
+            imagesFolder.file(filename, base64Data, { base64: true });
+            imageCount++;
+          }
+        } catch (error) {
+          console.error(`Failed to export image for card ${card.id}:`, error);
+        }
+      }
+    }
+
+    console.log(`Exporting ${cards.length} cards and ${imageCount} images...`);
+
+    // Generate zip file
+    const blob = await zip.generateAsync({ type: 'blob' });
+
+    // Download
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+
+    // Create filename with date
+    const date = new Date().toISOString().split('T')[0];
+    a.download = `spatial-view-backup-${date}.zip`;
+
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    console.log(`Backup created successfully: ${cards.length} cards, ${imageCount} images`);
+    alert(`Backup skapad!\n\n${cards.length} kort och ${imageCount} bilder exporterade.`);
+
+  } catch (error) {
+    console.error('Backup failed:', error);
+    alert('Misslyckades att skapa backup: ' + error.message);
   }
 }
 

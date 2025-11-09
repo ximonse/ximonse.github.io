@@ -2347,6 +2347,13 @@ function showCommandPalette() {
     { key: 'L', icon: '📂', name: 'Importera JSON', desc: 'Importera kort från JSON-fil', action: async () => {
       await importCanvas();
     }},
+    { key: 'B', icon: '💾', name: 'Ladda ner backup', desc: 'Ladda ner alla kort och bilder som zip-fil', action: async () => {
+      // Trigger download from main.js
+      const downloadBtn = document.getElementById('btn-download');
+      if (downloadBtn) {
+        downloadBtn.click();
+      }
+    }},
     { key: 'Delete', icon: '🗑️', name: 'Ta bort kort', desc: 'Ta bort markerade kort', action: async () => {
       const selectedNodes = layer.find('.selected');
       for (const node of selectedNodes) {
