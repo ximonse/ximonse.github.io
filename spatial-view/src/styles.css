@@ -72,12 +72,12 @@ html, body {
 /* Toolbar */
 #toolbar {
   height: var(--toolbar-height);
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  background: transparent;
+  backdrop-filter: none;
+  border-bottom: none;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   padding: 0 var(--spacing-lg);
   flex-shrink: 0;
   position: fixed;
@@ -85,6 +85,11 @@ html, body {
   left: 0;
   right: 0;
   z-index: 1000;
+  pointer-events: none; /* Låt klick gå igenom toolbar själv */
+}
+
+#toolbar-actions {
+  pointer-events: auto; /* Men knappar ska vara klickbara */
 }
 
 #toolbar h1 {
@@ -215,30 +220,31 @@ button:active {
   color: #000;
   z-index: 10000;
   cursor: pointer;
-  background: none;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.1);
   padding: 8px 16px;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   transition: all 0.2s;
-  text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
 }
 
 #floating-header:hover {
-  text-shadow: 1px 1px 4px rgba(255, 255, 255, 1);
+  background: rgba(255, 255, 255, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 /* Dark theme floating header */
 .dark-theme #floating-header {
   color: #fff;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+  background: rgba(30, 30, 30, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .dark-theme #floating-header:hover {
-  text-shadow: 1px 1px 4px rgba(0, 0, 0, 1);
-}
-
-/* Dark theme toolbar */
-.dark-theme #toolbar {
-  background: rgba(30, 30, 30, 0.95);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(40, 40, 40, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
 
 /* Info overlay */
