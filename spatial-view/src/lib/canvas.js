@@ -167,42 +167,66 @@ function renderCard(cardData) {
     showContextMenu(e.evt.clientX, e.evt.clientY, cardData.id, this);
   });
 
-  // Touch long-press to flip image cards
-  if (cardData.image) {
-    let touchTimer = null;
-    let touchStartPos = null;
+  // Touch handlers
+  let touchTimer = null;
+  let touchStartPos = null;
+  let hasMoved = false;
 
-    group.on('touchstart', function(e) {
-      const pos = this.position();
-      touchStartPos = { x: pos.x, y: pos.y };
+  group.on('touchstart', function(e) {
+    const pos = this.position();
+    touchStartPos = { x: pos.x, y: pos.y };
+    hasMoved = false;
 
-      touchTimer = setTimeout(async () => {
-        // Check if card hasn't moved (not dragging)
-        const currentPos = this.position();
-        const moved = Math.abs(currentPos.x - touchStartPos.x) > 5 ||
-                      Math.abs(currentPos.y - touchStartPos.y) > 5;
+    // Long press timer
+    touchTimer = setTimeout(async () => {
+      if (!hasMoved) {
+        // Long press detected
+        const selectedGroups = layer.find('.selected');
 
-        if (!moved) {
-          await flipCard(cardData.id);
-          touchTimer = null;
+        if (selectedGroups.length > 1 && this.hasName('selected')) {
+          // Multiple cards selected: show bulk menu
+          await showTouchBulkMenu(e.evt.clientX || e.evt.touches[0].clientX,
+                                  e.evt.clientY || e.evt.touches[0].clientY);
+        } else {
+          // Single card: open editor
+          if (cardData.image && cardData.flipped) {
+            createInlineEditor(cardData.id, this, cardData.backText || '', true);
+          } else if (cardData.image) {
+            // For image cards (front side), flip them
+            await flipCard(cardData.id);
+          } else {
+            // For text cards, open editor
+            createInlineEditor(cardData.id, this, cardData.text || '', false);
+          }
         }
-      }, 500); // 500ms long press
-    });
-
-    group.on('touchend touchcancel', function() {
-      if (touchTimer) {
-        clearTimeout(touchTimer);
         touchTimer = null;
       }
-    });
+    }, 600); // 600ms long press
+  });
 
-    group.on('dragstart', function() {
-      if (touchTimer) {
-        clearTimeout(touchTimer);
-        touchTimer = null;
-      }
-    });
-  }
+  group.on('touchmove', function() {
+    const currentPos = this.position();
+    const moved = Math.abs(currentPos.x - touchStartPos.x) > 5 ||
+                  Math.abs(currentPos.y - touchStartPos.y) > 5;
+    if (moved) {
+      hasMoved = true;
+    }
+  });
+
+  group.on('touchend touchcancel', function() {
+    if (touchTimer) {
+      clearTimeout(touchTimer);
+      touchTimer = null;
+    }
+  });
+
+  group.on('dragstart', function() {
+    hasMoved = true;
+    if (touchTimer) {
+      clearTimeout(touchTimer);
+      touchTimer = null;
+    }
+  });
 
   // Group drag - move all selected cards together
   let dragStartPositions = null;
@@ -705,22 +729,561 @@ async function createInlineEditor(cardId, group, currentText, isImageBack = fals
 }
 
 /**
- * Open edit dialog for card
+ * Bulk editor for multiple selected cards
+ */
+async function createBulkEditor(cardIds) {
+  const cards = await getAllCards();
+  const selectedCards = cards.filter(c => cardIds.includes(c.id));
+
+  if (selectedCards.length === 0) return;
+
+  // Create overlay
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 10000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  `;
+
+  // Create dialog
+  const dialog = document.createElement('div');
+  dialog.style.cssText = `
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    padding: 24px;
+    border-radius: 12px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  `;
+
+  dialog.innerHTML = `
+    <h3 style="margin-top: 0; margin-bottom: 20px; font-size: 20px; font-weight: 600;">
+      Redigera ${selectedCards.length} kort
+    </h3>
+
+    <div style="margin-bottom: 16px; padding: 12px; background: var(--bg-secondary); border-radius: 8px;">
+      <p style="margin: 0; font-size: 14px;">
+        Ändringar appliceras på alla ${selectedCards.length} markerade kort.
+        Lämna fält tomma för att inte ändra dem.
+      </p>
+    </div>
+
+    <div style="margin-bottom: 16px;">
+      <label style="display: block; margin-bottom: 8px; font-weight: 500;">
+        Lägg till tags (kommaseparerade, läggs till befintliga):
+      </label>
+      <input type="text" id="bulkAddTags"
+        placeholder="t.ex. urgent, projekt"
+        style="width: 100%; padding: 12px; font-size: 16px;
+               border: 2px solid var(--border-color); border-radius: 8px;
+               background: var(--bg-secondary); color: var(--text-primary);
+               box-sizing: border-box;">
+    </div>
+
+    <div style="margin-bottom: 20px;">
+      <label style="display: block; margin-bottom: 8px; font-weight: 500;">Kortfärg:</label>
+      <div id="bulkColorPicker" style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <div class="color-dot" data-color="none" style="width: 36px; height: 36px; border-radius: 50%;
+             background: var(--bg-secondary); border: 3px solid var(--accent-color); cursor: pointer;
+             display: flex; align-items: center; justify-content: center; font-size: 20px;"
+             title="Ändra inte färg">×</div>
+        <div class="color-dot" data-color="" style="width: 36px; height: 36px; border-radius: 50%;
+             background: var(--bg-secondary); border: 3px solid var(--border-color); cursor: pointer;
+             display: flex; align-items: center; justify-content: center; font-size: 20px;"
+             title="Ingen färg">⭘</div>
+        <div class="color-dot" data-color="card-color-1" style="width: 36px; height: 36px; border-radius: 50%;
+             background: #d4f2d4; border: 3px solid transparent; cursor: pointer;" title="Grön"></div>
+        <div class="color-dot" data-color="card-color-2" style="width: 36px; height: 36px; border-radius: 50%;
+             background: #ffe4b3; border: 3px solid transparent; cursor: pointer;" title="Orange"></div>
+        <div class="color-dot" data-color="card-color-3" style="width: 36px; height: 36px; border-radius: 50%;
+             background: #ffc1cc; border: 3px solid transparent; cursor: pointer;" title="Röd"></div>
+        <div class="color-dot" data-color="card-color-4" style="width: 36px; height: 36px; border-radius: 50%;
+             background: #fff7b3; border: 3px solid transparent; cursor: pointer;" title="Gul"></div>
+        <div class="color-dot" data-color="card-color-5" style="width: 36px; height: 36px; border-radius: 50%;
+             background: #f3e5f5; border: 3px solid transparent; cursor: pointer;" title="Lila"></div>
+        <div class="color-dot" data-color="card-color-6" style="width: 36px; height: 36px; border-radius: 50%;
+             background: #c7e7ff; border: 3px solid transparent; cursor: pointer;" title="Blå"></div>
+        <div class="color-dot" data-color="card-color-7" style="width: 36px; height: 36px; border-radius: 50%;
+             background: #e0e0e0; border: 3px solid transparent; cursor: pointer;" title="Grå"></div>
+        <div class="color-dot" data-color="card-color-8" style="width: 36px; height: 36px; border-radius: 50%;
+             background: #ffffff; border: 3px solid #ddd; cursor: pointer;" title="Vit"></div>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px;">
+      <button id="bulkCancel" style="padding: 12px 24px; background: var(--bg-secondary);
+                                     color: var(--text-primary); border: 2px solid var(--border-color);
+                                     border-radius: 8px; font-size: 16px; font-weight: 500; cursor: pointer;">
+        Avbryt
+      </button>
+      <button id="bulkSave" style="padding: 12px 24px; background: var(--accent-color);
+                                    color: white; border: none; border-radius: 8px;
+                                    font-size: 16px; font-weight: 600; cursor: pointer;">
+        Uppdatera alla
+      </button>
+    </div>
+
+    <div style="margin-top: 16px; font-size: 13px; color: var(--text-secondary); text-align: center;">
+      Tips: Ctrl+Enter = Spara, Esc = Avbryt
+    </div>
+  `;
+
+  overlay.appendChild(dialog);
+  document.body.appendChild(overlay);
+
+  // Get elements
+  const tagsInput = document.getElementById('bulkAddTags');
+  const saveBtn = document.getElementById('bulkSave');
+  const cancelBtn = document.getElementById('bulkCancel');
+
+  // Handle color selection
+  let selectedColor = 'none'; // Default: don't change
+  const colorDots = document.querySelectorAll('#bulkColorPicker .color-dot');
+
+  colorDots.forEach(dot => {
+    dot.addEventListener('click', function() {
+      // Remove selection from all
+      colorDots.forEach(d => {
+        if (d.dataset.color === 'none') {
+          d.style.border = '3px solid transparent';
+        } else if (d.dataset.color === '') {
+          d.style.border = '3px solid var(--border-color)';
+        } else if (d.dataset.color === 'card-color-8') {
+          d.style.border = '3px solid #ddd';
+        } else {
+          d.style.border = '3px solid transparent';
+        }
+      });
+
+      // Select this one
+      this.style.border = '3px solid var(--accent-color)';
+      selectedColor = this.dataset.color;
+    });
+  });
+
+  const cleanup = () => {
+    if (overlay.parentNode) {
+      document.body.removeChild(overlay);
+    }
+    document.removeEventListener('keydown', escHandler);
+  };
+
+  // Save handler
+  const save = async () => {
+    const addTags = tagsInput.value ? tagsInput.value.split(',').map(t => t.trim()).filter(t => t) : [];
+
+    // Build updates
+    for (const card of selectedCards) {
+      const updates = {};
+
+      // Add tags (merge with existing)
+      if (addTags.length > 0) {
+        const existingTags = card.tags || [];
+        const newTags = [...new Set([...existingTags, ...addTags])]; // Remove duplicates
+        updates.tags = newTags;
+      }
+
+      // Update color (only if not 'none')
+      if (selectedColor !== 'none') {
+        updates.cardColor = selectedColor;
+      }
+
+      // Only update if there are changes
+      if (Object.keys(updates).length > 0) {
+        await updateCard(card.id, updates);
+      }
+    }
+
+    await reloadCanvas();
+    cleanup();
+
+    console.log(`Bulk updated ${selectedCards.length} cards`);
+  };
+
+  // Event listeners
+  saveBtn.addEventListener('click', save);
+  cancelBtn.addEventListener('click', cleanup);
+
+  // Keyboard shortcuts
+  const escHandler = (e) => {
+    if (e.key === 'Escape') {
+      cleanup();
+    }
+  };
+  document.addEventListener('keydown', escHandler);
+
+  tagsInput.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.key === 'Enter') {
+      e.preventDefault();
+      save();
+    }
+  });
+
+  // Focus tags input
+  tagsInput.focus();
+}
+
+/**
+ * Show touch paste menu (for long-press on empty canvas)
+ */
+async function showTouchPasteMenu(x, y, position) {
+  const menu = document.createElement('div');
+  menu.style.cssText = `
+    position: fixed;
+    left: ${x}px;
+    top: ${y}px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    padding: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    z-index: 10000;
+    min-width: 200px;
+  `;
+
+  menu.innerHTML = `
+    <div id="touchMenuPasteImage" style="padding: 12px; cursor: pointer; border-radius: 8px; font-size: 16px;">
+      📷 Klistra in bild
+    </div>
+    <div id="touchMenuNewCard" style="padding: 12px; cursor: pointer; border-radius: 8px; font-size: 16px;">
+      📝 Nytt kort
+    </div>
+    <div id="touchMenuCancel" style="padding: 12px; cursor: pointer; border-radius: 8px; font-size: 16px; color: var(--text-secondary);">
+      ✕ Avbryt
+    </div>
+  `;
+
+  document.body.appendChild(menu);
+
+  // Add hover effects
+  const items = menu.querySelectorAll('div[id^="touchMenu"]');
+  items.forEach(item => {
+    item.addEventListener('mouseenter', () => {
+      item.style.background = 'var(--bg-secondary)';
+    });
+    item.addEventListener('mouseleave', () => {
+      item.style.background = 'transparent';
+    });
+  });
+
+  const cleanup = () => {
+    if (menu.parentNode) {
+      document.body.removeChild(menu);
+    }
+  };
+
+  // Paste image handler
+  document.getElementById('touchMenuPasteImage').addEventListener('click', async () => {
+    cleanup();
+    await importImage(position);
+  });
+
+  // New card handler
+  document.getElementById('touchMenuNewCard').addEventListener('click', async () => {
+    cleanup();
+    await createNewCard(position);
+  });
+
+  // Cancel handler
+  document.getElementById('touchMenuCancel').addEventListener('click', () => {
+    cleanup();
+  });
+
+  // Close on outside click
+  setTimeout(() => {
+    document.addEventListener('click', cleanup, { once: true });
+  }, 100);
+}
+
+/**
+ * Show touch bulk menu (for long-press on selected cards)
+ */
+async function showTouchBulkMenu(x, y) {
+  const selectedGroups = layer.find('.selected');
+  const selectedIds = selectedGroups.map(g => g.getAttr('cardId')).filter(id => id);
+
+  if (selectedIds.length === 0) return;
+
+  const menu = document.createElement('div');
+  menu.style.cssText = `
+    position: fixed;
+    left: ${x}px;
+    top: ${y}px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    padding: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    z-index: 10000;
+    min-width: 220px;
+  `;
+
+  menu.innerHTML = `
+    <div style="padding: 8px 12px; font-weight: 600; border-bottom: 1px solid var(--border-color); margin-bottom: 4px;">
+      ${selectedIds.length} kort markerade
+    </div>
+    <div id="touchBulkEdit" style="padding: 12px; cursor: pointer; border-radius: 8px; font-size: 16px;">
+      ✏️ Redigera alla
+    </div>
+    <div id="touchBulkColor" style="padding: 12px; cursor: pointer; border-radius: 8px; font-size: 16px;">
+      🎨 Ändra färg
+    </div>
+    <div id="touchBulkTag" style="padding: 12px; cursor: pointer; border-radius: 8px; font-size: 16px;">
+      🏷️ Lägg till taggar
+    </div>
+    <div id="touchBulkCancel" style="padding: 12px; cursor: pointer; border-radius: 8px; font-size: 16px; color: var(--text-secondary); border-top: 1px solid var(--border-color); margin-top: 4px;">
+      ✕ Avbryt
+    </div>
+  `;
+
+  document.body.appendChild(menu);
+
+  // Add hover effects
+  const items = menu.querySelectorAll('div[id^="touchBulk"]');
+  items.forEach(item => {
+    item.addEventListener('mouseenter', () => {
+      item.style.background = 'var(--bg-secondary)';
+    });
+    item.addEventListener('mouseleave', () => {
+      item.style.background = 'transparent';
+    });
+  });
+
+  const cleanup = () => {
+    if (menu.parentNode) {
+      document.body.removeChild(menu);
+    }
+  };
+
+  // Edit all handler
+  document.getElementById('touchBulkEdit').addEventListener('click', async () => {
+    cleanup();
+    await createBulkEditor(selectedIds);
+  });
+
+  // Color picker handler
+  document.getElementById('touchBulkColor').addEventListener('click', async () => {
+    cleanup();
+    await showQuickColorPicker(x, y, selectedIds);
+  });
+
+  // Add tags handler
+  document.getElementById('touchBulkTag').addEventListener('click', async () => {
+    cleanup();
+    await showQuickTagAdder(x, y, selectedIds);
+  });
+
+  // Cancel handler
+  document.getElementById('touchBulkCancel').addEventListener('click', () => {
+    cleanup();
+  });
+
+  // Close on outside click
+  setTimeout(() => {
+    document.addEventListener('click', cleanup, { once: true });
+  }, 100);
+}
+
+/**
+ * Quick color picker for bulk operations
+ */
+async function showQuickColorPicker(x, y, cardIds) {
+  const picker = document.createElement('div');
+  picker.style.cssText = `
+    position: fixed;
+    left: ${x}px;
+    top: ${y}px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    padding: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    z-index: 10001;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    max-width: 200px;
+  `;
+
+  const colors = [
+    { id: '', label: '⭘', title: 'Ingen färg' },
+    { id: 'card-color-1', color: '#d4f2d4', title: 'Grön' },
+    { id: 'card-color-2', color: '#ffe4b3', title: 'Orange' },
+    { id: 'card-color-3', color: '#ffc1cc', title: 'Röd' },
+    { id: 'card-color-4', color: '#fff7b3', title: 'Gul' },
+    { id: 'card-color-5', color: '#f3e5f5', title: 'Lila' },
+    { id: 'card-color-6', color: '#c7e7ff', title: 'Blå' },
+    { id: 'card-color-7', color: '#e0e0e0', title: 'Grå' },
+    { id: 'card-color-8', color: '#ffffff', title: 'Vit' }
+  ];
+
+  colors.forEach(colorInfo => {
+    const dot = document.createElement('div');
+    dot.style.cssText = `
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: ${colorInfo.color || 'var(--bg-secondary)'};
+      border: 2px solid var(--border-color);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+    `;
+    if (!colorInfo.color) {
+      dot.textContent = colorInfo.label;
+    }
+    dot.title = colorInfo.title;
+
+    dot.addEventListener('click', async () => {
+      const cards = await getAllCards();
+      for (const cardId of cardIds) {
+        await updateCard(cardId, { cardColor: colorInfo.id });
+      }
+      await reloadCanvas();
+      cleanup();
+    });
+
+    picker.appendChild(dot);
+  });
+
+  document.body.appendChild(picker);
+
+  const cleanup = () => {
+    if (picker.parentNode) {
+      document.body.removeChild(picker);
+    }
+  };
+
+  setTimeout(() => {
+    document.addEventListener('click', cleanup, { once: true });
+  }, 100);
+}
+
+/**
+ * Quick tag adder for bulk operations
+ */
+async function showQuickTagAdder(x, y, cardIds) {
+  const adder = document.createElement('div');
+  adder.style.cssText = `
+    position: fixed;
+    left: ${x}px;
+    top: ${y}px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    z-index: 10001;
+    min-width: 250px;
+  `;
+
+  adder.innerHTML = `
+    <div style="margin-bottom: 12px; font-weight: 600;">Lägg till taggar</div>
+    <input type="text" id="quickTagInput" placeholder="t.ex. urgent, projekt"
+      style="width: 100%; padding: 10px; border: 2px solid var(--border-color);
+             border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary);
+             box-sizing: border-box; font-size: 16px; margin-bottom: 12px;">
+    <div style="display: flex; gap: 8px;">
+      <button id="quickTagCancel" style="flex: 1; padding: 10px; background: var(--bg-secondary);
+              color: var(--text-primary); border: 2px solid var(--border-color); border-radius: 8px;
+              cursor: pointer; font-size: 14px;">Avbryt</button>
+      <button id="quickTagSave" style="flex: 1; padding: 10px; background: var(--accent-color);
+              color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px;
+              font-weight: 600;">Lägg till</button>
+    </div>
+  `;
+
+  document.body.appendChild(adder);
+
+  const input = document.getElementById('quickTagInput');
+  const saveBtn = document.getElementById('quickTagSave');
+  const cancelBtn = document.getElementById('quickTagCancel');
+
+  input.focus();
+
+  const cleanup = () => {
+    if (adder.parentNode) {
+      document.body.removeChild(adder);
+    }
+  };
+
+  const save = async () => {
+    const newTags = input.value.split(',').map(t => t.trim()).filter(t => t);
+    if (newTags.length === 0) {
+      cleanup();
+      return;
+    }
+
+    const cards = await getAllCards();
+    for (const cardId of cardIds) {
+      const card = cards.find(c => c.id === cardId);
+      if (card) {
+        const existingTags = card.tags || [];
+        const mergedTags = [...new Set([...existingTags, ...newTags])];
+        await updateCard(cardId, { tags: mergedTags });
+      }
+    }
+
+    await reloadCanvas();
+    cleanup();
+  };
+
+  saveBtn.addEventListener('click', save);
+  cancelBtn.addEventListener('click', cleanup);
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      save();
+    } else if (e.key === 'Escape') {
+      cleanup();
+    }
+  });
+}
+
+/**
+ * Open edit dialog for card (or bulk edit if multiple selected)
  */
 async function openEditDialog(cardId) {
-  const cards = await getAllCards();
-  const card = cards.find(c => c.id === cardId);
-  if (!card) return;
+  // Check if multiple cards are selected
+  const selectedGroups = layer.find('.selected');
 
-  const group = cardGroups.get(cardId);
-  if (!group) return;
-
-  if (card.image && card.flipped) {
-    // Flipped image card: inline edit back text
-    createInlineEditor(cardId, group, card.backText || '', true);
+  if (selectedGroups.length > 1) {
+    // Bulk edit mode
+    const selectedIds = selectedGroups.map(g => g.getAttr('cardId')).filter(id => id);
+    await createBulkEditor(selectedIds);
   } else {
-    // Text card: inline edit
-    createInlineEditor(cardId, group, card.text || '', false);
+    // Single card edit
+    const cards = await getAllCards();
+    const card = cards.find(c => c.id === cardId);
+    if (!card) return;
+
+    const group = cardGroups.get(cardId);
+    if (!group) return;
+
+    if (card.image && card.flipped) {
+      // Flipped image card: inline edit back text
+      createInlineEditor(cardId, group, card.backText || '', true);
+    } else {
+      // Text card: inline edit
+      createInlineEditor(cardId, group, card.text || '', false);
+    }
   }
 }
 
@@ -1242,6 +1805,46 @@ function setupCanvasEvents() {
         y: (pointer.y - stage.y()) / scale
       };
       createNewCard(position);
+    }
+  });
+
+  // Touch long-press on empty canvas to paste image
+  let stageTouchTimer = null;
+  let stageTouchStart = null;
+
+  stage.on('touchstart', (e) => {
+    if (e.target !== stage) return; // Only on empty canvas
+
+    stageTouchStart = Date.now();
+
+    stageTouchTimer = setTimeout(async () => {
+      // Long press on empty canvas
+      const pointer = stage.getPointerPosition();
+      const scale = stage.scaleX();
+      const position = {
+        x: (pointer.x - stage.x()) / scale,
+        y: (pointer.y - stage.y()) / scale
+      };
+
+      // Show paste menu
+      await showTouchPasteMenu(e.evt.touches ? e.evt.touches[0].clientX : e.evt.clientX,
+                               e.evt.touches ? e.evt.touches[0].clientY : e.evt.clientY,
+                               position);
+      stageTouchTimer = null;
+    }, 600); // 600ms long press
+  });
+
+  stage.on('touchmove', (e) => {
+    if (stageTouchTimer && e.target === stage) {
+      clearTimeout(stageTouchTimer);
+      stageTouchTimer = null;
+    }
+  });
+
+  stage.on('touchend touchcancel', (e) => {
+    if (stageTouchTimer) {
+      clearTimeout(stageTouchTimer);
+      stageTouchTimer = null;
     }
   });
 
