@@ -24,7 +24,8 @@
       "Bash(git remote add:*)",
       "Bash(git branch:*)",
       "Bash(npm run dev:*)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "Bash(chmod:*)"
     ],
     "deny": [],
     "ask": []

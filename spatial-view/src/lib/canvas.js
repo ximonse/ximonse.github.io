@@ -124,6 +124,7 @@ export async function initCanvas() {
 
   // Create floating buttons
   createFitAllButton();
+  createCommandPaletteButton();
   createAddButton();
 
   console.log('Konva canvas initialized');
@@ -310,16 +311,25 @@ function renderCard(cardData) {
     }
   });
 
-  group.on('dragend', function() {
+  group.on('dragend', async function() {
     if (dragStartPositions && dragStartPositions.size > 0) {
-      // Update all moved cards in database
-      dragStartPositions.forEach(async (originalPos, node) => {
+      // Update all moved cards in database and add to undo stack
+      for (const [node, originalPos] of dragStartPositions) {
         const cardId = node.getAttr('cardId');
         if (cardId) {
-          const position = { x: node.x(), y: node.y() };
-          await updateCard(cardId, { position });
+          const newPosition = { x: node.x(), y: node.y() };
+
+          // Add to undo stack
+          pushUndo({
+            type: 'update',
+            cardId: cardId,
+            oldData: { position: originalPos },
+            newData: { position: newPosition }
+          });
+
+          await updateCard(cardId, { position: newPosition });
         }
-      });
+      }
 
       dragStartPositions = null;
     }
@@ -340,18 +350,21 @@ function renderTextCard(group, cardData) {
   // Get card color
   const cardColor = getCardColor(cardData.cardColor);
 
+  // Check if e-ink theme is active
+  const isEink = document.body.classList.contains('eink-theme');
+
   // Background
   const background = new Konva.Rect({
     width: 200,
     height: 150,
-    fill: cardColor,
-    stroke: '#e0e0e0',
-    strokeWidth: 1,
-    cornerRadius: 8,
-    shadowColor: 'black',
-    shadowBlur: 10,
-    shadowOpacity: 0.1,
-    shadowOffset: { x: 0, y: 2 }
+    fill: isEink ? '#ffffff' : cardColor,
+    stroke: isEink ? '#000000' : '#e0e0e0',
+    strokeWidth: isEink ? 2 : 1,
+    cornerRadius: isEink ? 0 : 8,
+    shadowColor: isEink ? 'transparent' : 'black',
+    shadowBlur: isEink ? 0 : 10,
+    shadowOpacity: isEink ? 0 : 0.1,
+    shadowOffset: { x: 0, y: isEink ? 0 : 2 }
   });
 
   // Text
@@ -379,6 +392,9 @@ function renderImageCard(group, cardData) {
   const isFlipped = cardData.flipped || false;
 
   imageObj.onload = function() {
+    // Check if e-ink theme is active
+    const isEink = document.body.classList.contains('eink-theme');
+
     // Calculate card dimensions (maintain aspect ratio)
     // Standard width: 200px for aligned columns
     const maxWidth = 200;
@@ -401,14 +417,14 @@ function renderImageCard(group, cardData) {
       const background = new Konva.Rect({
         width: width,
         height: height,
-        fill: '#fffacd',
-        stroke: '#e0e0e0',
-        strokeWidth: 1,
-        cornerRadius: 8,
-        shadowColor: 'black',
-        shadowBlur: 10,
-        shadowOpacity: 0.1,
-        shadowOffset: { x: 0, y: 2 }
+        fill: isEink ? '#ffffff' : '#fffacd',
+        stroke: isEink ? '#000000' : '#e0e0e0',
+        strokeWidth: isEink ? 2 : 1,
+        cornerRadius: isEink ? 0 : 8,
+        shadowColor: isEink ? 'transparent' : 'black',
+        shadowBlur: isEink ? 0 : 10,
+        shadowOpacity: isEink ? 0 : 0.1,
+        shadowOffset: { x: 0, y: isEink ? 0 : 2 }
       });
 
       const text = new Konva.Text({
@@ -433,20 +449,20 @@ function renderImageCard(group, cardData) {
         width: width,
         height: height,
         fill: '#ffffff',
-        stroke: '#e0e0e0',
-        strokeWidth: 1,
-        cornerRadius: 8,
-        shadowColor: 'black',
-        shadowBlur: 10,
-        shadowOpacity: 0.1,
-        shadowOffset: { x: 0, y: 2 }
+        stroke: isEink ? '#000000' : '#e0e0e0',
+        strokeWidth: isEink ? 2 : 1,
+        cornerRadius: isEink ? 0 : 8,
+        shadowColor: isEink ? 'transparent' : 'black',
+        shadowBlur: isEink ? 0 : 10,
+        shadowOpacity: isEink ? 0 : 0.1,
+        shadowOffset: { x: 0, y: isEink ? 0 : 2 }
       });
 
       const konvaImage = new Konva.Image({
         image: imageObj,
         width: width,
         height: height,
-        cornerRadius: 8
+        cornerRadius: isEink ? 0 : 8
       });
 
       group.add(background);
@@ -514,11 +530,9 @@ function renderImageCard(group, cardData) {
  * Create new card
  */
 async function createNewCard(position) {
-  const text = prompt('Skriv kortets text:');
-  if (!text) return;
-
+  // Create empty card first
   const cardData = {
-    text,
+    text: '',
     tags: [],
     position
   };
@@ -534,6 +548,12 @@ async function createNewCard(position) {
 
   // Reload canvas to show new card
   await reloadCanvas();
+
+  // Open editor on the new card
+  const group = cardGroups.get(cardId);
+  if (group) {
+    await createInlineEditor(cardId, group, '', false);
+  }
 }
 
 /**
@@ -1957,6 +1977,13 @@ function setupCanvasEvents() {
       return;
     }
 
+    // K - Toggle view
+    if (e.key === 'k') {
+      e.preventDefault();
+      toggleViewFromMenu();
+      return;
+    }
+
     // N - New text card
     if (e.key === 'n') {
       e.preventDefault();
@@ -3219,6 +3246,50 @@ function createFitAllButton() {
 }
 
 /**
+ * Create "Command Palette" button
+ */
+function createCommandPaletteButton() {
+  const button = document.createElement('button');
+  button.id = 'command-palette-button';
+  button.innerHTML = '⌘';
+  button.title = 'Kommandopalett (Space)';
+  button.style.cssText = `
+    position: fixed;
+    bottom: 168px;
+    right: 24px;
+    width: 56px;
+    height: 56px;
+    background: #2196F3;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    font-size: 28px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  `;
+
+  button.addEventListener('mouseenter', () => {
+    button.style.transform = 'scale(1.1)';
+    button.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.2)';
+  });
+
+  button.addEventListener('mouseleave', () => {
+    button.style.transform = 'scale(1)';
+    button.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+  });
+
+  button.addEventListener('click', showCommandPalette);
+
+  document.body.appendChild(button);
+  console.log('Command Palette button created');
+}
+
+/**
  * Show add menu overlay
  */
 function showAddMenu() {
@@ -3777,4 +3848,23 @@ function showTextInputDialog(title, defaultValue = '') {
 export function clearClipboard() {
   clipboard = [];
   console.log('Clipboard cleared');
+}
+
+/**
+ * Deselect all cards
+ */
+export function deselectAllCards() {
+  if (!layer) return;
+
+  layer.find('.selected').forEach(group => {
+    group.removeName('selected');
+    const background = group.findOne('Rect');
+    if (background) {
+      background.stroke('#e0e0e0');
+      background.strokeWidth(1);
+    }
+  });
+
+  layer.batchDraw();
+  console.log('All cards deselected');
 }
