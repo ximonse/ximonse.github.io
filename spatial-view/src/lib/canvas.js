@@ -1,14 +1,27 @@
 /**
  * Canvas module using Konva.js
  *
- * ⚠️ TODO: DENNA FIL ÄR FÖR STOR (3706+ rader)!
- * Behöver delas upp enligt ARCHITECTURE.md:
- * - canvas/rendering.js (renderTextCard, renderImageCard, getCardColor)
- * - canvas/editing.js (createInlineEditor, createBulkEditor, touch-menyer)
- * - canvas/interactions.js (klick-, touch-, drag-handlers)
- * - canvas/clipboard.js (copy/paste-funktioner)
- * - canvas/search.js (sökfunktionalitet)
- * - canvas/core.js (initCanvas, layer, stage)
+ * FILE ORGANIZATION:
+ * This file is organized into clear sections for easier navigation.
+ * Use Ctrl+F to jump to section markers like "// === RENDERING ==="
+ *
+ * SECTIONS:
+ * 1. Global State & Configuration
+ * 2. Rendering (cards, colors)
+ * 3. Card Creation & Editing (inline editor, bulk editor, touch menus)
+ * 4. Card Operations (flip, delete)
+ * 5. Canvas Management (reload, undo/redo)
+ * 6. Clipboard (copy/paste/duplicate)
+ * 7. Selection & Interaction (events, drag, pan, zoom)
+ * 8. Public API (exports)
+ * 9. UI Dialogs (command palette, quality dialog, etc)
+ * 10. Search (boolean search with wildcards, proximity, etc)
+ * 11. Context Menu & Card Actions (lock, pin)
+ * 12. UI Buttons & Theme
+ * 13. Arrangements & Keyboard Handlers
+ *
+ * NOTE: This file is large (3700+ lines) due to tight coupling with global state.
+ * Future refactoring: Consider CanvasManager class or dependency injection.
  */
 
 import Konva from 'konva';
@@ -23,6 +36,10 @@ import {
   arrangeGridHorizontal,
   arrangeGridTopAligned
 } from './arrangement.js';
+
+// ============================================================================
+// SECTION 1: GLOBAL STATE & CONFIGURATION
+// ============================================================================
 
 let stage = null;
 let layer = null;
@@ -41,6 +58,10 @@ const MAX_UNDO_STACK = 50;
 
 // Clipboard for copy/paste
 let clipboard = [];
+
+// ============================================================================
+// SECTION 2: RENDERING (Cards, Colors, Visual Elements)
+// ============================================================================
 
 /**
  * Get card color from cardColor property
@@ -484,6 +505,10 @@ function renderImageCard(group, cardData) {
 
   imageObj.src = imageData.base64;
 }
+
+// ============================================================================
+// SECTION 3: CARD CREATION & EDITING (Dialogs, Inline Editor, Touch Menus)
+// ============================================================================
 
 /**
  * Create new card
@@ -1296,6 +1321,10 @@ async function openEditDialog(cardId) {
   }
 }
 
+// ============================================================================
+// SECTION 4: CARD OPERATIONS (Flip, Delete)
+// ============================================================================
+
 /**
  * Flip image card
  */
@@ -1355,6 +1384,10 @@ async function handleDeleteCard(cardId) {
   }
 }
 
+// ============================================================================
+// SECTION 5: CANVAS MANAGEMENT (Reload, Undo/Redo)
+// ============================================================================
+
 /**
  * Reload canvas from storage
  */
@@ -1377,6 +1410,10 @@ function pushUndo(action) {
   }
   redoStack = []; // Clear redo stack on new action
 }
+
+// ============================================================================
+// SECTION 6: CLIPBOARD (Copy/Paste/Duplicate)
+// ============================================================================
 
 /**
  * Duplicate/copy selected cards
@@ -1634,6 +1671,10 @@ async function redo() {
     console.log('Redo: Re-applied new card data');
   }
 }
+
+// ============================================================================
+// SECTION 7: SELECTION & INTERACTION (Events, Drag, Pan, Zoom)
+// ============================================================================
 
 /**
  * Update selection based on selection rectangle
@@ -2041,6 +2082,10 @@ function setupCanvasEvents() {
   });
 }
 
+// ============================================================================
+// SECTION 8: PUBLIC API (Exported Functions)
+// ============================================================================
+
 /**
  * Get stage instance
  */
@@ -2240,6 +2285,10 @@ export async function importImage() {
     input.click();
   });
 }
+
+// ============================================================================
+// SECTION 9: UI DIALOGS (Command Palette, Quality Dialog, Text Input)
+// ============================================================================
 
 /**
  * Show command palette
@@ -2716,6 +2765,10 @@ export function fitAllCards() {
   console.log('Fitted and centered all cards in view');
 }
 
+// ============================================================================
+// SECTION 10: SEARCH (Boolean Search, Wildcards, Proximity)
+// ============================================================================
+
 /**
  * Check if term matches with wildcard support
  */
@@ -2945,6 +2998,10 @@ export async function searchCards(query) {
   console.log(`[searchCards] ✓ Search complete: found ${matchingCards.size} matches for "${query}"`);
 }
 
+// ============================================================================
+// SECTION 11: CONTEXT MENU & CARD ACTIONS (Lock, Pin)
+// ============================================================================
+
 /**
  * Show context menu for card
  */
@@ -3112,6 +3169,10 @@ async function togglePinSelectedCards() {
   console.log(`${anyPinned ? 'Unpinned' : 'Pinned'} ${selectedGroups.length} cards`);
   layer.batchDraw();
 }
+
+// ============================================================================
+// SECTION 12: UI BUTTONS & THEME (Fit All, Add Menu, Theme Toggle)
+// ============================================================================
 
 /**
  * Create "Fit All" button
@@ -3414,6 +3475,10 @@ function createAddButton() {
   document.body.appendChild(button);
   console.log('Add button created');
 }
+
+// ============================================================================
+// SECTION 13: ARRANGEMENTS & KEYBOARD HANDLERS (Grid, Vertical, Horizontal, etc.)
+// ============================================================================
 
 /**
  * Apply arrangement to selected cards with animation

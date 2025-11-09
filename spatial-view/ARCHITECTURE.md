@@ -67,15 +67,59 @@ import { createInlineEditor } from './editing.js';
 
 ## Nuvarande status (2025-11-09)
 
-⚠️ **AKUT REFACTORING KRÄVS**
-- canvas.js: 3706 rader (måste delas upp)
-- main.js: 606 rader (måste delas upp)
+### Fas 1: Organisering med sektioner ✅ KLART
 
-## Nästa steg
+**canvas.js** är nu organiserat i 13 tydliga sektioner:
+1. Global State & Configuration
+2. Rendering (Cards, Colors, Visual Elements)
+3. Card Creation & Editing (Dialogs, Inline Editor, Touch Menus)
+4. Card Operations (Flip, Delete)
+5. Canvas Management (Reload, Undo/Redo)
+6. Clipboard (Copy/Paste/Duplicate)
+7. Selection & Interaction (Events, Drag, Pan, Zoom)
+8. Public API (Exported Functions)
+9. UI Dialogs (Command Palette, Quality Dialog, Text Input)
+10. Search (Boolean Search, Wildcards, Proximity)
+11. Context Menu & Card Actions (Lock, Pin)
+12. UI Buttons & Theme (Fit All, Add Menu, Theme Toggle)
+13. Arrangements & Keyboard Handlers
 
-1. Refactorera canvas.js → 6 moduler
-2. Refactorera main.js → 4 moduler
-3. Följ denna guide för alla framtida ändringar
+**Hur du navigerar:**
+- Använd Ctrl+F för att söka efter sektion markers: `// === SECTION X:`
+- Varje sektion har en stor banner som är lätt att se
+- Header-kommentaren listar alla sektioner
+
+**Fördelar:**
+- ✅ Lättare att hitta funktioner
+- ✅ Tydlig struktur
+- ✅ Ingen breaking changes
+- ✅ Fungerar direkt
+
+### Nästa steg
+
+#### Fas 2: Flytta ut fristående helpers (Frivilligt)
+När vi behöver lägga till funktionalitet kan vi överväga att flytta ut:
+- Search helpers (matchWithWildcard, checkProximity, evaluateBooleanQuery)
+- Color mapping utilities
+- Små, isolerade funktioner utan dependencies
+
+#### Fas 3: Full modularisering (Framtida arbete)
+Om canvas.js växer ytterligare (>5000 rader), överväg:
+- Skapa `CanvasManager` klass med state
+- Dependency injection för stage, layer
+- Dela upp i separata moduler
+
+**Varför väntar vi?**
+- Tight coupling mellan funktioner och global state
+- Risk för buggar vid stor refactoring
+- Nuvarande organisation är tillräckligt bra
+
+## Riktlinjer framåt
+
+1. **Innan du lägger till kod**: Kontrollera filstorlek med `wc -l`
+2. **Om fil > 300 rader**: Lägg till ny sektion eller diskutera refactoring
+3. **Följ sektionerna**: Lägg ny kod i rätt sektion
+4. **Dokumentera**: Uppdatera header-kommentaren när du lägger till funktioner
 
 ---
 
