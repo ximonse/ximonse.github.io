@@ -6,10 +6,6 @@
   <meta name="description" content="Spatial View - Visual Second Brain för handskrivna anteckningar">
   <meta name="theme-color" content="#ffffff">
   <title>Spatial View</title>
-  <script type="module" crossorigin src="/spatial-view/assets/index-D0Nn1Fp_.js"></script>
-  <link rel="modulepreload" crossorigin href="/spatial-view/assets/konva-DF021KA-.js">
-  <link rel="modulepreload" crossorigin href="/spatial-view/assets/dexie-nOSQWKqj.js">
-  <link rel="stylesheet" crossorigin href="/spatial-view/assets/index-Dy_iGKXp.css">
 </head>
 <body>
   <!-- Floating header - always visible -->
@@ -91,13 +87,13 @@
         <input type="search" id="search-input" placeholder="Sök kort...">
       </div>
     </header>
-    
+
     <main id="main-container">
       <!-- Board View (Konva canvas) -->
       <div id="board-view" class="view active">
         <div id="canvas-container"></div>
       </div>
-      
+
       <!-- Column View (scrollable list) -->
       <div id="column-view" class="view">
         <div id="card-list"></div>
@@ -105,5 +101,6 @@
     </main>
   </div>
 
+  <script type="module" src="/src/main.js"></script>
 </body>
 </html>

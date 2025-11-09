@@ -86,7 +86,10 @@ async function init() {
   
   // Apply device optimizations
   applyDeviceOptimizations();
-  
+
+  // Apply saved theme BEFORE initializing canvas
+  applySavedTheme();
+
   // Initialize storage
   await initStorage();
 
@@ -105,10 +108,10 @@ async function init() {
 }
 
 /**
- * Setup global event listeners
+ * Apply saved theme from localStorage
+ * Called BEFORE canvas initialization to ensure cards render with correct theme
  */
-function setupEventListeners() {
-  // Apply saved theme from localStorage
+function applySavedTheme() {
   const body = document.body;
   const savedTheme = localStorage.getItem('theme') || state.theme;
   if (savedTheme && savedTheme !== 'light') {
@@ -132,6 +135,12 @@ function setupEventListeners() {
   if (themeBtn) {
     themeBtn.textContent = themeNames[savedTheme] || '🎨 Tema';
   }
+}
+
+/**
+ * Setup global event listeners
+ */
+function setupEventListeners() {
 
   // View toggle
   const viewToggle = document.getElementById('btn-view-toggle');
