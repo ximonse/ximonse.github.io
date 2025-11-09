@@ -1,5 +1,14 @@
 /**
  * Canvas module using Konva.js
+ *
+ * ⚠️ TODO: DENNA FIL ÄR FÖR STOR (3706+ rader)!
+ * Behöver delas upp enligt ARCHITECTURE.md:
+ * - canvas/rendering.js (renderTextCard, renderImageCard, getCardColor)
+ * - canvas/editing.js (createInlineEditor, createBulkEditor, touch-menyer)
+ * - canvas/interactions.js (klick-, touch-, drag-handlers)
+ * - canvas/clipboard.js (copy/paste-funktioner)
+ * - canvas/search.js (sökfunktionalitet)
+ * - canvas/core.js (initCanvas, layer, stage)
  */
 
 import Konva from 'konva';

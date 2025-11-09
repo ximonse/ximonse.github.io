@@ -1,6 +1,14 @@
 /**
  * Spatial View v1.0
  * Main entry point
+ *
+ * ⚠️ TODO: DENNA FIL ÄR FÖR STOR (606+ rader)!
+ * Behöver delas upp enligt ARCHITECTURE.md:
+ * - ui/toolbar.js (toolbar interactions, knappar)
+ * - ui/search-bar.js (sök-input hantering)
+ * - ui/view-switcher.js (byten mellan board/column view)
+ * - core/app.js (huvudsaklig init-logik)
+ * main.js ska bara vara ~50 rader orchestrator
  */
 
 import './styles.css';
