@@ -4,7 +4,7 @@
  */
 
 import './styles.css';
-import { initCanvas, addNewCard, exportCanvas, importImage, searchCards } from './lib/canvas.js';
+import { initCanvas, addNewCard, exportCanvas, importImage, searchCards, clearClipboard } from './lib/canvas.js';
 import { initStorage } from './lib/storage.js';
 
 // App state
@@ -141,9 +141,12 @@ function setupEventListeners() {
     }
   });
 
-  // Global Escape handler for search
+  // Global Escape handler for search and clipboard
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
+      // Clear clipboard
+      clearClipboard();
+
       // If search has content, clear it
       if (searchInput && searchInput.value) {
         searchInput.value = '';

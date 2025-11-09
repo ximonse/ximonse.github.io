@@ -3696,3 +3696,11 @@ function showTextInputDialog(title, defaultValue = '') {
     input.select();
   });
 }
+
+/**
+ * Clear clipboard
+ */
+export function clearClipboard() {
+  clipboard = [];
+  console.log('Clipboard cleared');
+}
