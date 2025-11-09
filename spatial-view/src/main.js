@@ -11,7 +11,6 @@
  * main.js ska bara vara ~50 rader orchestrator
  */
 
-import './styles.css';
 import { initCanvas, addNewCard, exportCanvas, importImage, searchCards, clearClipboard, deselectAllCards } from './lib/canvas.js';
 import { initStorage } from './lib/storage.js';
 
@@ -20,6 +19,7 @@ const state = {
   currentView: 'board', // 'board' | 'column'
   deviceMode: detectDeviceMode(),
   theme: localStorage.getItem('theme') || 'light',
+  uiMode: localStorage.getItem('uiMode') || 'full', // 'full' | 'minimal' | 'toggle-only'
   cards: [],
 };
 
@@ -58,13 +58,21 @@ function applyDeviceOptimizations() {
     // E-ink mode: disable animations, use column view
     state.theme = 'eink';
     state.currentView = 'column';
+    // Default to minimal UI for e-ink if not set
+    if (!localStorage.getItem('uiMode')) {
+      state.uiMode = 'minimal';
+    }
     console.log('E-ink mode activated');
   }
 
-  if (state.deviceMode === 'mobile') {
-    // Mobile mode: start with column view
+  if (state.deviceMode === 'mobile' || state.deviceMode === 'tablet') {
+    // Mobile/tablet mode: start with column view
     state.currentView = 'column';
-    console.log('Mobile mode activated');
+    // Default to minimal UI for touch devices if not set
+    if (!localStorage.getItem('uiMode')) {
+      state.uiMode = 'minimal';
+    }
+    console.log(`${state.deviceMode} mode activated`);
   }
 
 }
@@ -132,6 +140,10 @@ function setupEventListeners() {
   // Theme toggle
   themeBtn?.addEventListener('click', toggleTheme);
 
+  // UI mode toggle
+  const uiModeToggle = document.getElementById('btn-ui-mode-toggle');
+  uiModeToggle?.addEventListener('click', toggleUIMode);
+
   // Import button
   const importBtn = document.getElementById('btn-import');
   importBtn?.addEventListener('click', handleImport);
@@ -172,6 +184,29 @@ function setupEventListeners() {
 
   // Listen for toggle theme event from canvas
   window.addEventListener('toggleTheme', toggleTheme);
+
+  // Apply saved UI mode
+  applyUIMode();
+
+  // Info overlay handlers
+  const floatingHeader = document.getElementById('floating-header');
+  const infoOverlay = document.getElementById('info-overlay');
+  const infoClose = document.getElementById('info-close');
+
+  floatingHeader?.addEventListener('click', () => {
+    infoOverlay?.classList.add('active');
+  });
+
+  infoClose?.addEventListener('click', () => {
+    infoOverlay?.classList.remove('active');
+  });
+
+  // Close on overlay background click
+  infoOverlay?.addEventListener('click', (e) => {
+    if (e.target === infoOverlay) {
+      infoOverlay.classList.remove('active');
+    }
+  });
 }
 
 /**
@@ -554,6 +589,66 @@ function toggleTheme() {
   }
 
   console.log(`Theme changed to: ${nextTheme}`);
+}
+
+/**
+ * Toggle UI mode (full -> minimal -> toggle-only -> full)
+ */
+function toggleUIMode() {
+  const modes = ['full', 'minimal', 'toggle-only'];
+  const currentIndex = modes.indexOf(state.uiMode);
+  const nextIndex = (currentIndex + 1) % modes.length;
+  state.uiMode = modes[nextIndex];
+
+  // Save to localStorage
+  localStorage.setItem('uiMode', state.uiMode);
+
+  // Apply the new mode
+  applyUIMode();
+
+  console.log(`UI mode changed to: ${state.uiMode}`);
+}
+
+/**
+ * Apply UI mode - show/hide buttons
+ */
+function applyUIMode() {
+  const toolbar = document.getElementById('toolbar');
+  const commandPaletteBtn = document.getElementById('command-palette-button');
+  const addBtn = document.getElementById('add-button');
+  const fitAllBtn = document.getElementById('fit-all-button');
+  const uiToggleBtn = document.getElementById('btn-ui-mode-toggle');
+
+  if (!toolbar) return;
+
+  // Mode 1: Full - show everything
+  if (state.uiMode === 'full') {
+    toolbar.style.display = 'flex';
+    if (commandPaletteBtn) commandPaletteBtn.style.display = 'flex';
+    if (addBtn) addBtn.style.display = 'flex';
+    if (fitAllBtn) fitAllBtn.style.display = 'flex';
+    if (uiToggleBtn) uiToggleBtn.textContent = '👁️ UI: Full';
+  }
+
+  // Mode 2: Minimal - show only command palette + toggle button
+  else if (state.uiMode === 'minimal') {
+    toolbar.style.display = 'flex';
+    if (commandPaletteBtn) commandPaletteBtn.style.display = 'flex';
+    if (addBtn) addBtn.style.display = 'none';
+    if (fitAllBtn) fitAllBtn.style.display = 'none';
+    if (uiToggleBtn) uiToggleBtn.textContent = '👁️ UI: Minimal';
+  }
+
+  // Mode 3: Toggle-only - show only toggle button
+  else if (state.uiMode === 'toggle-only') {
+    toolbar.style.display = 'flex';
+    if (commandPaletteBtn) commandPaletteBtn.style.display = 'none';
+    if (addBtn) addBtn.style.display = 'none';
+    if (fitAllBtn) fitAllBtn.style.display = 'none';
+    if (uiToggleBtn) uiToggleBtn.textContent = '👁️';
+  }
+
+  console.log(`Applied UI mode: ${state.uiMode}`);
 }
 
 /**

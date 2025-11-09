@@ -6,9 +6,66 @@
   <meta name="description" content="Spatial View - Visual Second Brain för handskrivna anteckningar">
   <meta name="theme-color" content="#ffffff">
   <title>Spatial View</title>
-  <link rel="stylesheet" href="/src/styles.css">
+  <link rel="stylesheet" href="./src/styles.css">
 </head>
 <body>
+  <!-- Floating header - always visible -->
+  <div id="floating-header">SPATIAL VIEW</div>
+
+  <!-- Info overlay -->
+  <div id="info-overlay">
+    <div id="info-content">
+      <button id="info-close">&times;</button>
+      <h2>Spatial View</h2>
+
+      <div class="info-section">
+        <p>En visuell second brain för dina handskrivna anteckningar och idéer.</p>
+        <p><strong>Skapad av:</strong> ximonse och Claude</p>
+        <p><strong>⚠️ Beta-version:</strong> Detta är en tidig version som kan vara ostabil. Ladda ner dina kort regelbundet om arbetet är viktigt!</p>
+      </div>
+
+      <div class="info-section">
+        <h3>Snabbguide</h3>
+        <ul class="tip-list">
+          <li>
+            <span class="tip-icon">⌘</span>
+            <span><strong>Kommandopalett (Space):</strong> Snabb åtkomst till alla funktioner</span>
+          </li>
+          <li>
+            <span class="tip-icon">+</span>
+            <span><strong>Lägg till:</strong> Skapa nytt kort eller importera bild</span>
+          </li>
+          <li>
+            <span class="tip-icon">🎨</span>
+            <span><strong>Tema:</strong> Byt mellan ljust, mörkt och e-ink läge</span>
+          </li>
+          <li>
+            <span class="tip-icon">🔄</span>
+            <span><strong>Vy (K):</strong> Växla mellan brädvy och kolumnvy</span>
+          </li>
+          <li>
+            <span class="tip-icon">👁️</span>
+            <span><strong>UI-läge:</strong> Anpassa synliga knappar för din enhet</span>
+          </li>
+          <li>
+            <span class="tip-icon">🔍</span>
+            <span><strong>Sök:</strong> Boolean search med AND, OR, NOT och wildcards</span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="info-section">
+        <h3>Tips</h3>
+        <ul class="tip-list">
+          <li><span class="tip-icon">💡</span><span>Dubbelklicka på ett kort för att redigera</span></li>
+          <li><span class="tip-icon">💡</span><span>Använd Ctrl+C/V för att kopiera och klistra in kort</span></li>
+          <li><span class="tip-icon">💡</span><span>Tryck Escape för att avmarkera allt</span></li>
+          <li><span class="tip-icon">💡</span><span>Håll Ctrl och klicka för att markera flera kort</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
   <div id="app">
     <header id="toolbar">
       <h1>Spatial View</h1>
@@ -16,6 +73,7 @@
         <button id="btn-import">+ Lägg till</button>
         <button id="btn-theme-toggle">🎨 Tema</button>
         <button id="btn-view-toggle">🔄 Vy</button>
+        <button id="btn-ui-mode-toggle">👁️ UI</button>
         <input type="search" id="search-input" placeholder="Sök kort...">
       </div>
     </header>
@@ -32,7 +90,7 @@
       </div>
     </main>
   </div>
-  
-  <script type="module" src="/src/main.js"></script>
+
+  <script type="module" src="./src/main.js"></script>
 </body>
 </html>

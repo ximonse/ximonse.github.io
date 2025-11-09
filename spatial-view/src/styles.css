@@ -195,3 +195,122 @@ button:active {
   animation: none !important;
   transition: none !important;
 }
+
+/* Floating header */
+#floating-header {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 18px;
+  font-weight: 400;
+  color: #000;
+  z-index: 10000;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 8px 16px;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s;
+}
+
+#floating-header:hover {
+  background: rgba(255, 255, 255, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Info overlay */
+#info-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 10001;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s;
+}
+
+#info-overlay.active {
+  display: flex;
+}
+
+#info-content {
+  background: white;
+  padding: 32px;
+  border-radius: 8px;
+  max-width: 600px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+#info-content h2 {
+  margin-top: 0;
+  margin-bottom: 16px;
+  font-size: 24px;
+  color: #333;
+}
+
+#info-content p {
+  margin-bottom: 16px;
+  line-height: 1.6;
+  color: #666;
+}
+
+#info-content .info-section {
+  margin-bottom: 24px;
+}
+
+#info-content .info-section h3 {
+  margin-bottom: 8px;
+  font-size: 18px;
+  color: #444;
+}
+
+#info-content .tip-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+#info-content .tip-list li {
+  padding: 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#info-content .tip-icon {
+  font-size: 20px;
+  min-width: 24px;
+}
+
+#info-close {
+  float: right;
+  font-size: 24px;
+  font-weight: bold;
+  cursor: pointer;
+  color: #999;
+  background: none;
+  border: none;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  line-height: 32px;
+  text-align: center;
+  border-radius: 4px;
+}
+
+#info-close:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
