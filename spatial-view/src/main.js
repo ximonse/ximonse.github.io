@@ -618,6 +618,7 @@ function toggleUIMode() {
  */
 function applyUIMode() {
   const toolbar = document.getElementById('toolbar');
+  const toolbarActions = document.getElementById('toolbar-actions');
   const commandPaletteBtn = document.getElementById('command-palette-button');
   const addBtn = document.getElementById('add-button');
   const fitAllBtn = document.getElementById('fit-all-button');
@@ -625,31 +626,70 @@ function applyUIMode() {
 
   if (!toolbar) return;
 
+  // Reset toggle button to default position first
+  if (uiToggleBtn) {
+    uiToggleBtn.style.position = '';
+    uiToggleBtn.style.top = '';
+    uiToggleBtn.style.right = '';
+    uiToggleBtn.style.zIndex = '';
+  }
+
   // Mode 1: Full - show everything
   if (state.uiMode === 'full') {
     toolbar.style.display = 'flex';
+    if (toolbarActions) {
+      toolbarActions.style.display = 'flex';
+      // Show all buttons in toolbar
+      Array.from(toolbarActions.children).forEach(child => {
+        child.style.display = '';
+      });
+    }
     if (commandPaletteBtn) commandPaletteBtn.style.display = 'flex';
     if (addBtn) addBtn.style.display = 'flex';
     if (fitAllBtn) fitAllBtn.style.display = 'flex';
-    if (uiToggleBtn) uiToggleBtn.textContent = '👁️ UI: Full';
+    if (uiToggleBtn) uiToggleBtn.textContent = '⚙️ Full';
   }
 
-  // Mode 2: Minimal - show only command palette + toggle button
+  // Mode 2: Minimal - hide toolbar buttons EXCEPT toggle, show floating command palette
   else if (state.uiMode === 'minimal') {
-    toolbar.style.display = 'flex';
+    // Hide toolbar buttons except toggle
+    if (toolbarActions) {
+      Array.from(toolbarActions.children).forEach(child => {
+        if (child.id === 'btn-ui-mode-toggle') {
+          child.style.display = '';
+        } else {
+          child.style.display = 'none';
+        }
+      });
+      toolbarActions.style.display = 'flex';
+    }
+    // Show floating command palette button
     if (commandPaletteBtn) commandPaletteBtn.style.display = 'flex';
     if (addBtn) addBtn.style.display = 'none';
     if (fitAllBtn) fitAllBtn.style.display = 'none';
-    if (uiToggleBtn) uiToggleBtn.textContent = '👁️ UI: Minimal';
+    toolbar.style.display = 'flex';
+    if (uiToggleBtn) uiToggleBtn.textContent = '⚙️ Minimal';
   }
 
-  // Mode 3: Toggle-only - show only toggle button
+  // Mode 3: Toggle-only - show ONLY toggle button
   else if (state.uiMode === 'toggle-only') {
-    toolbar.style.display = 'flex';
+    // Hide toolbar buttons except toggle
+    if (toolbarActions) {
+      Array.from(toolbarActions.children).forEach(child => {
+        if (child.id === 'btn-ui-mode-toggle') {
+          child.style.display = '';
+        } else {
+          child.style.display = 'none';
+        }
+      });
+      toolbarActions.style.display = 'flex';
+    }
+    // Hide floating buttons
     if (commandPaletteBtn) commandPaletteBtn.style.display = 'none';
     if (addBtn) addBtn.style.display = 'none';
     if (fitAllBtn) fitAllBtn.style.display = 'none';
-    if (uiToggleBtn) uiToggleBtn.textContent = '👁️';
+    toolbar.style.display = 'flex';
+    if (uiToggleBtn) uiToggleBtn.textContent = '⚙️';
   }
 
   console.log(`Applied UI mode: ${state.uiMode}`);
