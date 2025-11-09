@@ -136,6 +136,7 @@ function setupEventListeners() {
   viewToggle?.addEventListener('click', toggleView);
 
   // Theme toggle
+  const themeBtn = document.getElementById('btn-theme-toggle');
   themeBtn?.addEventListener('click', toggleTheme);
 
   // UI mode toggle
