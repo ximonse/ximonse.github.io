@@ -444,9 +444,9 @@ async function renderColumnView(searchQuery = '') {
       }
     });
 
-    // Double-click to edit (same as board view)
+    // Double-click to edit - inline editing for column view
     cardElement.addEventListener('dblclick', () => {
-      showColumnEditDialog(card, cardElement);
+      showColumnInlineEdit(card, cardElement);
     });
 
     // Right-click context menu (same as board view)
@@ -514,7 +514,213 @@ async function renderColumnView(searchQuery = '') {
 /**
  * Show edit dialog for card in column view
  */
-async function showColumnEditDialog(card, cardElement) {
+/**
+ * Show inline editor in column view
+ */
+async function showColumnInlineEdit(card, cardElement) {
+  // Check if already editing
+  if (cardElement.querySelector('.inline-editor')) return;
+
+  const isImageCard = !!card.image;
+  const currentText = isImageCard ? (card.backText || '') : (card.text || '');
+  const currentTags = card.tags || [];
+  const currentColor = card.cardColor || '';
+
+  // Create inline editor container
+  const editorContainer = document.createElement('div');
+  editorContainer.className = 'inline-editor';
+  editorContainer.style.cssText = `
+    padding: 16px;
+    background: var(--bg-secondary);
+    border: 2px solid var(--accent-color);
+    border-radius: 8px;
+    margin-top: 12px;
+  `;
+
+  // If image card, show image first
+  let imageHTML = '';
+  if (isImageCard) {
+    const imageSrc = typeof card.image === 'string' ? card.image : card.image.base64;
+    imageHTML = `
+      <div style="margin-bottom: 16px;">
+        <img src="${imageSrc}" style="width: 100%; border-radius: 8px;" alt="Card image" />
+      </div>
+    `;
+  }
+
+  editorContainer.innerHTML = `
+    ${imageHTML}
+
+    <div style="margin-bottom: 12px;">
+      <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 14px;">Text:</label>
+      <textarea id="column-edit-text"
+        style="width: 100%; min-height: 150px; padding: 10px; font-size: 15px;
+               border: 2px solid var(--border-color); border-radius: 6px;
+               background: var(--bg-primary); color: var(--text-primary);
+               font-family: inherit; resize: vertical; box-sizing: border-box;"
+      >${currentText}</textarea>
+    </div>
+
+    ${!isImageCard ? `
+    <div style="margin-bottom: 12px;">
+      <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 14px;">Tags (kommaseparerade):</label>
+      <input type="text" id="column-edit-tags" value="${currentTags.join(', ')}"
+        style="width: 100%; padding: 10px; font-size: 15px;
+               border: 2px solid var(--border-color); border-radius: 6px;
+               background: var(--bg-primary); color: var(--text-primary);
+               box-sizing: border-box;">
+    </div>
+
+    <div style="margin-bottom: 16px;">
+      <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 14px;">Kortfärg:</label>
+      <div id="column-color-picker" style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <div class="color-dot" data-color="" style="width: 32px; height: 32px; border-radius: 50%;
+             background: var(--bg-primary); border: 3px solid var(--border-color); cursor: pointer;
+             display: flex; align-items: center; justify-content: center; font-size: 18px;"
+             title="Ingen färg">⭘</div>
+        <div class="color-dot" data-color="card-color-1" style="width: 32px; height: 32px; border-radius: 50%;
+             background: #d4f2d4; border: 3px solid ${currentColor === 'card-color-1' ? '#2196F3' : 'transparent'}; cursor: pointer;" title="Grön"></div>
+        <div class="color-dot" data-color="card-color-2" style="width: 32px; height: 32px; border-radius: 50%;
+             background: #ffe4b3; border: 3px solid ${currentColor === 'card-color-2' ? '#2196F3' : 'transparent'}; cursor: pointer;" title="Orange"></div>
+        <div class="color-dot" data-color="card-color-3" style="width: 32px; height: 32px; border-radius: 50%;
+             background: #ffc1cc; border: 3px solid ${currentColor === 'card-color-3' ? '#2196F3' : 'transparent'}; cursor: pointer;" title="Röd"></div>
+        <div class="color-dot" data-color="card-color-4" style="width: 32px; height: 32px; border-radius: 50%;
+             background: #fff7b3; border: 3px solid ${currentColor === 'card-color-4' ? '#2196F3' : 'transparent'}; cursor: pointer;" title="Gul"></div>
+        <div class="color-dot" data-color="card-color-5" style="width: 32px; height: 32px; border-radius: 50%;
+             background: #f3e5f5; border: 3px solid ${currentColor === 'card-color-5' ? '#2196F3' : 'transparent'}; cursor: pointer;" title="Lila"></div>
+        <div class="color-dot" data-color="card-color-6" style="width: 32px; height: 32px; border-radius: 50%;
+             background: #c7e7ff; border: 3px solid ${currentColor === 'card-color-6' ? '#2196F3' : 'transparent'}; cursor: pointer;" title="Blå"></div>
+        <div class="color-dot" data-color="card-color-7" style="width: 32px; height: 32px; border-radius: 50%;
+             background: #e0e0e0; border: 3px solid ${currentColor === 'card-color-7' ? '#2196F3' : 'transparent'}; cursor: pointer;" title="Grå"></div>
+        <div class="color-dot" data-color="card-color-8" style="width: 32px; height: 32px; border-radius: 50%;
+             background: #ffffff; border: 3px solid ${currentColor === 'card-color-8' ? '#2196F3' : '#ddd'}; cursor: pointer;" title="Vit"></div>
+      </div>
+    </div>
+    ` : ''}
+
+    <div style="display: flex; gap: 8px; justify-content: flex-end;">
+      <button id="column-cancel-edit" style="padding: 10px 20px; background: var(--bg-secondary);
+                                         color: var(--text-primary); border: 2px solid var(--border-color);
+                                         border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer;">
+        Avbryt
+      </button>
+      <button id="column-delete-card" style="padding: 10px 20px; background: #dc3545;
+                                         color: white; border: none; border-radius: 6px;
+                                         font-size: 14px; font-weight: 500; cursor: pointer;">
+        🗑️ Ta bort
+      </button>
+      <button id="column-save-edit" style="padding: 10px 20px; background: var(--accent-color);
+                                        color: white; border: none; border-radius: 6px;
+                                        font-size: 14px; font-weight: 600; cursor: pointer;">
+        Spara
+      </button>
+    </div>
+
+    <div style="margin-top: 12px; font-size: 12px; color: var(--text-secondary); text-align: center;">
+      Ctrl+Enter = Spara, Esc = Avbryt
+    </div>
+  `;
+
+  cardElement.appendChild(editorContainer);
+
+  // Get elements
+  const textarea = editorContainer.querySelector('#column-edit-text');
+  const tagsInput = editorContainer.querySelector('#column-edit-tags');
+  const saveBtn = editorContainer.querySelector('#column-save-edit');
+  const cancelBtn = editorContainer.querySelector('#column-cancel-edit');
+  const deleteBtn = editorContainer.querySelector('#column-delete-card');
+  const colorPicker = editorContainer.querySelector('#column-color-picker');
+
+  // Focus textarea
+  textarea.focus();
+  textarea.select();
+
+  // Track selected color
+  let selectedColor = currentColor;
+
+  // Color picker logic
+  if (colorPicker) {
+    const colorDots = colorPicker.querySelectorAll('.color-dot');
+    colorDots.forEach(dot => {
+      dot.addEventListener('click', () => {
+        const color = dot.dataset.color;
+        selectedColor = color;
+
+        // Update borders
+        colorDots.forEach(d => {
+          if (d.dataset.color === color) {
+            d.style.border = '3px solid #2196F3';
+          } else {
+            d.style.border = d.dataset.color === 'card-color-8' ? '3px solid #ddd' : '3px solid transparent';
+          }
+        });
+      });
+    });
+  }
+
+  // Save function
+  const saveEdit = async () => {
+    const newText = textarea.value;
+    const { updateCard } = await import('./lib/storage.js');
+
+    const updates = {};
+
+    if (isImageCard) {
+      updates.backText = newText;
+    } else {
+      updates.text = newText;
+
+      // Parse tags
+      if (tagsInput) {
+        const tagString = tagsInput.value.trim();
+        updates.tags = tagString ? tagString.split(',').map(t => t.trim()).filter(t => t.length > 0) : [];
+      }
+
+      // Set color
+      updates.cardColor = selectedColor;
+    }
+
+    await updateCard(card.id, updates);
+    editorContainer.remove();
+    await renderColumnView(); // Refresh view
+  };
+
+  // Cancel function
+  const cancelEdit = () => {
+    editorContainer.remove();
+  };
+
+  // Delete function
+  const deleteCard = async () => {
+    if (confirm('Är du säker på att du vill ta bort detta kort?')) {
+      const { deleteCard } = await import('./lib/storage.js');
+      await deleteCard(card.id);
+      await renderColumnView();
+    }
+  };
+
+  // Event listeners
+  saveBtn.addEventListener('click', saveEdit);
+  cancelBtn.addEventListener('click', cancelEdit);
+  deleteBtn.addEventListener('click', deleteCard);
+
+  // Keyboard shortcuts
+  const keyHandler = (e) => {
+    if (e.key === 'Escape') {
+      cancelEdit();
+      document.removeEventListener('keydown', keyHandler);
+    } else if (e.ctrlKey && e.key === 'Enter') {
+      saveEdit();
+      document.removeEventListener('keydown', keyHandler);
+    }
+  };
+  document.addEventListener('keydown', keyHandler);
+}
+
+/**
+ * OLD: Show edit dialog (modal) - kept for reference but replaced with inline
+ */
+async function showColumnEditDialog_OLD(card, cardElement) {
   // Create overlay
   const overlay = document.createElement('div');
   overlay.style.cssText = `
@@ -709,7 +915,7 @@ async function showColumnEditDialog(card, cardElement) {
 /**
  * Toggle theme
  */
-function toggleTheme() {
+async function toggleTheme() {
   const body = document.body;
 
   // Get current theme from class
@@ -747,6 +953,10 @@ function toggleTheme() {
   if (themeBtn) {
     themeBtn.textContent = themeNames[nextTheme] || '🎨 Tema';
   }
+
+  // Update card shadows based on new theme
+  const { updateCardShadows } = await import('./lib/canvas.js');
+  updateCardShadows();
 
   console.log(`Theme changed to: ${nextTheme}`);
 }

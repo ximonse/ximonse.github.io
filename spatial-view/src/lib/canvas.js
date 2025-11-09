@@ -1471,6 +1471,38 @@ async function reloadCanvas() {
 }
 
 /**
+ * Update shadows on all cards based on current theme
+ * Called when theme changes
+ */
+export function updateCardShadows() {
+  const isEink = document.body.classList.contains('eink-theme');
+  const isDark = document.body.classList.contains('dark-theme');
+
+  cardGroups.forEach(group => {
+    const background = group.findOne('Rect');
+    if (background) {
+      if (isEink) {
+        // E-ink: no shadows
+        background.shadowColor('transparent');
+        background.shadowBlur(0);
+        background.shadowOpacity(0);
+        background.shadowOffset({ x: 0, y: 0 });
+      } else {
+        // Normal/dark: subtle shadows
+        background.shadowColor('black');
+        background.shadowBlur(10);
+        background.shadowOpacity(0.1);
+        background.shadowOffset({ x: 0, y: 2 });
+      }
+    }
+  });
+
+  if (layer) {
+    layer.batchDraw();
+  }
+}
+
+/**
  * Undo/redo functions
  */
 function pushUndo(action) {
