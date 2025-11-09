@@ -1,13 +1,13 @@
-/**
- * Spatial View v1.0
- * Base styles
- */
-
-/* Import themes first (CSS requirement) */
+/* Import themes FIRST (CSS requirement - must be before ALL other code including comments) */
 @import './assets/theme-dark.css';
 @import './assets/theme-sepia.css';
 @import './assets/theme-eink.css';
 @import './assets/cards-colors.css';
+
+/**
+ * Spatial View v1.0
+ * Base styles
+ */
 
 /* CSS Reset */
 *, *::before, *::after {

@@ -8,7 +8,13 @@
     "build": "vite build",
     "preview": "vite preview"
   },
-  "keywords": ["notes", "visual", "canvas", "ocr", "second-brain"],
+  "keywords": [
+    "notes",
+    "visual",
+    "canvas",
+    "ocr",
+    "second-brain"
+  ],
   "author": "ximonse",
   "license": "MIT",
   "devDependencies": {
@@ -18,6 +24,7 @@
     "browser-image-compression": "^2.0.2",
     "dexie": "^4.2.1",
     "fuse.js": "^7.1.0",
-    "konva": "^10.0.8"
+    "konva": "^10.0.8",
+    "marked": "^17.0.0"
   }
 }

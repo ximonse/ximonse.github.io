@@ -30,6 +30,27 @@ let undoStack = [];
 let redoStack = [];
 const MAX_UNDO_STACK = 50;
 
+// Clipboard for copy/paste
+let clipboard = [];
+
+/**
+ * Get card color from cardColor property
+ */
+function getCardColor(cardColor) {
+  const colorMap = {
+    'card-color-1': '#d4f2d4', // Grön
+    'card-color-2': '#ffe4b3', // Orange
+    'card-color-3': '#ffc1cc', // Röd
+    'card-color-4': '#fff7b3', // Gul
+    'card-color-5': '#f3e5f5', // Lila
+    'card-color-6': '#c7e7ff', // Blå
+    'card-color-7': '#e0e0e0', // Grå
+    'card-color-8': '#ffffff'  // Vit
+  };
+
+  return colorMap[cardColor] || '#ffffff'; // Default white
+}
+
 /**
  * Initialize Konva canvas
  */
@@ -112,6 +133,12 @@ function renderCard(cardData) {
   // Store card ID on group
   group.setAttr('cardId', cardData.id);
 
+  // Set locked state
+  if (cardData.locked) {
+    group.draggable(false);
+    group.setAttr('locked', true);
+  }
+
   // Click to select (for deletion)
   group.on('click', function() {
     const isSelected = this.hasName('selected');
@@ -132,6 +159,12 @@ function renderCard(cardData) {
     }
 
     layer.batchDraw();
+  });
+
+  // Right-click context menu
+  group.on('contextmenu', function(e) {
+    e.evt.preventDefault();
+    showContextMenu(e.evt.clientX, e.evt.clientY, cardData.id, this);
   });
 
   // Touch long-press to flip image cards
@@ -250,11 +283,14 @@ function renderCard(cardData) {
  * Render text card
  */
 function renderTextCard(group, cardData) {
+  // Get card color
+  const cardColor = getCardColor(cardData.cardColor);
+
   // Background
   const background = new Konva.Rect({
     width: 200,
     height: 150,
-    fill: '#ffffff',
+    fill: cardColor,
     stroke: '#e0e0e0',
     strokeWidth: 1,
     cornerRadius: 8,
@@ -290,7 +326,8 @@ function renderImageCard(group, cardData) {
 
   imageObj.onload = function() {
     // Calculate card dimensions (maintain aspect ratio)
-    const maxWidth = 300;
+    // Standard width: 200px for aligned columns
+    const maxWidth = 200;
     const maxHeight = 300;
     let width = imageObj.naturalWidth;
     let height = imageObj.naturalHeight;
@@ -326,7 +363,7 @@ function renderImageCard(group, cardData) {
         y: 16,
         width: width - 32,
         height: height - 32,
-        fontSize: 14,
+        fontSize: 16,
         fontFamily: 'sans-serif',
         fill: '#1a1a1a',
         wrap: 'word',
@@ -444,84 +481,172 @@ async function createNewCard(position) {
 /**
  * Inline text editor using HTML textarea overlay
  */
-function createInlineEditor(cardId, group, currentText, isImageBack = false) {
-  const cardGroup = cardGroups.get(cardId);
-  if (!cardGroup) return;
+async function createInlineEditor(cardId, group, currentText, isImageBack = false) {
+  // Get card data
+  const cards = await getAllCards();
+  const card = cards.find(c => c.id === cardId);
+  if (!card) return;
 
-  // Get card position and dimensions
-  const background = group.findOne('Rect');
-  if (!background) return;
+  const currentTags = card.tags || [];
+  const currentColor = card.cardColor || '';
 
-  const width = background.width();
-  const height = background.height();
-
-  // Get absolute position on screen accounting for stage transform
-  const transform = group.getAbsoluteTransform();
-  const topLeft = transform.point({ x: 0, y: 0 });
-
-  // Get stage container position
-  const container = stage.container();
-  const containerRect = container.getBoundingClientRect();
-
-  const screenX = containerRect.left + topLeft.x;
-  const screenY = containerRect.top + topLeft.y;
-
-  const scale = stage.scaleX();
-
-  // Create textarea overlay
-  const textarea = document.createElement('textarea');
-  textarea.value = currentText || '';
-
-  const scaledWidth = width * scale;
-  const scaledHeight = height * scale;
-  const padding = 16;
-
-  textarea.style.cssText = `
+  // Create overlay
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
     position: fixed;
-    left: ${screenX + padding}px;
-    top: ${screenY + padding}px;
-    width: ${scaledWidth - padding * 2}px;
-    height: ${scaledHeight - 60}px;
-    padding: 8px;
-    font-size: 16px;
-    font-family: sans-serif;
-    border: 2px solid #2196F3;
-    border-radius: 6px;
-    resize: none;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
     z-index: 10000;
-    background: ${isImageBack ? '#fffacd' : '#ffffff'};
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    display: flex;
+    justify-content: center;
+    align-items: center;
   `;
 
-  // Create save button
-  const saveBtn = document.createElement('button');
-  saveBtn.textContent = isImageBack ? 'Spara & Vänd tillbaka' : 'Spara';
-  saveBtn.style.cssText = `
-    position: fixed;
-    left: ${screenX + padding}px;
-    top: ${screenY + scaledHeight - 44}px;
-    padding: 8px 16px;
-    background: #4CAF50;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    z-index: 10001;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  // Create dialog
+  const dialog = document.createElement('div');
+  dialog.style.cssText = `
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    padding: 24px;
+    border-radius: 12px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   `;
+
+  dialog.innerHTML = `
+    <h3 style="margin-top: 0; margin-bottom: 20px; font-size: 20px; font-weight: 600;">
+      ${isImageBack ? 'Redigera baksida' : 'Redigera kort'}
+    </h3>
+
+    <div style="margin-bottom: 16px;">
+      <label style="display: block; margin-bottom: 8px; font-weight: 500;">Text:</label>
+      <textarea id="editCardText"
+        style="width: 100%; height: 200px; padding: 12px; font-size: 16px;
+               border: 2px solid var(--border-color); border-radius: 8px;
+               background: var(--bg-secondary); color: var(--text-primary);
+               font-family: inherit; resize: vertical; box-sizing: border-box;"
+      >${currentText || ''}</textarea>
+    </div>
+
+    ${!isImageBack ? `
+    <div style="margin-bottom: 16px;">
+      <label style="display: block; margin-bottom: 8px; font-weight: 500;">Tags (kommaseparerade):</label>
+      <input type="text" id="editCardTags" value="${currentTags.join(', ')}"
+        style="width: 100%; padding: 12px; font-size: 16px;
+               border: 2px solid var(--border-color); border-radius: 8px;
+               background: var(--bg-secondary); color: var(--text-primary);
+               box-sizing: border-box;">
+    </div>
+
+    <div style="margin-bottom: 20px;">
+      <label style="display: block; margin-bottom: 8px; font-weight: 500;">Kortfärg:</label>
+      <div id="editColorPicker" style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <div class="color-dot" data-color="" style="width: 36px; height: 36px; border-radius: 50%;
+             background: var(--bg-secondary); border: 3px solid var(--border-color); cursor: pointer;
+             display: flex; align-items: center; justify-content: center; font-size: 20px;"
+             title="Ingen färg">⭘</div>
+        <div class="color-dot" data-color="card-color-1" style="width: 36px; height: 36px; border-radius: 50%;
+             background: #d4f2d4; border: 3px solid transparent; cursor: pointer;" title="Grön"></div>
+        <div class="color-dot" data-color="card-color-2" style="width: 36px; height: 36px; border-radius: 50%;
+             background: #ffe4b3; border: 3px solid transparent; cursor: pointer;" title="Orange"></div>
+        <div class="color-dot" data-color="card-color-3" style="width: 36px; height: 36px; border-radius: 50%;
+             background: #ffc1cc; border: 3px solid transparent; cursor: pointer;" title="Röd"></div>
+        <div class="color-dot" data-color="card-color-4" style="width: 36px; height: 36px; border-radius: 50%;
+             background: #fff7b3; border: 3px solid transparent; cursor: pointer;" title="Gul"></div>
+        <div class="color-dot" data-color="card-color-5" style="width: 36px; height: 36px; border-radius: 50%;
+             background: #f3e5f5; border: 3px solid transparent; cursor: pointer;" title="Lila"></div>
+        <div class="color-dot" data-color="card-color-6" style="width: 36px; height: 36px; border-radius: 50%;
+             background: #c7e7ff; border: 3px solid transparent; cursor: pointer;" title="Blå"></div>
+        <div class="color-dot" data-color="card-color-7" style="width: 36px; height: 36px; border-radius: 50%;
+             background: #e0e0e0; border: 3px solid transparent; cursor: pointer;" title="Grå"></div>
+        <div class="color-dot" data-color="card-color-8" style="width: 36px; height: 36px; border-radius: 50%;
+             background: #ffffff; border: 3px solid #ddd; cursor: pointer;" title="Vit"></div>
+      </div>
+    </div>
+    ` : ''}
+
+    <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px;">
+      <button id="cancelEdit" style="padding: 12px 24px; background: var(--bg-secondary);
+                                     color: var(--text-primary); border: 2px solid var(--border-color);
+                                     border-radius: 8px; font-size: 16px; font-weight: 500; cursor: pointer;">
+        Avbryt
+      </button>
+      <button id="saveEdit" style="padding: 12px 24px; background: var(--accent-color);
+                                    color: white; border: none; border-radius: 8px;
+                                    font-size: 16px; font-weight: 600; cursor: pointer;">
+        ${isImageBack ? 'Spara & Vänd tillbaka' : 'Spara'}
+      </button>
+    </div>
+
+    <div style="margin-top: 16px; font-size: 13px; color: var(--text-secondary); text-align: center;">
+      Tips: Ctrl+Enter = Spara, Esc = Avbryt
+    </div>
+  `;
+
+  overlay.appendChild(dialog);
+  document.body.appendChild(overlay);
+
+  // Get elements
+  const textarea = document.getElementById('editCardText');
+  const tagsInput = document.getElementById('editCardTags');
+  const saveBtn = document.getElementById('saveEdit');
+  const cancelBtn = document.getElementById('cancelEdit');
+
+  // Focus textarea
+  textarea.focus();
+  textarea.select();
+
+  // Handle color selection (only for regular cards)
+  let selectedColor = currentColor;
+  if (!isImageBack) {
+    const colorDots = document.querySelectorAll('#editColorPicker .color-dot');
+
+    // Highlight current color
+    colorDots.forEach(dot => {
+      if (dot.dataset.color === currentColor) {
+        dot.style.border = '3px solid var(--accent-color)';
+      } else if (!currentColor && dot.dataset.color === '') {
+        dot.style.border = '3px solid var(--accent-color)';
+      }
+
+      dot.addEventListener('click', function() {
+        // Remove selection from all
+        colorDots.forEach(d => {
+          if (d.dataset.color === '') {
+            d.style.border = '3px solid var(--border-color)';
+          } else if (d.dataset.color === 'card-color-8') {
+            d.style.border = '3px solid #ddd';
+          } else {
+            d.style.border = '3px solid transparent';
+          }
+        });
+
+        // Select this one
+        this.style.border = '3px solid var(--accent-color)';
+        selectedColor = this.dataset.color;
+      });
+    });
+  }
 
   const cleanup = () => {
-    if (textarea.parentNode) document.body.removeChild(textarea);
-    if (saveBtn.parentNode) document.body.removeChild(saveBtn);
+    if (overlay.parentNode) {
+      document.body.removeChild(overlay);
+    }
+    document.removeEventListener('keydown', escHandler);
   };
 
-  saveBtn.addEventListener('click', async () => {
+  // Save handler
+  const save = async () => {
     const newText = textarea.value;
 
     if (isImageBack) {
-      // Save back text and flip card back
+      // Save back text and flip card
       pushUndo({
         type: 'update',
         cardId,
@@ -530,45 +655,53 @@ function createInlineEditor(cardId, group, currentText, isImageBack = false) {
       });
 
       await updateCard(cardId, { backText: newText });
-      await flipCard(cardId); // Flip back to front
+      await flipCard(cardId);
     } else {
-      // Save text card content
-      if (newText !== currentText) {
-        pushUndo({
-          type: 'update',
-          cardId,
-          oldData: { text: currentText },
-          newData: { text: newText }
-        });
+      // Save regular card
+      const newTags = tagsInput ? tagsInput.value.split(',').map(t => t.trim()).filter(t => t) : currentTags;
 
-        await updateCard(cardId, { text: newText });
-        await reloadCanvas();
+      const updates = {
+        text: newText,
+        tags: newTags
+      };
+
+      // Add color if changed
+      if (selectedColor !== currentColor) {
+        updates.cardColor = selectedColor;
       }
+
+      pushUndo({
+        type: 'update',
+        cardId,
+        oldData: { text: currentText, tags: currentTags, cardColor: currentColor },
+        newData: updates
+      });
+
+      await updateCard(cardId, updates);
+      await reloadCanvas();
     }
 
     cleanup();
-  });
+  };
 
-  // Close on Escape
+  // Event listeners
+  saveBtn.addEventListener('click', save);
+  cancelBtn.addEventListener('click', cleanup);
+
+  // Keyboard shortcuts
   const escHandler = (e) => {
     if (e.key === 'Escape') {
       cleanup();
-      document.removeEventListener('keydown', escHandler);
     }
   };
   document.addEventListener('keydown', escHandler);
 
-  // Save on Ctrl+Enter
   textarea.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.key === 'Enter') {
-      saveBtn.click();
+      e.preventDefault();
+      save();
     }
   });
-
-  document.body.appendChild(textarea);
-  document.body.appendChild(saveBtn);
-  textarea.focus();
-  textarea.select();
 }
 
 /**
@@ -671,6 +804,209 @@ function pushUndo(action) {
     undoStack.shift();
   }
   redoStack = []; // Clear redo stack on new action
+}
+
+/**
+ * Duplicate/copy selected cards
+ */
+async function duplicateSelectedCards() {
+  const selectedGroups = layer.find('.selected');
+
+  if (selectedGroups.length === 0) {
+    console.log('No cards selected to duplicate');
+    return;
+  }
+
+  const { getCard, createCard } = await import('./storage.js');
+
+  for (const group of selectedGroups) {
+    const cardId = group.getAttr('cardId');
+    if (!cardId) continue;
+
+    // Get original card data
+    const originalCard = await getCard(cardId);
+    if (!originalCard) continue;
+
+    // Create duplicate with offset position
+    const { id, uniqueId, created, modified, metadata, ...cardData } = originalCard;
+
+    const duplicateData = {
+      ...cardData,
+      position: {
+        x: (originalCard.position?.x || 0) + 50,
+        y: (originalCard.position?.y || 0) + 50
+      }
+    };
+
+    // Create with copy metadata
+    await createCard(duplicateData, {
+      copied: true,
+      copiedAt: new Date().toISOString(),
+      copiedFrom: originalCard.uniqueId,
+      originalCardId: cardId
+    });
+  }
+
+  // Reload canvas
+  await reloadCanvas();
+  console.log(`Duplicated ${selectedGroups.length} cards`);
+}
+
+/**
+ * Copy selected cards to clipboard
+ */
+async function copySelectedCards() {
+  const selectedGroups = layer.find('.selected');
+
+  if (selectedGroups.length === 0) {
+    console.log('No cards selected to copy');
+    return;
+  }
+
+  const { getCard } = await import('./storage.js');
+
+  clipboard = [];
+
+  for (const group of selectedGroups) {
+    const cardId = group.getAttr('cardId');
+    if (!cardId) continue;
+
+    const card = await getCard(cardId);
+    if (!card) continue;
+
+    // Store card data in clipboard
+    clipboard.push({
+      ...card
+    });
+  }
+
+  console.log(`Copied ${clipboard.length} cards to clipboard`);
+}
+
+/**
+ * Paste cards from clipboard
+ */
+async function pasteCards() {
+  if (clipboard.length === 0) {
+    console.log('Clipboard is empty');
+    return;
+  }
+
+  const { createCard } = await import('./storage.js');
+
+  // Get paste position (center of viewport or mouse position)
+  const pointer = stage.getPointerPosition() || {
+    x: stage.width() / 2,
+    y: stage.height() / 2
+  };
+  const scale = stage.scaleX();
+  const pastePosition = {
+    x: (pointer.x - stage.x()) / scale,
+    y: (pointer.y - stage.y()) / scale
+  };
+
+  // Calculate offset from first card's position
+  const firstCard = clipboard[0];
+  const offsetX = pastePosition.x - (firstCard.position?.x || 0);
+  const offsetY = pastePosition.y - (firstCard.position?.y || 0);
+
+  for (const cardData of clipboard) {
+    const { id, uniqueId, created, modified, metadata, ...cleanData } = cardData;
+
+    const pastedData = {
+      ...cleanData,
+      position: {
+        x: (cardData.position?.x || 0) + offsetX,
+        y: (cardData.position?.y || 0) + offsetY
+      }
+    };
+
+    // Create with copy metadata
+    await createCard(pastedData, {
+      copied: true,
+      copiedAt: new Date().toISOString(),
+      copiedFrom: cardData.uniqueId,
+      originalCardId: id
+    });
+  }
+
+  await reloadCanvas();
+  console.log(`Pasted ${clipboard.length} cards`);
+}
+
+/**
+ * Paste cards from clipboard and apply arrangement
+ */
+async function pasteCardsWithArrangement(arrangementFunc, arrangementName) {
+  if (clipboard.length === 0) {
+    console.log('Clipboard is empty');
+    return;
+  }
+
+  const { createCard } = await import('./storage.js');
+
+  // Get paste position (center of viewport)
+  const pointer = stage.getPointerPosition() || {
+    x: stage.width() / 2,
+    y: stage.height() / 2
+  };
+  const scale = stage.scaleX();
+  const pastePosition = {
+    x: (pointer.x - stage.x()) / scale,
+    y: (pointer.y - stage.y()) / scale
+  };
+
+  // Create cards first
+  const newCardIds = [];
+  for (const cardData of clipboard) {
+    const { id, uniqueId, created, modified, metadata, ...cleanData } = cardData;
+
+    const pastedData = {
+      ...cleanData,
+      position: pastePosition // Start at paste position
+    };
+
+    // Create with copy metadata
+    const newId = await createCard(pastedData, {
+      copied: true,
+      copiedAt: new Date().toISOString(),
+      copiedFrom: cardData.uniqueId,
+      originalCardId: id
+    });
+
+    newCardIds.push(newId);
+  }
+
+  await reloadCanvas();
+
+  // Select the newly pasted cards
+  layer.find('.selected').forEach(group => {
+    group.removeName('selected');
+    const background = group.findOne('Rect');
+    if (background) {
+      background.stroke(null);
+      background.strokeWidth(0);
+    }
+  });
+
+  newCardIds.forEach(cardId => {
+    const group = cardGroups.get(cardId);
+    if (group) {
+      group.addName('selected');
+      const background = group.findOne('Rect');
+      if (background) {
+        background.stroke('#2196F3');
+        background.strokeWidth(3);
+      }
+    }
+  });
+
+  layer.batchDraw();
+
+  // Apply arrangement to the newly pasted cards
+  await applyArrangement(arrangementFunc, arrangementName);
+
+  console.log(`Pasted and arranged ${clipboard.length} cards using ${arrangementName}`);
 }
 
 async function undo() {
@@ -930,6 +1266,20 @@ function setupCanvasEvents() {
       return;
     }
 
+    // Ctrl+C - Copy selected cards
+    if (e.ctrlKey && e.key === 'c') {
+      e.preventDefault();
+      await copySelectedCards();
+      return;
+    }
+
+    // Ctrl+V - Paste copied cards
+    if (e.ctrlKey && e.key === 'v') {
+      e.preventDefault();
+      await pasteCards();
+      return;
+    }
+
     // Ctrl+A - Select all cards
     if (e.ctrlKey && e.key === 'a') {
       e.preventDefault();
@@ -985,24 +1335,10 @@ function setupCanvasEvents() {
       return;
     }
 
-    // C - Command palette
-    if (e.key === 'c') {
+    // Space - Command palette
+    if (e.key === ' ') {
       e.preventDefault();
       showCommandPalette();
-      return;
-    }
-
-    // V - Vertical arrangement
-    if (e.key === 'v' && !e.ctrlKey) {
-      e.preventDefault();
-      await applyArrangement(arrangeVertical, 'Vertical');
-      return;
-    }
-
-    // H - Horizontal arrangement
-    if (e.key === 'h' && !e.ctrlKey) {
-      e.preventDefault();
-      await applyArrangement(arrangeHorizontal, 'Horizontal');
       return;
     }
 
@@ -1023,10 +1359,14 @@ function setupCanvasEvents() {
         document.removeEventListener('keydown', keyHandler);
 
         if (e2.key === 'v') {
-          // G+V = Grid Vertical Columns
+          // G+V = Paste and arrange in Grid Vertical (if clipboard has cards), otherwise arrange selected
           e2.preventDefault();
           console.log('G+V pressed');
-          await applyArrangement(arrangeGridVertical, 'Grid Vertical');
+          if (clipboard.length > 0) {
+            await pasteCardsWithArrangement(arrangeGridVertical, 'Grid Vertical');
+          } else {
+            await applyArrangement(arrangeGridVertical, 'Grid Vertical');
+          }
         } else if (e2.key === 'h') {
           // G+H = Grid Horizontal Packed
           e2.preventDefault();
@@ -1056,10 +1396,21 @@ function setupCanvasEvents() {
       return;
     }
 
-    // Q - Cluster arrangement
+    // Q - Paste and arrange in cluster (if clipboard has cards), otherwise arrange selected
     if (e.key === 'q' && !e.ctrlKey) {
       e.preventDefault();
-      await applyArrangement(arrangeCluster, 'Cluster');
+      if (clipboard.length > 0) {
+        await pasteCardsWithArrangement(arrangeCluster, 'Cluster');
+      } else {
+        await applyArrangement(arrangeCluster, 'Cluster');
+      }
+      return;
+    }
+
+    // P - Toggle pin/unpin selected cards
+    if (e.key === 'p' && !e.ctrlKey) {
+      e.preventDefault();
+      await togglePinSelectedCards();
       return;
     }
 
@@ -1133,6 +1484,71 @@ export async function exportCanvas() {
   a.click();
 
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Import canvas from JSON file
+ */
+export async function importCanvas() {
+  return new Promise((resolve, reject) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json,.json';
+
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) {
+        resolve(null);
+        return;
+      }
+
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+
+        // Import cards
+        const { createCard } = await import('./storage.js');
+
+        if (data.cards && Array.isArray(data.cards)) {
+          for (let i = 0; i < data.cards.length; i++) {
+            const card = data.cards[i];
+            // Create each card in storage (without the id to avoid conflicts)
+            const { id, ...cardWithoutId } = card;
+
+            // Add import metadata
+            await createCard(cardWithoutId, {
+              imported: true,
+              importedAt: new Date().toISOString(),
+              importedFrom: file.name,
+              importBatchIndex: i
+            });
+          }
+
+          // Reload canvas to show imported cards
+          await reloadCanvas();
+
+          // Restore viewport if available
+          if (data.viewport) {
+            stage.position({ x: data.viewport.x, y: data.viewport.y });
+            stage.scale({ x: data.viewport.scale, y: data.viewport.scale });
+            stage.batchDraw();
+          }
+
+          console.log(`Imported ${data.cards.length} cards`);
+          alert(`Importerade ${data.cards.length} kort!`);
+          resolve(data.cards.length);
+        } else {
+          throw new Error('Invalid JSON format');
+        }
+      } catch (error) {
+        console.error('Import failed:', error);
+        alert('Misslyckades att importera fil: ' + error.message);
+        reject(error);
+      }
+    };
+
+    input.click();
+  });
 }
 
 /**
@@ -1237,8 +1653,11 @@ function showCommandPalette() {
         searchInput.select();
       }
     }},
-    { key: 'S', icon: '💾', name: 'Spara/Exportera', desc: 'Exportera canvas till JSON-fil', action: async () => {
+    { key: 'S', icon: '💾', name: 'Exportera', desc: 'Exportera canvas till JSON-fil', action: async () => {
       await exportCanvas();
+    }},
+    { key: 'L', icon: '📂', name: 'Importera JSON', desc: 'Importera kort från JSON-fil', action: async () => {
+      await importCanvas();
     }},
     { key: 'Delete', icon: '🗑️', name: 'Ta bort kort', desc: 'Ta bort markerade kort', action: async () => {
       const selectedNodes = layer.find('.selected');
@@ -1255,9 +1674,55 @@ function showCommandPalette() {
     { key: 'Ctrl+Y', icon: '↷', name: 'Gör om', desc: 'Gör om ångrad ändring', action: async () => {
       await redo();
     }},
+    { key: 'Ctrl+C', icon: '📋', name: 'Kopiera kort', desc: 'Kopiera markerade kort till clipboard', action: async () => {
+      await copySelectedCards();
+    }},
+    { key: 'Ctrl+V', icon: '📄', name: 'Klistra in kort', desc: 'Klistra in kopierade kort', action: async () => {
+      await pasteCards();
+    }},
+    { key: 'P', icon: '📌', name: 'Pinna/Avpinna kort', desc: 'Pinna eller avpinna markerade kort (kan inte flyttas)', action: async () => {
+      await togglePinSelectedCards();
+    }},
+    { key: 'V', icon: '↕️', name: 'Arrangera vertikalt', desc: 'Arrangera markerade kort i vertikal kolumn', action: async () => {
+      await applyArrangement(arrangeVertical, 'Vertical');
+    }},
+    { key: 'H', icon: '↔️', name: 'Arrangera horisontellt', desc: 'Arrangera markerade kort i horisontell rad', action: async () => {
+      await applyArrangement(arrangeHorizontal, 'Horizontal');
+    }},
+    { key: 'G', icon: '⊞', name: 'Arrangera grid', desc: 'Arrangera markerade kort i grid', action: async () => {
+      await applyArrangement(arrangeGrid, 'Grid');
+    }},
+    { key: 'Q', icon: '◉', name: 'Arrangera cirkel', desc: 'Klistra in och arrangera i cirkel (om kopierade kort), annars arrangera markerade', action: async () => {
+      if (clipboard.length > 0) {
+        await pasteCardsWithArrangement(arrangeCluster, 'Cluster');
+      } else {
+        await applyArrangement(arrangeCluster, 'Cluster');
+      }
+    }},
+    { key: 'G+V', icon: '⊞↕', name: 'Arrangera grid vertikalt', desc: 'Klistra in och arrangera vertikalt (om kopierade kort), annars arrangera markerade', action: async () => {
+      if (clipboard.length > 0) {
+        await pasteCardsWithArrangement(arrangeGridVertical, 'Grid Vertical');
+      } else {
+        await applyArrangement(arrangeGridVertical, 'Grid Vertical');
+      }
+    }},
+    { key: 'G+H', icon: '⊞↔', name: 'Arrangera grid horisontellt', desc: 'Arrangera markerade kort i horisontella rader', action: async () => {
+      await applyArrangement(arrangeGridHorizontal, 'Grid Horizontal');
+    }},
+    { key: 'G+T', icon: '⊞⤓', name: 'Arrangera grid överlappande', desc: 'Arrangera markerade kort överlappande (Kanban-stil)', action: async () => {
+      await applyArrangement(arrangeGridTopAligned, 'Grid Top-Aligned');
+    }},
+    { key: '-', icon: '🎨', name: 'Byt tema', desc: 'Växla mellan ljust/mörkt/e-ink tema', action: () => {
+      window.dispatchEvent(new CustomEvent('toggleTheme'));
+    }},
+    { key: '-', icon: '🔄', name: 'Byt vy', desc: 'Växla mellan bräd-vy och kolumn-vy', action: () => {
+      window.dispatchEvent(new CustomEvent('toggleView'));
+    }},
+    { key: 'Ctrl+A', icon: '☑', name: 'Markera alla', desc: 'Markera alla kort på canvas', action: null },
     { key: 'Scroll', icon: '🔍', name: 'Zooma', desc: 'Zooma in/ut med mushjulet', action: null },
-    { key: 'Shift+Drag', icon: '✋', name: 'Panorera', desc: 'Panorera canvas genom att hålla Shift och dra', action: null },
+    { key: 'Ctrl+Drag', icon: '✋', name: 'Panorera', desc: 'Panorera canvas genom att hålla Ctrl och dra', action: null },
     { key: 'Double-click', icon: '✏️', name: 'Redigera kort', desc: 'Dubbelklicka på kort för att redigera', action: null },
+    { key: 'Right-click', icon: '📋', name: 'Kontextmeny', desc: 'Högerklicka på kort för meny', action: null },
     { key: 'Drag', icon: '🔄', name: 'Flytta kort', desc: 'Dra kort för att flytta dem', action: null },
   ];
 
@@ -1587,9 +2052,8 @@ export function setupImageDragDrop() {
  * Fit all cards in view
  */
 export function fitAllCards() {
-  const cards = layer.find('.selected').length > 0
-    ? layer.find('.selected')
-    : layer.getChildren();
+  // ALWAYS fit ALL cards (like v2's cy.fit(null, 50))
+  const cards = layer.getChildren().filter(node => node.getAttr('cardId'));
 
   if (cards.length === 0) {
     console.log('No cards to fit');
@@ -1610,32 +2074,171 @@ export function fitAllCards() {
     maxY = Math.max(maxY, box.y + box.height);
   });
 
-  const width = maxX - minX;
-  const height = maxY - minY;
+  const contentWidth = maxX - minX;
+  const contentHeight = maxY - minY;
 
-  // Add padding (10%)
-  const padding = 0.1;
-  const paddedWidth = width * (1 + padding * 2);
-  const paddedHeight = height * (1 + padding * 2);
+  // Add fixed padding (50px like v2)
+  const padding = 50;
+  const paddedWidth = contentWidth + padding * 2;
+  const paddedHeight = contentHeight + padding * 2;
 
   // Calculate scale to fit
   const scaleX = stage.width() / paddedWidth;
   const scaleY = stage.height() / paddedHeight;
   const scale = Math.min(scaleX, scaleY, 1); // Don't zoom in beyond 1x
 
-  // Calculate center position
-  const centerX = minX + width / 2;
-  const centerY = minY + height / 2;
+  // Calculate center of content
+  const contentCenterX = minX + contentWidth / 2;
+  const contentCenterY = minY + contentHeight / 2;
 
-  // Set new scale and position
+  // Set new scale
   stage.scale({ x: scale, y: scale });
+
+  // Center the content in the stage
   stage.position({
-    x: stage.width() / 2 - centerX * scale,
-    y: stage.height() / 2 - centerY * scale
+    x: stage.width() / 2 - contentCenterX * scale,
+    y: stage.height() / 2 - contentCenterY * scale
   });
 
   stage.batchDraw();
-  console.log('Fitted all cards in view');
+  console.log('Fitted and centered all cards in view');
+}
+
+/**
+ * Check if term matches with wildcard support
+ */
+function matchWithWildcard(term, searchableText) {
+  if (term.includes('*')) {
+    // Convert wildcard to regex
+    const regexPattern = term.replace(/\*/g, '.*');
+    const regex = new RegExp('\\b' + regexPattern + '\\b', 'i');
+    return regex.test(searchableText);
+  }
+  return searchableText.includes(term);
+}
+
+/**
+ * Check proximity search (NEAR/x or N/x)
+ */
+function checkProximity(query, searchableText) {
+  // Match patterns like "word1 near/5 word2" or "word1 n/5 word2"
+  const proximityMatch = query.match(/(.+?)\s+(near|n)\/(\d+)\s+(.+)/i);
+  if (!proximityMatch) return false;
+
+  const term1 = proximityMatch[1].trim();
+  const distance = parseInt(proximityMatch[3]);
+  const term2 = proximityMatch[4].trim();
+
+  // Split text into words
+  const words = searchableText.split(/\s+/);
+
+  // Find positions of both terms
+  const positions1 = [];
+  const positions2 = [];
+
+  words.forEach((word, index) => {
+    if (matchWithWildcard(term1, word)) positions1.push(index);
+    if (matchWithWildcard(term2, word)) positions2.push(index);
+  });
+
+  // Check if any pair is within distance
+  for (const pos1 of positions1) {
+    for (const pos2 of positions2) {
+      if (Math.abs(pos1 - pos2) <= distance) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Evaluate boolean search query
+ * Supports: OR, AND, NOT, "exact phrases", *, ( ), NEAR/x, N/x
+ */
+function evaluateBooleanQuery(query, searchableText) {
+  // Handle different boolean operators
+  console.log('[evaluateBooleanQuery] Query:', query, 'SearchableText:', searchableText.substring(0, 50));
+
+  // Handle parentheses (highest precedence)
+  if (query.includes('(')) {
+    // Find matching parentheses and evaluate recursively
+    const parenMatch = query.match(/\(([^()]+)\)/);
+    if (parenMatch) {
+      const innerQuery = parenMatch[1];
+      const innerResult = evaluateBooleanQuery(innerQuery, searchableText);
+      // Replace the parentheses group with result placeholder
+      const replaced = query.replace(parenMatch[0], innerResult ? '__TRUE__' : '__FALSE__');
+      return evaluateBooleanQuery(replaced, searchableText);
+    }
+  }
+
+  // Handle result placeholders from parentheses
+  if (query === '__TRUE__') return true;
+  if (query === '__FALSE__') return false;
+
+  // Handle proximity search (NEAR/x or N/x)
+  if (/\s+(near|n)\/\d+\s+/i.test(query)) {
+    return checkProximity(query, searchableText);
+  }
+
+  // Split by OR first (lowest precedence)
+  if (query.includes(' or ')) {
+    const orParts = query.split(' or ');
+    console.log('[evaluateBooleanQuery] OR parts:', orParts);
+    return orParts.some(part => evaluateBooleanQuery(part.trim(), searchableText));
+  }
+
+  // Handle NOT operations
+  if (query.includes(' not ')) {
+    const notIndex = query.indexOf(' not ');
+    const beforeNot = query.substring(0, notIndex).trim();
+    const afterNot = query.substring(notIndex + 5).trim(); // ' not '.length = 5
+
+    // If there's something before NOT, it must match
+    let beforeMatches = true;
+    if (beforeNot) {
+      beforeMatches = evaluateBooleanQuery(beforeNot, searchableText);
+    }
+
+    // The part after NOT must NOT match
+    const afterMatches = evaluateBooleanQuery(afterNot, searchableText);
+
+    return beforeMatches && !afterMatches;
+  }
+
+  // Handle AND operations (default behavior and explicit)
+  const andParts = query.includes(' and ') ?
+    query.split(' and ') :
+    query.split(' ').filter(term => term.length > 0);
+
+  return andParts.every(term => {
+    term = term.trim();
+    console.log('[evaluateBooleanQuery] Checking term:', term);
+
+    // Skip placeholders
+    if (term === '__TRUE__') return true;
+    if (term === '__FALSE__') return false;
+
+    // Remove quotes if present for exact phrase matching
+    if (term.startsWith('"') && term.endsWith('"')) {
+      // Exact phrase search
+      const phrase = term.slice(1, -1);
+      console.log('[evaluateBooleanQuery] Exact phrase search:', phrase, 'Match:', searchableText.includes(phrase));
+      return searchableText.includes(phrase);
+    } else if (term.startsWith("'") && term.endsWith("'")) {
+      // Also support single quotes
+      const phrase = term.slice(1, -1);
+      console.log('[evaluateBooleanQuery] Single quote phrase search:', phrase, 'Match:', searchableText.includes(phrase));
+      return searchableText.includes(phrase);
+    } else {
+      // Regular word search with wildcard support
+      const matches = matchWithWildcard(term, searchableText);
+      console.log('[evaluateBooleanQuery] Regular/wildcard search:', term, 'Match:', matches);
+      return matches;
+    }
+  });
 }
 
 /**
@@ -1643,13 +2246,23 @@ export function fitAllCards() {
  * @param {string} query - Search query
  */
 export async function searchCards(query) {
-  if (!layer) return;
+  console.log('[searchCards] Called with query:', query);
+
+  if (!layer) {
+    console.error('[searchCards] Layer not initialized');
+    return;
+  }
 
   const allCards = await getAllCards();
-  const allGroups = layer.getChildren(node => node.getAttr('cardId'));
+  // Get all groups from layer that have a cardId attribute
+  const allGroups = layer.getChildren().filter(node => node.getAttr('cardId'));
+
+  console.log('[searchCards] Total cards in DB:', allCards.length);
+  console.log('[searchCards] Total card groups on canvas:', allGroups.length);
 
   if (!query || query.trim() === '') {
     // Clear search - reset all cards
+    console.log('[searchCards] Clearing search, resetting all cards');
     allGroups.forEach(group => {
       group.opacity(1);
       const background = group.findOne('Rect');
@@ -1667,15 +2280,25 @@ export async function searchCards(query) {
   const lowerQuery = query.toLowerCase();
   const matchingCards = new Set();
 
-  // Find matching cards
+  // Find matching cards using boolean logic
   allCards.forEach(card => {
     const text = (card.text || '').toLowerCase();
     const backText = (card.backText || '').toLowerCase();
+    const tags = (card.tags || []).join(' ').toLowerCase();
 
-    if (text.includes(lowerQuery) || backText.includes(lowerQuery)) {
+    // Combine all searchable text
+    const searchableText = [text, backText, tags].join(' ');
+
+    console.log('[searchCards] Checking card:', card.id);
+
+    // Use boolean query evaluation
+    if (evaluateBooleanQuery(lowerQuery, searchableText)) {
+      console.log('[searchCards] ✓ Match found:', card.id);
       matchingCards.add(card.id);
     }
   });
+
+  console.log('[searchCards] Matching card IDs:', Array.from(matchingCards));
 
   // Apply visual effects
   allGroups.forEach(group => {
@@ -1683,8 +2306,11 @@ export async function searchCards(query) {
     const background = group.findOne('Rect');
     const isMatch = matchingCards.has(cardId);
 
+    console.log('[searchCards] Group cardId:', cardId, 'isMatch:', isMatch, 'hasBackground:', !!background);
+
     if (isMatch) {
       // Matching card: mark and full opacity
+      console.log('[searchCards] → Highlighting match:', cardId);
       group.opacity(1);
       group.addName('selected');
       if (background) {
@@ -1693,6 +2319,7 @@ export async function searchCards(query) {
       }
     } else {
       // Non-matching card: fade and remove selection
+      console.log('[searchCards] → Fading non-match:', cardId);
       group.opacity(0.3);
       group.removeName('selected');
       if (background) {
@@ -1703,7 +2330,175 @@ export async function searchCards(query) {
   });
 
   layer.batchDraw();
-  console.log(`Search: found ${matchingCards.size} matches for "${query}"`);
+  console.log(`[searchCards] ✓ Search complete: found ${matchingCards.size} matches for "${query}"`);
+}
+
+/**
+ * Show context menu for card
+ */
+function showContextMenu(x, y, cardId, group) {
+  // Remove any existing context menu
+  const existingMenu = document.getElementById('card-context-menu');
+  if (existingMenu) {
+    existingMenu.remove();
+  }
+
+  const isLocked = group.getAttr('locked') || false;
+
+  // Create menu
+  const menu = document.createElement('div');
+  menu.id = 'card-context-menu';
+  menu.style.cssText = `
+    position: fixed;
+    left: ${x}px;
+    top: ${y}px;
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 10001;
+    min-width: 150px;
+    overflow: hidden;
+  `;
+
+  const menuItems = [
+    {
+      label: isLocked ? '📌 Avpinna kort' : '📌 Pinna kort',
+      action: () => toggleLockCard(cardId, group)
+    },
+    {
+      label: '✏️ Redigera',
+      action: () => {
+        if (group.getAttr('cardId')) {
+          const cards = cardGroups.get(cardId);
+          if (cards) {
+            getAllCards().then(allCards => {
+              const card = allCards.find(c => c.id === cardId);
+              if (card && card.image) {
+                flipCard(cardId);
+              } else {
+                openEditDialog(cardId);
+              }
+            });
+          }
+        }
+      }
+    },
+    {
+      label: '🗑️ Ta bort',
+      action: () => deleteCard(cardId)
+    }
+  ];
+
+  menuItems.forEach(item => {
+    const menuItem = document.createElement('div');
+    menuItem.textContent = item.label;
+    menuItem.style.cssText = `
+      padding: 10px 16px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.2s;
+    `;
+    menuItem.addEventListener('mouseenter', () => {
+      menuItem.style.background = '#f5f5f5';
+    });
+    menuItem.addEventListener('mouseleave', () => {
+      menuItem.style.background = 'white';
+    });
+    menuItem.addEventListener('click', () => {
+      item.action();
+      menu.remove();
+    });
+    menu.appendChild(menuItem);
+  });
+
+  document.body.appendChild(menu);
+
+  // Close menu on click outside
+  const closeMenu = (e) => {
+    if (!menu.contains(e.target)) {
+      menu.remove();
+      document.removeEventListener('click', closeMenu);
+    }
+  };
+  setTimeout(() => document.addEventListener('click', closeMenu), 10);
+}
+
+/**
+ * Toggle lock state for a card
+ */
+async function toggleLockCard(cardId, group) {
+  const isLocked = group.getAttr('locked') || false;
+  const newLockedState = !isLocked;
+
+  // Update visual state
+  group.draggable(!newLockedState);
+  group.setAttr('locked', newLockedState);
+
+  // Update database
+  await updateCard(cardId, { locked: newLockedState });
+
+  // Visual feedback - add lock icon
+  updateLockIndicator(group, newLockedState);
+
+  console.log(`Card ${cardId} ${newLockedState ? 'locked' : 'unlocked'}`);
+  layer.batchDraw();
+}
+
+/**
+ * Update lock indicator on card
+ */
+function updateLockIndicator(group, isLocked) {
+  // Remove existing lock indicator
+  const existingLock = group.findOne('.lock-indicator');
+  if (existingLock) {
+    existingLock.destroy();
+  }
+
+  if (isLocked) {
+    // Add pin icon
+    const background = group.findOne('Rect');
+    if (background) {
+      const pinIcon = new Konva.Text({
+        text: '📌',
+        x: background.width() - 30,
+        y: 5,
+        fontSize: 20,
+        name: 'lock-indicator',
+        listening: false
+      });
+      group.add(pinIcon);
+    }
+  }
+}
+
+/**
+ * Toggle pin/unpin for selected cards
+ */
+async function togglePinSelectedCards() {
+  const selectedGroups = layer.find('.selected');
+  if (selectedGroups.length === 0) {
+    console.log('No cards selected to pin/unpin');
+    return;
+  }
+
+  // Check if any are pinned
+  const anyPinned = selectedGroups.some(group => group.getAttr('locked'));
+
+  for (const group of selectedGroups) {
+    const cardId = group.getAttr('cardId');
+    if (cardId) {
+      // If any are pinned, unpin all. Otherwise, pin all.
+      const newState = !anyPinned;
+      group.draggable(!newState);
+      group.setAttr('locked', newState);
+      await updateCard(cardId, { locked: newState });
+      updateLockIndicator(group, newState);
+    }
+  }
+
+  console.log(`${anyPinned ? 'Unpinned' : 'Pinned'} ${selectedGroups.length} cards`);
+  layer.batchDraw();
 }
 
 /**
@@ -1751,6 +2546,168 @@ function createFitAllButton() {
 }
 
 /**
+ * Show add menu overlay
+ */
+function showAddMenu() {
+  // Remove existing menu if any
+  const existingMenu = document.getElementById('add-menu-overlay');
+  if (existingMenu) {
+    existingMenu.remove();
+    return; // Toggle off
+  }
+
+  // Create overlay
+  const overlay = document.createElement('div');
+  overlay.id = 'add-menu-overlay';
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10002;
+    backdrop-filter: blur(4px);
+  `;
+
+  // Create menu container
+  const menu = document.createElement('div');
+  menu.style.cssText = `
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    min-width: 300px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  `;
+
+  // Title
+  const title = document.createElement('h2');
+  title.textContent = 'Snabbmeny';
+  title.style.cssText = `
+    margin: 0 0 20px 0;
+    font-size: 24px;
+    color: #1a1a1a;
+  `;
+  menu.appendChild(title);
+
+  // Menu items
+  const menuItems = [
+    {
+      icon: '📝',
+      label: 'Nytt text-kort',
+      desc: 'Skapa ett nytt text-kort',
+      action: async () => {
+        const pointer = stage.getPointerPosition();
+        const scale = stage.scaleX();
+        const position = pointer ? {
+          x: (pointer.x - stage.x()) / scale,
+          y: (pointer.y - stage.y()) / scale
+        } : { x: 100, y: 100 };
+        await createNewCard(position);
+        overlay.remove();
+      }
+    },
+    {
+      icon: '🖼️',
+      label: 'Importera bild',
+      desc: 'Lägg till en bild från din enhet',
+      action: async () => {
+        overlay.remove(); // Remove overlay BEFORE opening file picker
+        await importImage();
+      }
+    }
+  ];
+
+  menuItems.forEach(item => {
+    const menuItem = document.createElement('div');
+    menuItem.style.cssText = `
+      padding: 16px;
+      margin-bottom: 8px;
+      background: #f5f5f5;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    `;
+
+    menuItem.innerHTML = `
+      <div style="font-size: 28px; flex-shrink: 0;">${item.icon}</div>
+      <div style="flex: 1;">
+        <div style="font-weight: 600; font-size: 16px; color: #1a1a1a; margin-bottom: 2px;">
+          ${item.label}
+        </div>
+        <div style="font-size: 13px; color: #666;">
+          ${item.desc}
+        </div>
+      </div>
+    `;
+
+    menuItem.addEventListener('mouseenter', () => {
+      menuItem.style.background = '#e8e8e8';
+      menuItem.style.transform = 'translateX(4px)';
+    });
+
+    menuItem.addEventListener('mouseleave', () => {
+      menuItem.style.background = '#f5f5f5';
+      menuItem.style.transform = 'translateX(0)';
+    });
+
+    menuItem.addEventListener('click', item.action);
+    menu.appendChild(menuItem);
+  });
+
+  overlay.appendChild(menu);
+  document.body.appendChild(overlay);
+
+  // Close on overlay click
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) {
+      overlay.remove();
+    }
+  });
+
+  // Close on ESC
+  const escHandler = (e) => {
+    if (e.key === 'Escape') {
+      overlay.remove();
+      document.removeEventListener('keydown', escHandler);
+    }
+  };
+  document.addEventListener('keydown', escHandler);
+}
+
+/**
+ * Toggle theme
+ */
+function toggleTheme() {
+  const body = document.body;
+  const currentTheme = body.getAttribute('data-theme') || 'light';
+
+  const themes = ['light', 'dark', 'eink'];
+  const currentIndex = themes.indexOf(currentTheme);
+  const nextIndex = (currentIndex + 1) % themes.length;
+  const nextTheme = themes[nextIndex];
+
+  body.setAttribute('data-theme', nextTheme);
+  localStorage.setItem('theme', nextTheme);
+
+  console.log(`Theme changed to: ${nextTheme}`);
+}
+
+/**
+ * Toggle view from menu
+ */
+function toggleViewFromMenu() {
+  // Call the main.js toggleView function via custom event
+  window.dispatchEvent(new CustomEvent('toggleView'));
+}
+
+/**
  * Create floating add button
  */
 function createAddButton() {
@@ -1788,26 +2745,9 @@ function createAddButton() {
   };
 
   const onPressEnd = () => {
-    const pressDuration = Date.now() - pressStartTime;
     button.style.transform = 'scale(1)';
-
-    // Determine action based on press duration
-    if (pressDuration >= 1500) {
-      // Extra long press = Command palette
-      showCommandPalette();
-    } else if (pressDuration >= 500) {
-      // Long press = Import image
-      importImage();
-    } else {
-      // Short press = Create new card
-      const pointer = stage.getPointerPosition();
-      const scale = stage.scaleX();
-      const position = pointer ? {
-        x: (pointer.x - stage.x()) / scale,
-        y: (pointer.y - stage.y()) / scale
-      } : { x: 100, y: 100 };
-      createNewCard(position);
-    }
+    // Show overlay menu
+    showAddMenu();
   };
 
   let isPressed = false;
@@ -1904,18 +2844,74 @@ async function applyArrangement(arrangeFn, arrangeName) {
   // Calculate new positions
   const newPositions = arrangeFn(cardsData, centerPos);
 
-  // Animate cards to new positions
+  // Check if this is a grid arrangement that needs standard width
+  const needsStandardWidth = arrangeName.includes('Grid Vertical') ||
+                             arrangeName.includes('Grid Horizontal') ||
+                             arrangeName.includes('Grid Top-Aligned');
+  const standardWidth = 200;
+
+  // Animate cards to new positions (and resize if needed)
   newPositions.forEach(({ id, x, y }) => {
     const group = cardGroups.get(id);
     if (!group) return;
 
-    // Animate with Konva
+    // Animate position
     group.to({
       x: x,
       y: y,
       duration: 0.3,
       easing: Konva.Easings.EaseOut
     });
+
+    // Resize cards to standard width for grid arrangements
+    if (needsStandardWidth) {
+      const background = group.findOne('Rect');
+      const text = group.findOne('Text');
+      const image = group.findOne('Image');
+
+      if (background) {
+        const currentWidth = background.width();
+        if (currentWidth !== standardWidth) {
+          background.to({
+            width: standardWidth,
+            duration: 0.3,
+            easing: Konva.Easings.EaseOut
+          });
+        }
+      }
+
+      if (text) {
+        text.to({
+          width: standardWidth - 20,
+          duration: 0.3,
+          easing: Konva.Easings.EaseOut
+        });
+      }
+
+      if (image) {
+        // Scale image proportionally to fit standard width
+        const currentWidth = image.width();
+        const currentHeight = image.height();
+        if (currentWidth !== standardWidth) {
+          const scale = standardWidth / currentWidth;
+          image.to({
+            width: standardWidth,
+            height: currentHeight * scale,
+            duration: 0.3,
+            easing: Konva.Easings.EaseOut
+          });
+
+          // Also resize background to match new image height
+          if (background) {
+            background.to({
+              height: currentHeight * scale + 60, // +60 for text area
+              duration: 0.3,
+              easing: Konva.Easings.EaseOut
+            });
+          }
+        }
+      }
+    }
 
     // Update database
     updateCard(id, { position: { x, y } });

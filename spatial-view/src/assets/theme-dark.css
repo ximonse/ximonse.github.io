@@ -1,78 +1,62 @@
-        /* Dark Theme CSS */
-        body.dark-theme {
-            background: #1a1a1a;
-            color: #e0e0e0;
-        }
-        
-        .dark-theme .toolbar {
-            background: transparent;
-            border-bottom: 1px solid rgba(74, 85, 104, 0.3);
-        }
-        
-        .dark-theme .tag-filter-input,
-        .dark-theme .search-input {
-            background: linear-gradient(145deg, #4a5568 0%, #3a4458 100%);
-            border: 1px solid #5a6572;
-            color: #f7fafc;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-        }
-        
-        .dark-theme .tag-filter-input:focus,
-        .dark-theme .search-input:focus {
-            border-color: #6b7280;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
-            background: linear-gradient(145deg, #5a6572 0%, #4a5568 100%);
-        }
-        
-        /* Dark theme unified toolbar buttons */
-        .dark-theme .toolbar-btn {
-            background: linear-gradient(145deg, #4a5568 0%, #3a4458 100%);
-            color: #f7fafc;
-            border: 1px solid #5a6572;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-        }
-        
-        .dark-theme .toolbar-btn:hover {
-            background: linear-gradient(145deg, #5a6572 0%, #4a5568 100%);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
-        }
-        
-        .dark-theme .dropdown-content {
-            background: rgba(45, 55, 72, 0.75);
-            color: #e2e8f0;
-            border: 1px solid #4a5568;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-        }
-        
-        .dark-theme .dropdown-content button {
-            color: #e2e8f0;
-        }
-        
-        .dark-theme .dropdown-content button:hover {
-            background: linear-gradient(90deg, #4a5568 0%, #3a4458 100%);
-            color: #f7fafc;
-        }
-        
-        .dark-theme .dropdown-content button:active {
-            background: linear-gradient(90deg, #2d3748 0%, #1a202c 100%);
-        }
-        
-        .dark-theme .search-results-info {
-            background: rgba(77, 166, 255, 0.9);
-            color: #1a1a1a;
-        }
-        
-        .dark-theme .selection-info {
-            background: rgba(102, 179, 255, 0.9);
-            color: #1a1a1a;
-        }
-        
-        .dark-theme .mobile-btn {
-            background: #4da6ff;
-            color: #1a1a1a;
-        }
-        
-        /* Dark theme för Cytoscape korten */
-        body.dark-theme #cy {
-            background: #1a1a1a;
-        }
+/* Dark Theme - CSS Variables Override */
+body.dark-theme {
+    /* Colors */
+    --bg-primary: #1a1a1a;
+    --bg-secondary: #2d3748;
+    --text-primary: #e0e0e0;
+    --text-secondary: #a0aec0;
+    --border-color: #4a5568;
+    --accent-color: #4da6ff;
+
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+/* Toolbar */
+.dark-theme #toolbar {
+    background: var(--bg-secondary);
+    border-bottom-color: var(--border-color);
+}
+
+.dark-theme #toolbar h1 {
+    color: var(--text-primary);
+}
+
+/* Buttons */
+.dark-theme button {
+    background: linear-gradient(145deg, #4a5568 0%, #3a4458 100%);
+    color: #f7fafc;
+    border: 1px solid #5a6572;
+}
+
+.dark-theme button:hover {
+    background: linear-gradient(145deg, #5a6572 0%, #4a5568 100%);
+}
+
+/* Search input */
+.dark-theme #search-input {
+    background: linear-gradient(145deg, #4a5568 0%, #3a4458 100%);
+    border-color: #5a6572;
+    color: #f7fafc;
+}
+
+.dark-theme #search-input:focus {
+    border-color: #6b7280;
+    background: linear-gradient(145deg, #5a6572 0%, #4a5568 100%);
+}
+
+/* Column view */
+.dark-theme #column-view {
+    background: var(--bg-secondary);
+}
+
+.dark-theme .column-card {
+    background: #2d3748 !important;
+    border-color: #4a5568 !important;
+    color: var(--text-primary) !important;
+}
+
+/* Board view */
+.dark-theme #board-view {
+    background: var(--bg-primary);
+}

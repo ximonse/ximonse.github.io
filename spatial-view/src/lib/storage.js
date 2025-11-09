@@ -65,21 +65,62 @@ export async function getCard(id) {
   return await db.cards.get(id);
 }
 
+// Counter for cards created in the same millisecond
+let cardCounter = 0;
+let lastTimestamp = 0;
+
+/**
+ * Generate unique card ID in format: yymmdd_hh_mm_ss_ms_a
+ */
+function generateCardId() {
+  const now = new Date();
+  const timestamp = now.getTime();
+
+  // Reset counter if we're in a new millisecond
+  if (timestamp !== lastTimestamp) {
+    cardCounter = 0;
+    lastTimestamp = timestamp;
+  } else {
+    cardCounter++;
+  }
+
+  // Format: yymmdd_hh_mm_ss_ms_a
+  const yy = String(now.getFullYear()).slice(-2);
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const hh = String(now.getHours()).padStart(2, '0');
+  const min = String(now.getMinutes()).padStart(2, '0');
+  const ss = String(now.getSeconds()).padStart(2, '0');
+  const ms = String(now.getMilliseconds()).padStart(3, '0');
+
+  // Letter suffix: a, b, c, etc.
+  const suffix = String.fromCharCode(97 + cardCounter); // 97 = 'a'
+
+  return `${yy}${mm}${dd}_${hh}_${min}_${ss}_${ms}_${suffix}`;
+}
+
 /**
  * Create new card
  */
-export async function createCard(cardData) {
+export async function createCard(cardData, metadata = {}) {
+  const uniqueId = generateCardId();
+
   const card = {
     ...cardData,
+    uniqueId,
     created: Date.now(),
-    modified: Date.now()
+    modified: Date.now(),
+    metadata: {
+      ...metadata,
+      createdAt: new Date().toISOString()
+    }
   };
-  
+
   const id = await db.cards.add(card);
-  
+
   // Log to changelog
   await logChange('create', id, card);
-  
+
   return id;
 }
 

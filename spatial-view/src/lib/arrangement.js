@@ -131,30 +131,19 @@ export function arrangeCluster(cards, centerPos) {
 /**
  * Arrange cards in vertical columns (grid variant)
  * Max 5 columns, 20px gaps both ways
+ * All cards use standard width for aligned columns
  */
 export function arrangeGridVertical(cards, centerPos) {
   const maxCols = 5;
   const gap = 20;
+  const standardWidth = 200; // Standard width for all cards
   const positions = [];
 
   const cols = Math.min(maxCols, Math.ceil(Math.sqrt(cards.length)));
   const cardsPerCol = Math.ceil(cards.length / cols);
 
-  // Calculate column widths (max card width in each column)
-  const columnWidths = [];
-  for (let col = 0; col < cols; col++) {
-    let maxWidth = 200; // default
-    for (let row = 0; row < cardsPerCol; row++) {
-      const index = col * cardsPerCol + row;
-      if (index < cards.length) {
-        maxWidth = Math.max(maxWidth, cards[index].width || 200);
-      }
-    }
-    columnWidths.push(maxWidth);
-  }
-
-  // Calculate total grid width
-  const totalWidth = columnWidths.reduce((sum, w) => sum + w, 0) + (cols - 1) * gap;
+  // Calculate total grid width (all columns same width)
+  const totalWidth = cols * standardWidth + (cols - 1) * gap;
 
   // Start position
   let currentX = centerPos.x - totalWidth / 2;
@@ -178,7 +167,7 @@ export function arrangeGridVertical(cards, centerPos) {
       cardIndex++;
     }
 
-    currentX += columnWidths[col] + gap;
+    currentX += standardWidth + gap;
   }
 
   return positions;
@@ -187,10 +176,12 @@ export function arrangeGridVertical(cards, centerPos) {
 /**
  * Arrange cards in packed rows
  * Max 5 per row, top-aligned within row, tight vertical packing
+ * All cards use standard width for aligned columns
  */
 export function arrangeGridHorizontal(cards, centerPos) {
   const maxCols = 5;
   const gap = 20;
+  const standardWidth = 200; // Standard width for all cards
   const positions = [];
 
   // Group cards into rows
@@ -210,20 +201,18 @@ export function arrangeGridHorizontal(cards, centerPos) {
   let currentY = centerPos.y - totalHeight / 2;
 
   rows.forEach((row, rowIndex) => {
-    // Calculate row width
-    const rowWidth = row.reduce((sum, card) => sum + (card.width || 200), 0) + (row.length - 1) * gap;
+    // Calculate row width (all cards same width)
+    const rowWidth = row.length * standardWidth + (row.length - 1) * gap;
     let currentX = centerPos.x - rowWidth / 2;
 
     row.forEach(card => {
-      const width = card.width || 200;
-
       positions.push({
         id: card.id,
         x: currentX,
         y: currentY // Top-aligned within row
       });
 
-      currentX += width + gap;
+      currentX += standardWidth + gap;
     });
 
     // Next row starts at bottom of tallest card in current row + gap
@@ -237,11 +226,13 @@ export function arrangeGridHorizontal(cards, centerPos) {
  * Arrange cards in overlapping grid (Kanban-style, for showing titles)
  * Max 5 per row, cards overlap vertically to show ~120px of each
  * Rows start at left edge
+ * All cards use standard width for aligned columns
  */
 export function arrangeGridTopAligned(cards, centerPos) {
   const maxCols = 5;
   const colSpacing = 15; // Tight horizontal spacing
   const rowSpacing = 120; // Vertical overlap - show 120px of each card
+  const standardWidth = 200; // Standard width for all cards
   const positions = [];
 
   // Group into rows
@@ -258,15 +249,13 @@ export function arrangeGridTopAligned(cards, centerPos) {
     let currentX = centerPos.x;
 
     row.forEach(card => {
-      const width = card.width || 200;
-
       positions.push({
         id: card.id,
         x: currentX,
         y: currentY
       });
 
-      currentX += width + colSpacing;
+      currentX += standardWidth + colSpacing;
     });
 
     currentY += rowSpacing; // Overlapping rows
