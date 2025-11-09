@@ -1,4 +1,4 @@
-// (SNABBFIX) Ta bort import './styles.css'; från toppen — CSS laddas nu via <link> i index.html
+// (SNABBFIX) CSS laddas via <link> i index.html — ta bort import './styles.css';
 
 /**
  * Spatial View v1.0
