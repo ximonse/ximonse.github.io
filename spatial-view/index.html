@@ -7,10 +7,21 @@
   <meta name="theme-color" content="#ffffff">
   <title>Spatial View</title>
 
-  <!-- Ladda CSS direkt som vanlig stylesheet (SNABBFIX) -->
+  <!-- Load CSS as regular stylesheet -->
   <link rel="stylesheet" href="./src/styles.css">
 
-  <!-- Relativ script-länk -->
+  <!-- Import map to resolve bare module specifiers to CDN ESM bundles -->
+  <script type="importmap">
+  {
+    "imports": {
+      "konva": "https://cdn.skypack.dev/konva",
+      "dexie": "https://cdn.skypack.dev/dexie",
+      "jszip": "https://cdn.skypack.dev/jszip"
+    }
+  }
+  </script>
+
+  <!-- Relative module entry -->
   <script type="module" src="./src/main.js"></script>
 </head>
 <body>
