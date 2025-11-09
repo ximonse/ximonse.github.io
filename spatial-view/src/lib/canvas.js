@@ -2603,6 +2603,75 @@ function showCommandPalette() {
     overflow-y: auto;
   `;
 
+  // Function to render command list
+  const renderCommands = (filteredCommands) => {
+    const commandList = palette.querySelector('#command-list');
+    commandList.innerHTML = filteredCommands.map((cmd, idx) => `
+      <div class="command-item" data-original-index="${cmd.originalIndex}" style="
+        padding: 16px;
+        background: ${cmd.action ? '#f5f5f5' : '#fafafa'};
+        border-radius: 8px;
+        cursor: ${cmd.action ? 'pointer' : 'default'};
+        transition: all 0.15s;
+        border: 2px solid transparent;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      ">
+        <div style="font-size: 24px; flex-shrink: 0;">
+          ${cmd.icon}
+        </div>
+        <div style="flex: 1; min-width: 0;">
+          <div style="font-weight: 600; font-size: 16px; color: #1a1a1a; margin-bottom: 2px;">
+            ${cmd.name}
+          </div>
+          <div style="font-size: 13px; color: #666;">
+            ${cmd.desc}
+          </div>
+        </div>
+        <div style="
+          background: white;
+          padding: 6px 12px;
+          border-radius: 6px;
+          font-size: 12px;
+          font-weight: 600;
+          color: #666;
+          font-family: monospace;
+          white-space: nowrap;
+          flex-shrink: 0;
+        ">
+          ${cmd.key}
+        </div>
+      </div>
+    `).join('');
+
+    // Add hover and click effects
+    const commandItems = commandList.querySelectorAll('.command-item');
+    commandItems.forEach((item) => {
+      const originalIdx = parseInt(item.dataset.originalIndex);
+      const cmd = commands[originalIdx];
+
+      if (cmd.action) {
+        item.addEventListener('mouseenter', () => {
+          item.style.background = '#e3f2fd';
+          item.style.borderColor = '#2196F3';
+          item.style.transform = 'scale(1.01)';
+        });
+
+        item.addEventListener('mouseleave', () => {
+          item.style.background = '#f5f5f5';
+          item.style.borderColor = 'transparent';
+          item.style.transform = 'scale(1)';
+        });
+
+        item.addEventListener('click', async () => {
+          cleanup();
+          await cmd.action();
+        });
+      }
+    });
+  };
+
   palette.innerHTML = `
     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
       <h2 style="margin: 0; font-size: 24px; color: #1a1a1a;">
@@ -2611,74 +2680,63 @@ function showCommandPalette() {
       <span style="color: #999; font-size: 14px;">Tryck ESC för att stänga</span>
     </div>
 
+    <input
+      type="text"
+      id="command-search"
+      placeholder="Sök kommandon..."
+      style="
+        width: 100%;
+        padding: 12px 16px;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 16px;
+        margin-bottom: 16px;
+        outline: none;
+        transition: border-color 0.15s;
+      "
+    />
+
     <div id="command-list" style="display: flex; flex-direction: column; gap: 8px;">
-      ${commands.map((cmd, idx) => `
-        <div class="command-item" data-index="${idx}" style="
-          padding: 16px;
-          background: ${cmd.action ? '#f5f5f5' : '#fafafa'};
-          border-radius: 8px;
-          cursor: ${cmd.action ? 'pointer' : 'default'};
-          transition: all 0.15s;
-          border: 2px solid transparent;
-          display: flex;
-          align-items: center;
-          gap: 16px;
-        ">
-          <div style="font-size: 24px; flex-shrink: 0;">
-            ${cmd.icon}
-          </div>
-          <div style="flex: 1; min-width: 0;">
-            <div style="font-weight: 600; font-size: 16px; color: #1a1a1a; margin-bottom: 2px;">
-              ${cmd.name}
-            </div>
-            <div style="font-size: 13px; color: #666;">
-              ${cmd.desc}
-            </div>
-          </div>
-          <div style="
-            background: white;
-            padding: 6px 12px;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 600;
-            color: #666;
-            font-family: monospace;
-            white-space: nowrap;
-            flex-shrink: 0;
-          ">
-            ${cmd.key}
-          </div>
-        </div>
-      `).join('')}
     </div>
   `;
 
   overlay.appendChild(palette);
   document.body.appendChild(overlay);
 
-  // Add hover and click effects
-  const commandItems = palette.querySelectorAll('.command-item');
-  commandItems.forEach((item, idx) => {
-    const cmd = commands[idx];
+  // Add commands with original index for tracking
+  const commandsWithIndex = commands.map((cmd, idx) => ({ ...cmd, originalIndex: idx }));
 
-    if (cmd.action) {
-      item.addEventListener('mouseenter', () => {
-        item.style.background = '#e3f2fd';
-        item.style.borderColor = '#2196F3';
-        item.style.transform = 'scale(1.01)';
-      });
+  // Initial render with all commands
+  renderCommands(commandsWithIndex);
 
-      item.addEventListener('mouseleave', () => {
-        item.style.background = '#f5f5f5';
-        item.style.borderColor = 'transparent';
-        item.style.transform = 'scale(1)';
-      });
+  // Add search functionality
+  const searchInput = palette.querySelector('#command-search');
+  searchInput.addEventListener('input', (e) => {
+    const query = e.target.value.toLowerCase().trim();
 
-      item.addEventListener('click', async () => {
-        cleanup();
-        await cmd.action();
-      });
+    if (!query) {
+      renderCommands(commandsWithIndex);
+      return;
     }
+
+    const filtered = commandsWithIndex.filter(cmd =>
+      cmd.name.toLowerCase().includes(query) ||
+      cmd.desc.toLowerCase().includes(query) ||
+      cmd.key.toLowerCase().includes(query)
+    );
+
+    renderCommands(filtered);
+  });
+
+  // Focus search input
+  searchInput.focus();
+
+  // Handle focus on border
+  searchInput.addEventListener('focus', () => {
+    searchInput.style.borderColor = '#2196F3';
+  });
+  searchInput.addEventListener('blur', () => {
+    searchInput.style.borderColor = '#e0e0e0';
   });
 
   // Cleanup function
