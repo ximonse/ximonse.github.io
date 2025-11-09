@@ -1503,6 +1503,67 @@ export function updateCardShadows() {
 }
 
 /**
+ * Update fill colors on all cards based on current theme.
+ * Called when theme changes.
+ */
+export async function updateCardFills() {
+  const isEink = document.body.classList.contains('eink-theme');
+  const isDark = document.body.classList.contains('dark-theme');
+  const allCards = await getAllCards();
+
+  const cardDataMap = new Map(allCards.map(card => [card.id, card]));
+
+  cardGroups.forEach(group => {
+    const cardId = group.getAttr('cardId');
+    const cardData = cardDataMap.get(cardId);
+    if (!cardData) return;
+
+    const background = group.findOne('Rect');
+    const text = group.findOne('Text');
+
+    if (background) {
+      let fillColor;
+
+      if (cardData.image && cardData.flipped) {
+        // Back of an image card
+        fillColor = isEink ? '#ffffff' : (isDark ? '#2d3748' : '#fffacd');
+      } else if (cardData.image && !cardData.flipped) {
+        // Front of an image card is always white
+        fillColor = '#ffffff';
+      } else {
+        // Text card
+        const cardColor = getCardColor(cardData.cardColor);
+        fillColor = cardColor; // Default to the card's own color
+
+        if (isEink) {
+          if (cardData.cardColor && cardData.cardColor !== 'yellow') {
+            const colorMap = {
+              'blue': '#e6f2ff', 'green': '#e6ffe6', 'pink': '#ffe6f2',
+              'purple': '#f2e6ff', 'orange': '#fff2e6'
+            };
+            fillColor = colorMap[cardData.cardColor] || '#ffffff';
+          } else {
+            fillColor = '#ffffff';
+          }
+        } else if (isDark) {
+          // In dark mode, text cards have a standard dark background, ignoring their color property
+          fillColor = '#2d3748';
+        }
+      }
+      background.fill(fillColor);
+    }
+
+    if (text) {
+      text.fill(isDark ? '#e0e0e0' : '#1a1a1a');
+    }
+  });
+
+  if (layer) {
+    layer.batchDraw();
+  }
+}
+
+/**
  * Undo/redo functions
  */
 function pushUndo(action) {
