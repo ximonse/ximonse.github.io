@@ -147,7 +147,7 @@ button:active {
   flex: 1;
   position: relative;
   overflow: hidden;
-  margin-top: var(--toolbar-height); /* Kompensera för fixed toolbar */
+  /* Ingen margin-top - canvas ska gå bakom transparent toolbar */
 }
 
 /* Views */
