@@ -225,11 +225,11 @@ async function toggleView() {
   if (state.currentView === 'board') {
     boardView?.classList.add('active');
     columnView?.classList.remove('active');
-    toggleBtn.textContent = '🔄 Vy';
+    toggleBtn.textContent = '▯'; // Icon for Column view (what it will switch to)
   } else {
     boardView?.classList.remove('active');
     columnView?.classList.add('active');
-    toggleBtn.textContent = '🔄 Vy';
+    toggleBtn.textContent = '▬'; // Icon for Board view (what it will switch to)
     // Load cards in column view
     await renderColumnView();
   }
@@ -944,13 +944,14 @@ async function toggleTheme() {
 
   // Update button text
   const themeBtn = document.getElementById('btn-theme-toggle');
-  const themeNames = {
-    'light': '☀️ Ljust',
-    'dark': '🌙 Mörkt',
-    'eink': '📄 E-ink'
-  };
   if (themeBtn) {
-    themeBtn.textContent = themeNames[nextTheme] || '🎨 Tema';
+    // The text is now removed, but we could update a title/tooltip here
+    const themeTitles = {
+      'light': 'Byt till mörkt tema',
+      'dark': 'Byt till e-ink tema',
+      'eink': 'Byt till ljust tema'
+    };
+    themeBtn.title = themeTitles[nextTheme] || 'Byt tema';
   }
 
   // Update card appearances based on new theme
@@ -1014,7 +1015,7 @@ function applyUIMode() {
     if (commandPaletteBtn) commandPaletteBtn.style.display = 'flex';
     if (addBtn) addBtn.style.display = 'flex';
     if (fitAllBtn) fitAllBtn.style.display = 'flex';
-    if (uiToggleBtn) uiToggleBtn.textContent = '⚙️ Full';
+    if (uiToggleBtn) uiToggleBtn.title = 'Byt till minimalt UI';
   }
 
   // Mode 2: Minimal - hide toolbar buttons EXCEPT toggle, show floating command palette
@@ -1035,7 +1036,7 @@ function applyUIMode() {
     if (addBtn) addBtn.style.display = 'none';
     if (fitAllBtn) fitAllBtn.style.display = 'none';
     toolbar.style.display = 'flex';
-    if (uiToggleBtn) uiToggleBtn.textContent = '⚙️ Minimal';
+    if (uiToggleBtn) uiToggleBtn.title = 'Byt till endast UI-knapp';
   }
 
   // Mode 3: Toggle-only - show ONLY toggle button
@@ -1056,7 +1057,7 @@ function applyUIMode() {
     if (addBtn) addBtn.style.display = 'none';
     if (fitAllBtn) fitAllBtn.style.display = 'none';
     toolbar.style.display = 'flex';
-    if (uiToggleBtn) uiToggleBtn.textContent = '⚙️';
+    if (uiToggleBtn) uiToggleBtn.title = 'Byt till fullt UI';
   }
 
   console.log(`Applied UI mode: ${state.uiMode}`);
