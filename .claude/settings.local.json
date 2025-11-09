@@ -28,7 +28,8 @@
       "Bash(chmod:*)",
       "Bash(npm run build:*)",
       "Bash(.gitignore)",
-      "WebFetch(domain:gomakethings.com)"
+      "WebFetch(domain:gomakethings.com)",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "ask": []
