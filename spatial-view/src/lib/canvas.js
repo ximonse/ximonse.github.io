@@ -273,7 +273,51 @@ function renderCard(cardData) {
     }
   });
 
-  group.on('touchend touchcancel', function() {
+  group.on('touchend', function() {
+    if (touchTimer) {
+      clearTimeout(touchTimer);
+      touchTimer = null;
+
+      // If touch ended before long press timer and card hasn't moved much, treat as tap to select
+      if (!hasMoved) {
+        const isSelected = this.hasName('selected');
+        const background = this.findOne('Rect');
+        const isEink = document.body.classList.contains('eink-theme');
+        const isDark = document.body.classList.contains('dark-theme');
+
+        if (isSelected) {
+          this.removeName('selected');
+          if (background) {
+            if (isEink) {
+              background.stroke('#000000');
+              background.strokeWidth(2);
+            } else if (isDark) {
+              background.stroke('#4a5568');
+              background.strokeWidth(1);
+            } else {
+              background.stroke('#e0e0e0');
+              background.strokeWidth(1);
+            }
+          }
+        } else {
+          this.addName('selected');
+          if (background) {
+            if (isEink) {
+              background.stroke('#000000');
+              background.strokeWidth(4);
+            } else {
+              background.stroke('#2196F3');
+              background.strokeWidth(3);
+            }
+          }
+        }
+
+        layer.batchDraw();
+      }
+    }
+  });
+
+  group.on('touchcancel', function() {
     if (touchTimer) {
       clearTimeout(touchTimer);
       touchTimer = null;
@@ -724,6 +768,13 @@ async function createInlineEditor(cardId, group, currentText, isImageBack = fals
                                      border-radius: 8px; font-size: 16px; font-weight: 500; cursor: pointer;">
         Avbryt
       </button>
+      ${card.image ? `
+      <button id="readWithAI" style="padding: 12px 24px; background: #8B5CF6;
+                                     color: white; border: none; border-radius: 8px;
+                                     font-size: 16px; font-weight: 600; cursor: pointer;">
+        ✨ Läs med AI
+      </button>
+      ` : ''}
       <button id="saveEdit" style="padding: 12px 24px; background: var(--accent-color);
                                     color: white; border: none; border-radius: 8px;
                                     font-size: 16px; font-weight: 600; cursor: pointer;">
@@ -834,6 +885,15 @@ async function createInlineEditor(cardId, group, currentText, isImageBack = fals
   // Event listeners
   saveBtn.addEventListener('click', save);
   cancelBtn.addEventListener('click', cleanup);
+
+  // AI read button (only for image cards)
+  const readWithAIBtn = document.getElementById('readWithAI');
+  if (readWithAIBtn) {
+    readWithAIBtn.addEventListener('click', async () => {
+      cleanup();
+      await readImageWithGemini(cardId);
+    });
+  }
 
   // Keyboard shortcuts
   const escHandler = (e) => {
@@ -2656,6 +2716,37 @@ function showCommandPalette() {
     }},
     { key: 'I', icon: '🖼️', name: 'Importera bild', desc: 'Öppna filväljare för att importera bilder', action: async () => {
       await importImage();
+    }},
+    { key: 'R', icon: '✨', name: 'Läs med AI', desc: 'Använd Gemini AI för att läsa text från markerade bildkort', action: async () => {
+      const selectedNodes = layer.find('.selected');
+      if (selectedNodes.length === 0) {
+        alert('Markera först ett eller flera bildkort som du vill läsa med AI.');
+        return;
+      }
+
+      // Get all cards and filter only image cards
+      const allCards = await getAllCards();
+      const imageCardIds = [];
+
+      for (const node of selectedNodes) {
+        const cardId = node.getAttr('cardId');
+        if (cardId) {
+          const card = allCards.find(c => c.id === cardId);
+          if (card && card.image) {
+            imageCardIds.push(cardId);
+          }
+        }
+      }
+
+      if (imageCardIds.length === 0) {
+        alert('Inga bildkort är markerade. Endast bildkort kan läsas med AI.');
+        return;
+      }
+
+      // Process each card
+      for (const cardId of imageCardIds) {
+        await readImageWithGemini(cardId);
+      }
     }},
     { key: 'F', icon: '🔍', name: 'Sök kort', desc: 'Fokusera sökfältet', action: () => {
       const searchInput = document.getElementById('search-input');
