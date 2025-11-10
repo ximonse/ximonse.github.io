@@ -29,7 +29,9 @@
       "Bash(npm run build:*)",
       "Bash(.gitignore)",
       "WebFetch(domain:gomakethings.com)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(copy /Y \"spatial-view\\dist\\index.html\" \"index.html\")",
+      "Bash(xcopy:*)"
     ],
     "deny": [],
     "ask": []

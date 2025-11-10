@@ -2132,20 +2132,27 @@ function setupCanvasEvents() {
         openEditDialog(cardId);
       }
     } else if (target === stage) {
-      // Double-click on canvas to create new card
-      const pointer = stage.getPointerPosition();
-      const scale = stage.scaleX();
-      const position = {
-        x: (pointer.x - stage.x()) / scale,
-        y: (pointer.y - stage.y()) / scale
-      };
-      createNewCard(position);
+      // Only create card if user hasn't been panning
+      if (!stageTouchHasMoved) {
+        // Double-click on canvas to create new card
+        const pointer = stage.getPointerPosition();
+        const scale = stage.scaleX();
+        const position = {
+          x: (pointer.x - stage.x()) / scale,
+          y: (pointer.y - stage.y()) / scale
+        };
+        createNewCard(position);
+      }
+      // Reset movement flag after double-tap check
+      stageTouchHasMoved = false;
     }
   });
 
   // Touch long-press on empty canvas to paste image
   let stageTouchTimer = null;
   let stageTouchStart = null;
+  let stageTouchStartPos = null;
+  let stageTouchHasMoved = false;
   let lastCenter = null;
   let lastDist = 0;
   let isTouchPanning = false;
@@ -2164,6 +2171,10 @@ function setupCanvasEvents() {
   stage.on('touchstart', (e) => {
     const touch1 = e.evt.touches[0];
     const touch2 = e.evt.touches[1];
+
+    // Reset movement tracking
+    stageTouchHasMoved = false;
+    stageTouchStartPos = touch1 ? { x: touch1.clientX, y: touch1.clientY } : null;
 
     if (touch1 && touch2) {
       // Two fingers - prepare for pinch/pan
@@ -2192,18 +2203,20 @@ function setupCanvasEvents() {
     stageTouchStart = Date.now();
 
     stageTouchTimer = setTimeout(async () => {
-      // Long press on empty canvas
-      const pointer = stage.getPointerPosition();
-      const scale = stage.scaleX();
-      const position = {
-        x: (pointer.x - stage.x()) / scale,
-        y: (pointer.y - stage.y()) / scale
-      };
+      // Only show paste menu if user hasn't moved (not panning)
+      if (!stageTouchHasMoved) {
+        const pointer = stage.getPointerPosition();
+        const scale = stage.scaleX();
+        const position = {
+          x: (pointer.x - stage.x()) / scale,
+          y: (pointer.y - stage.y()) / scale
+        };
 
-      // Show paste menu
-      await showTouchPasteMenu(e.evt.touches ? e.evt.touches[0].clientX : e.evt.clientX,
-                               e.evt.touches ? e.evt.touches[0].clientY : e.evt.clientY,
-                               position);
+        // Show paste menu
+        await showTouchPasteMenu(e.evt.touches ? e.evt.touches[0].clientX : e.evt.clientX,
+                                 e.evt.touches ? e.evt.touches[0].clientY : e.evt.clientY,
+                                 position);
+      }
       stageTouchTimer = null;
     }, 600); // 600ms long press
   });
@@ -2212,9 +2225,21 @@ function setupCanvasEvents() {
     const touch1 = e.evt.touches[0];
     const touch2 = e.evt.touches[1];
 
+    // Track if user has moved (for detecting panning vs tap)
+    if (touch1 && stageTouchStartPos) {
+      const moveDistance = Math.sqrt(
+        Math.pow(touch1.clientX - stageTouchStartPos.x, 2) +
+        Math.pow(touch1.clientY - stageTouchStartPos.y, 2)
+      );
+      if (moveDistance > 10) { // 10px threshold
+        stageTouchHasMoved = true;
+      }
+    }
+
     if (touch1 && touch2) {
       // Two fingers - pinch to zoom and pan
       e.evt.preventDefault();
+      stageTouchHasMoved = true; // Mark as moved for two-finger gestures
 
       if (stageTouchTimer) {
         clearTimeout(stageTouchTimer);
@@ -2256,7 +2281,8 @@ function setupCanvasEvents() {
       return;
     }
 
-    if (stageTouchTimer && e.target === stage) {
+    // Cancel long-press timer if user is moving (panning)
+    if (stageTouchTimer && stageTouchHasMoved) {
       clearTimeout(stageTouchTimer);
       stageTouchTimer = null;
     }
@@ -2273,6 +2299,10 @@ function setupCanvasEvents() {
     }
     lastCenter = null;
     lastDist = 0;
+
+    // Reset movement tracking
+    stageTouchStartPos = null;
+    // Note: Don't reset stageTouchHasMoved here - it's needed for dbltap check
   });
 
   // Track if 'g' key is currently held down for simultaneous combos
