@@ -2796,12 +2796,19 @@ async function pasteImageFromClipboard() {
           // Convert blob to file
           const file = new File([blob], 'clipboard-image.png', { type: blob.type });
 
+          console.log('Clipboard image size:', (file.size / 1024).toFixed(1), 'KB');
+
           // Show quality selector dialog
           const quality = await showQualityDialog(1);
           if (!quality) return;
 
+          console.log('Selected quality:', quality);
+
           // Process image
           const processed = await processImage(file, quality);
+
+          console.log('Processed size:', (processed.metadata.compressedSize / 1024).toFixed(1), 'KB');
+          console.log('Dimensions:', processed.metadata.width, 'x', processed.metadata.height);
 
           // Calculate position at center or mouse position
           const pointer = stage.getPointerPosition() || { x: stage.width() / 2, y: stage.height() / 2 };

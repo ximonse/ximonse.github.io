@@ -12,16 +12,19 @@ const QUALITY_PRESETS = {
   low: {
     maxWidthOrHeight: 600,
     quality: 0.75,
+    fileType: 'image/jpeg',
     useWebWorker: true
   },
   normal: {
     maxWidthOrHeight: 900,
     quality: 0.85,
+    fileType: 'image/jpeg',
     useWebWorker: true
   },
   high: {
     maxWidthOrHeight: 1200,
     quality: 0.92,
+    fileType: 'image/jpeg',
     useWebWorker: true
   }
 };

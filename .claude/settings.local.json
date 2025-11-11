@@ -31,7 +31,9 @@
       "WebFetch(domain:gomakethings.com)",
       "Bash(git checkout:*)",
       "Bash(copy /Y \"spatial-view\\dist\\index.html\" \"index.html\")",
-      "Bash(xcopy:*)"
+      "Bash(xcopy:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []
