@@ -487,7 +487,7 @@ async function renderColumnView(searchQuery = '') {
 
     cardElement.addEventListener('touchmove', (e) => {
       const currentY = e.touches[0].clientY;
-      const moved = Math.abs(currentY - touchStartY) > 5;
+      const moved = Math.abs(currentY - touchStartY) > 3;
       if (moved) {
         hasMoved = true;
       }

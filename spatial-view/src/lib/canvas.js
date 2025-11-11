@@ -266,8 +266,8 @@ function renderCard(cardData) {
 
   group.on('touchmove', function() {
     const currentPos = this.position();
-    const moved = Math.abs(currentPos.x - touchStartPos.x) > 5 ||
-                  Math.abs(currentPos.y - touchStartPos.y) > 5;
+    const moved = Math.abs(currentPos.x - touchStartPos.x) > 3 ||
+                  Math.abs(currentPos.y - touchStartPos.y) > 3;
     if (moved) {
       hasMoved = true;
     }
@@ -2271,7 +2271,7 @@ function setupCanvasEvents() {
         Math.pow(touch1.clientX - stageTouchStartPos.x, 2) +
         Math.pow(touch1.clientY - stageTouchStartPos.y, 2)
       );
-      if (moveDistance > 10) { // 10px threshold
+      if (moveDistance > 5) { // 5px threshold for better pan sensitivity
         stageTouchHasMoved = true;
       }
     }
