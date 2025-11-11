@@ -1166,9 +1166,21 @@ async function showTouchPasteMenu(x, y, position) {
     }
   };
 
-  // Paste image handler
+  // Paste image handler - try clipboard first, fallback to file picker
   document.getElementById('touchMenuPasteImage').addEventListener('click', async () => {
     cleanup();
+
+    // Try to paste from clipboard first
+    if (navigator.clipboard && navigator.clipboard.read) {
+      try {
+        await pasteImageFromClipboard();
+        return;
+      } catch (error) {
+        console.log('Clipboard paste failed, falling back to file picker:', error);
+      }
+    }
+
+    // Fallback to file picker
     await importImage(position);
   });
 
@@ -2351,6 +2363,13 @@ function setupCanvasEvents() {
       return;
     }
 
+    // Ctrl+Shift+V - Paste image from clipboard
+    if (e.ctrlKey && e.shiftKey && e.key === 'V') {
+      e.preventDefault();
+      await pasteImageFromClipboard();
+      return;
+    }
+
     // Ctrl+V - Paste copied cards
     if (e.ctrlKey && e.key === 'v') {
       e.preventDefault();
@@ -2741,6 +2760,83 @@ export async function importImage() {
   });
 }
 
+/**
+ * Paste image from system clipboard (e.g. screenshot)
+ */
+async function pasteImageFromClipboard() {
+  try {
+    // Check if Clipboard API is available
+    if (!navigator.clipboard || !navigator.clipboard.read) {
+      alert('Clipboard API stöds inte i denna webbläsare. Använd "Importera bild" istället.');
+      return;
+    }
+
+    const clipboardItems = await navigator.clipboard.read();
+    let imageFound = false;
+
+    for (const clipboardItem of clipboardItems) {
+      for (const type of clipboardItem.types) {
+        if (type.startsWith('image/')) {
+          imageFound = true;
+          const blob = await clipboardItem.getType(type);
+
+          // Convert blob to file
+          const file = new File([blob], 'clipboard-image.png', { type: blob.type });
+
+          // Show quality selector dialog
+          const quality = await showQualityDialog(1);
+          if (!quality) return;
+
+          // Process image
+          const processed = await processImage(file, quality);
+
+          // Calculate position at center or mouse position
+          const pointer = stage.getPointerPosition() || { x: stage.width() / 2, y: stage.height() / 2 };
+          const scale = stage.scaleX();
+          const position = {
+            x: (pointer.x - stage.x()) / scale,
+            y: (pointer.y - stage.y()) / scale
+          };
+
+          // Create card with image
+          await createCard({
+            text: 'Inklistrad bild',
+            tags: ['bild', 'clipboard'],
+            position,
+            image: {
+              base64: processed.base64,
+              width: processed.metadata.width,
+              height: processed.metadata.height,
+              quality: processed.metadata.quality
+            },
+            metadata: {
+              ...processed.metadata,
+              fileName: 'clipboard-image.png',
+              source: 'clipboard'
+            }
+          });
+
+          await reloadCanvas();
+          console.log('Image pasted from clipboard');
+          return;
+        }
+      }
+    }
+
+    if (!imageFound) {
+      alert('Ingen bild hittades i clipboard. Kopiera en bild eller skärmdump först.');
+    }
+
+  } catch (error) {
+    console.error('Failed to paste from clipboard:', error);
+    if (error.name === 'NotAllowedError') {
+      alert('Tillgång till clipboard nekades. Ge webbläsaren tillstånd att läsa clipboard.');
+    } else {
+      alert('Kunde inte klistra in bild från clipboard: ' + error.message);
+    }
+  }
+}
+
 // ============================================================================
 // SECTION 9: UI DIALOGS (Command Palette, Quality Dialog, Text Input)
 // ============================================================================
@@ -2761,6 +2857,9 @@ function showCommandPalette() {
     }},
     { key: 'I', icon: '🖼️', name: 'Importera bild', desc: 'Öppna filväljare för att importera bilder', action: async () => {
       await importImage();
+    }},
+    { key: 'Ctrl+Shift+V', icon: '📋🖼️', name: 'Klistra in bild', desc: 'Klistra in bild från clipboard (t.ex. skärmdump)', action: async () => {
+      await pasteImageFromClipboard();
     }},
     { key: 'R', icon: '✨', name: 'Läs med AI', desc: 'Använd Gemini AI för att läsa text från markerade bildkort', action: async () => {
       const selectedNodes = layer.find('.selected');
