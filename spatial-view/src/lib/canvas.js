@@ -2706,12 +2706,6 @@ export async function importImage() {
     input.accept = 'image/*';
     input.multiple = true;
 
-    // Check if mobile device for camera option
-    const isMobile = /mobile|android|iphone|ipad|ipod/i.test(navigator.userAgent);
-    if (isMobile) {
-      input.capture = 'environment'; // Use rear camera
-    }
-
     input.onchange = async (e) => {
       const files = Array.from(e.target.files);
       if (files.length === 0) {
