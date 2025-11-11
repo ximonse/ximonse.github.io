@@ -1,5 +1,3 @@
-// (SNABBFIX) CSS laddas via <link> i index.html — ta bort import './styles.css';
-
 /**
  * Spatial View v1.0
  * Main entry point
@@ -13,7 +11,7 @@
  * main.js ska bara vara ~50 rader orchestrator
  */
 
-/* CSS-importen är borttagen vid runtime; laddas via <link> i index.html */
+import './styles.css';
 import { initCanvas, addNewCard, exportCanvas, importImage, searchCards, clearClipboard, deselectAllCards } from './lib/canvas.js';
 import { initStorage } from './lib/storage.js';
 
