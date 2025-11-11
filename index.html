@@ -1,75 +1,124 @@
 <!DOCTYPE html>
 <html lang="sv">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <meta name="description" content="Spatial View - Visual Second Brain för handskrivna anteckningar">
-  <meta name="theme-color" content="#ffffff">
-  <title>Spatial View</title>
-
-  <!-- Load CSS as regular stylesheet -->
-
-  <!-- Import map to resolve bare module specifiers to CDN ESM bundles -->
-
-
-  <!-- Relative module entry -->
-  <script type="importmap">
-  {
-    "imports": {
-      "konva": "https://cdn.skypack.dev/konva",
-      "dexie": "https://cdn.skypack.dev/dexie",
-      "jszip": "https://cdn.skypack.dev/jszip",
-      "browser-image-compression": "https://cdn.skypack.dev/browser-image-compression"
-    }
-  }
-  </script>
-  <script type="module" crossorigin src="/spatial-view/assets/index-CaWiaQzt.js"></script>
-  <link rel="modulepreload" crossorigin href="/spatial-view/assets/konva-DF021KA-.js">
-  <link rel="modulepreload" crossorigin href="/spatial-view/assets/dexie-nOSQWKqj.js">
-  <link rel="stylesheet" crossorigin href="/spatial-view/assets/index-DzGCkHVL.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ximonse - GitHub Pages</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            padding: 40px 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .app-list {
+            list-style: none;
+            padding: 0;
+        }
+        .app-item {
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .app-link {
+            display: block;
+            padding: 20px;
+            text-decoration: none;
+            color: #333;
+            transition: background-color 0.2s;
+        }
+        .app-link:hover {
+            background-color: #f8f9fa;
+        }
+        .app-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        .app-description {
+            color: #666;
+            font-size: 14px;
+        }
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            border-radius: 3px;
+            margin-left: 8px;
+        }
+        .badge-new {
+            background: #28a745;
+            color: white;
+        }
+        .badge-beta {
+            background: #ffc107;
+            color: #333;
+        }
+        .badge-legacy {
+            background: #6c757d;
+            color: white;
+        }
+    </style>
 </head>
 <body>
-  <!-- Floating header - always visible -->
-  <div id="floating-header">SPATIAL VIEW</div>
+    <div class="container">
+        <h1>ximonse's Apps</h1>
 
-  <!-- Info overlay -->
-  <div id="info-overlay">
-    <div id="info-content">
-      <button id="info-close">&times;</button>
-      <h2>Spatial View</h2>
+        <ul class="app-list">
+            <li class="app-item">
+                <a href="spatial-view/" class="app-link">
+                    <div class="app-title">
+                        Spatial View
+                        <span class="badge badge-new">NYAST</span>
+                    </div>
+                    <div class="app-description">
+                        Digital visuospatial sketchpad för handskrivna anteckningar.
+                        Konva canvas, touch-optimerad, AI OCR med Gemini, Boolean search,
+                        bildimport och backup.
+                    </div>
+                </a>
+            </li>
 
-      <div class="info-section">
-        <p>En digital <strong>visuospatial sketchpad</strong> för dina handskrivna anteckningar och idéer. Precis som arbetsminnets visuospatiala komponent låter Spatial View dig organisera och[...]</p>
-        <p><strong>Skapad av:</strong> ximonse och Claude</p>
-        <p><strong>⚠️ Beta-version:</strong> Detta är en tidig version som kan vara ostabil. Ladda ner dina kort regelbundet om arbetet är viktigt!</p>
-      </div>
+            <li class="app-item">
+                <a href="spatial-notes-v2/" class="app-link">
+                    <div class="app-title">
+                        Spatial Notes v2
+                        <span class="badge badge-beta">BETA</span>
+                    </div>
+                    <div class="app-description">
+                        Modular version av Spatial Notes med förbättrad arkitektur.
+                        Sök och klunga anteckningar visuellt.
+                    </div>
+                </a>
+            </li>
 
-      <!-- ... resten of page unchanged ... -->
+            <li class="app-item">
+                <a href="spatial-notes/" class="app-link">
+                    <div class="app-title">
+                        Spatial Notes
+                        <span class="badge badge-legacy">LEGACY</span>
+                    </div>
+                    <div class="app-description">
+                        Original version - Interactive note visualization app.
+                        Sök och klunga anteckningar visuellt.
+                    </div>
+                </a>
+            </li>
+        </ul>
     </div>
-  </div>
-
-  <div id="app">
-    <header id="toolbar">
-      <h1>Spatial View</h1>
-      <div id="toolbar-actions">
-        <button id="btn-download">💾</button>
-        <button id="btn-theme-toggle">🎨</button>
-        <button id="btn-view-toggle">▬</button>
-        <button id="btn-ui-mode-toggle">⚙️</button>
-        <input type="search" id="search-input" placeholder="Sök kort...">
-      </div>
-    </header>
-    
-    <main id="main-container">
-      <div id="board-view" class="view active">
-        <div id="canvas-container"></div>
-      </div>
-      
-      <div id="column-view" class="view">
-        <div id="card-list"></div>
-      </div>
-    </main>
-  </div>
-
 </body>
 </html>
