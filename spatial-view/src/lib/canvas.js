@@ -1966,13 +1966,23 @@ async function redo() {
  */
 function updateSelection() {
   const selBox = selectionRectangle.getClientRect();
+  const isEink = document.body.classList.contains('eink-theme');
+  const isDark = document.body.classList.contains('dark-theme');
 
   layer.find('.selected').forEach(group => {
     const background = group.findOne('Rect');
     group.removeName('selected');
     if (background) {
-      background.stroke('#e0e0e0');
-      background.strokeWidth(1);
+      if (isEink) {
+        background.stroke('#000000');
+        background.strokeWidth(2);
+      } else if (isDark) {
+        background.stroke('#4a5568');
+        background.strokeWidth(1);
+      } else {
+        background.stroke('#e0e0e0');
+        background.strokeWidth(1);
+      }
     }
   });
 
@@ -1985,8 +1995,13 @@ function updateSelection() {
       const background = group.findOne('Rect');
       group.addName('selected');
       if (background) {
-        background.stroke('#2196F3');
-        background.strokeWidth(3);
+        if (isEink) {
+          background.stroke('#000000');
+          background.strokeWidth(4);
+        } else {
+          background.stroke('#2196F3');
+          background.strokeWidth(3);
+        }
       }
     }
   });
@@ -4421,12 +4436,23 @@ export function clearClipboard() {
 export function deselectAllCards() {
   if (!layer) return;
 
+  const isEink = document.body.classList.contains('eink-theme');
+  const isDark = document.body.classList.contains('dark-theme');
+
   layer.find('.selected').forEach(group => {
     group.removeName('selected');
     const background = group.findOne('Rect');
     if (background) {
-      background.stroke('#e0e0e0');
-      background.strokeWidth(1);
+      if (isEink) {
+        background.stroke('#000000');
+        background.strokeWidth(2);
+      } else if (isDark) {
+        background.stroke('#4a5568');
+        background.strokeWidth(1);
+      } else {
+        background.stroke('#e0e0e0');
+        background.strokeWidth(1);
+      }
     }
   });
 
