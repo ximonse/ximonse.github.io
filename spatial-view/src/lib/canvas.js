@@ -495,25 +495,34 @@ function renderImageCard(group, cardData) {
     const isEink = document.body.classList.contains('eink-theme');
     const isDark = document.body.classList.contains('dark-theme');
 
-    // Calculate card dimensions (maintain aspect ratio)
-    // Standard width: 200px for aligned columns
-    const maxWidth = 200;
-    const maxHeight = 300;
-    let width = imageObj.naturalWidth;
-    let height = imageObj.naturalHeight;
+    // Calculate card display dimensions (maintain aspect ratio)
+    // Standard display size: 200px for aligned columns
+    const displayMaxWidth = 200;
+    const displayMaxHeight = 300;
+
+    let naturalWidth = imageObj.naturalWidth;
+    let naturalHeight = imageObj.naturalHeight;
 
     // If natural dimensions are 0, use stored dimensions if available, or fallback
-    if (width === 0 || height === 0) {
+    if (naturalWidth === 0 || naturalHeight === 0) {
         console.warn('WARNING: Image natural dimensions are 0. Falling back to stored dimensions or default.');
-        width = imageData.width || 200;
-        height = imageData.height || 150;
+        naturalWidth = imageData.width || 200;
+        naturalHeight = imageData.height || 150;
     }
 
-    if (width > maxWidth || height > maxHeight) {
-      const ratio = Math.min(maxWidth / width, maxHeight / height);
-      width = width * ratio;
-      height = height * ratio;
+    // Calculate display size (scaled down for card)
+    let displayWidth = naturalWidth;
+    let displayHeight = naturalHeight;
+
+    if (displayWidth > displayMaxWidth || displayHeight > displayMaxHeight) {
+      const ratio = Math.min(displayMaxWidth / displayWidth, displayMaxHeight / displayHeight);
+      displayWidth = displayWidth * ratio;
+      displayHeight = displayHeight * ratio;
     }
+
+    // Use display dimensions for card, but keep original image for sharp rendering
+    const width = displayWidth;
+    const height = displayHeight;
 
     console.log('DEBUG: renderImageCard - Final calculated width:', width, 'height:', height);
 
@@ -567,10 +576,14 @@ function renderImageCard(group, cardData) {
         shadowOffset: { x: 0, y: isEink ? 0 : 2 }
       });
 
+      // Calculate scale to fit display dimensions while preserving image quality
+      const scaleX = width / naturalWidth;
+      const scaleY = height / naturalHeight;
+
       const konvaImage = new Konva.Image({
         image: imageObj,
-        width: width,
-        height: height,
+        scaleX: scaleX,
+        scaleY: scaleY,
         cornerRadius: 8
       });
 
@@ -3233,8 +3246,24 @@ function showQualityDialog(fileCount) {
           text-align: left;
           transition: transform 0.1s;
         ">
-          <div style="font-size: 18px; margin-bottom: 4px;">📸 Rimlig för stor skärm</div>
-          <div style="font-size: 14px; opacity: 0.9;">1200px, hög kvalitet (rekommenderad)</div>
+          <div style="font-size: 18px; margin-bottom: 4px;">📸 Normal (rekommenderad)</div>
+          <div style="font-size: 14px; opacity: 0.9;">900px, bra balans för A7-kort</div>
+        </button>
+
+        <button id="quality-high" style="
+          padding: 20px;
+          background: #FF9800;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          font-size: 16px;
+          font-weight: 600;
+          cursor: pointer;
+          text-align: left;
+          transition: transform 0.1s;
+        ">
+          <div style="font-size: 18px; margin-bottom: 4px;">🔍 Hög (för OCR)</div>
+          <div style="font-size: 14px; opacity: 0.9;">1200px, bäst för AI-textigenkänning</div>
         </button>
 
         <button id="quality-low" style="
@@ -3249,8 +3278,24 @@ function showQualityDialog(fileCount) {
           text-align: left;
           transition: transform 0.1s;
         ">
-          <div style="font-size: 18px; margin-bottom: 4px;">✍️ Anpassad för anteckningar</div>
-          <div style="font-size: 14px; opacity: 0.9;">700px, optimerad för vit bakgrund</div>
+          <div style="font-size: 18px; margin-bottom: 4px;">✍️ Låg (snabbt)</div>
+          <div style="font-size: 14px; opacity: 0.9;">600px, mindre filstorlek</div>
+        </button>
+
+        <button id="quality-original" style="
+          padding: 20px;
+          background: #9C27B0;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          font-size: 16px;
+          font-weight: 600;
+          cursor: pointer;
+          text-align: left;
+          transition: transform 0.1s;
+        ">
+          <div style="font-size: 18px; margin-bottom: 4px;">⭐ Original</div>
+          <div style="font-size: 14px; opacity: 0.9;">Ingen komprimering - kan bli stort!</div>
         </button>
 
         <button id="quality-cancel" style="
@@ -3289,8 +3334,10 @@ function showQualityDialog(fileCount) {
       resolve(quality);
     };
 
+    dialog.querySelector('#quality-high').addEventListener('click', () => cleanup('high'));
     dialog.querySelector('#quality-normal').addEventListener('click', () => cleanup('normal'));
     dialog.querySelector('#quality-low').addEventListener('click', () => cleanup('low'));
+    dialog.querySelector('#quality-original').addEventListener('click', () => cleanup('original'));
     dialog.querySelector('#quality-cancel').addEventListener('click', () => cleanup(null));
 
     // ESC to cancel

@@ -6,21 +6,22 @@ import imageCompression from 'browser-image-compression';
 
 /**
  * Quality presets
+ * Optimized for A7 cards (74x105mm) with handwritten notes
  */
 const QUALITY_PRESETS = {
   low: {
-    maxWidthOrHeight: 700,
-    quality: 0.7,
+    maxWidthOrHeight: 600,
+    quality: 0.75,
     useWebWorker: true
   },
   normal: {
-    maxWidthOrHeight: 1200,
+    maxWidthOrHeight: 900,
     quality: 0.85,
     useWebWorker: true
   },
   high: {
-    maxWidthOrHeight: 2000,
-    quality: 0.95,
+    maxWidthOrHeight: 1200,
+    quality: 0.92,
     useWebWorker: true
   }
 };
@@ -122,8 +123,8 @@ export async function extractExifData(file) {
  */
 export async function processImage(file, quality = 'normal') {
   try {
-    // Compress image
-    const compressed = await compressImage(file, quality);
+    // If quality is 'original', skip compression
+    const compressed = quality === 'original' ? file : await compressImage(file, quality);
 
     // Extract metadata
     const metadata = await extractExifData(file);
