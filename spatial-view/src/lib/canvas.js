@@ -51,6 +51,7 @@ let cardGroups = new Map(); // Map cardId -> Konva.Group
 let selectionRectangle = null;
 let selectionStartPos = null;
 let isSelecting = false;
+let isAdditiveSelection = false; // Shift held during drag selection
 
 // Undo/redo stacks
 let undoStack = [];
@@ -196,7 +197,7 @@ function renderCard(cardData) {
       if (background) {
         if (isEink) {
           background.stroke('#000000');
-          background.strokeWidth(2);
+          background.strokeWidth(1);
         } else if (isDark) {
           background.stroke('#4a5568');
           background.strokeWidth(1);
@@ -210,7 +211,7 @@ function renderCard(cardData) {
       if (background) {
         if (isEink) {
           background.stroke('#000000');
-          background.strokeWidth(4);
+          background.strokeWidth(3);
         } else {
           background.stroke('#2196F3');
           background.strokeWidth(3);
@@ -290,7 +291,7 @@ function renderCard(cardData) {
           if (background) {
             if (isEink) {
               background.stroke('#000000');
-              background.strokeWidth(2);
+              background.strokeWidth(1);
             } else if (isDark) {
               background.stroke('#4a5568');
               background.strokeWidth(1);
@@ -304,7 +305,7 @@ function renderCard(cardData) {
           if (background) {
             if (isEink) {
               background.stroke('#000000');
-              background.strokeWidth(4);
+              background.strokeWidth(3);
             } else {
               background.stroke('#2196F3');
               background.strokeWidth(3);
@@ -453,8 +454,8 @@ function renderTextCard(group, cardData) {
     height: 150,
     fill: fillColor,
     stroke: isEink ? '#000000' : (isDark ? '#4a5568' : '#e0e0e0'),
-    strokeWidth: isEink ? 2 : 1,
-    cornerRadius: 8,
+    strokeWidth: 1,
+    cornerRadius: 4,
     shadowColor: isEink ? 'transparent' : 'black',
     shadowBlur: isEink ? 0 : 10,
     shadowOpacity: isEink ? 0 : 0.1,
@@ -537,8 +538,8 @@ function renderImageCard(group, cardData) {
         height: height,
         fill: isEink ? '#ffffff' : (isDark ? '#2d3748' : '#fffacd'),
         stroke: isEink ? '#000000' : (isDark ? '#4a5568' : '#e0e0e0'),
-        strokeWidth: isEink ? 2 : 1,
-        cornerRadius: 8,
+        strokeWidth: 1,
+        cornerRadius: 4,
         shadowColor: isEink ? 'transparent' : 'black',
         shadowBlur: isEink ? 0 : 10,
         shadowOpacity: isEink ? 0 : 0.1,
@@ -568,8 +569,8 @@ function renderImageCard(group, cardData) {
         height: height,
         fill: '#ffffff',
         stroke: isEink ? '#000000' : (isDark ? '#4a5568' : '#e0e0e0'),
-        strokeWidth: isEink ? 2 : 1,
-        cornerRadius: 8,
+        strokeWidth: 1,
+        cornerRadius: 4,
         shadowColor: isEink ? 'transparent' : 'black',
         shadowBlur: isEink ? 0 : 10,
         shadowOpacity: isEink ? 0 : 0.1,
@@ -1684,7 +1685,7 @@ export function updateCardStrokes() {
                 // Keep selection stroke color if selected
                 if (isEink) {
                     background.stroke('#000000');
-                    background.strokeWidth(4);
+                    background.strokeWidth(3);
                 } else {
                     background.stroke('#2196F3');
                     background.strokeWidth(3);
@@ -1693,7 +1694,7 @@ export function updateCardStrokes() {
                 // Apply theme-specific stroke for non-selected cards
                 if (isEink) {
                     background.stroke('#000000');
-                    background.strokeWidth(2);
+                    background.strokeWidth(1);
                 } else if (isDark) {
                     background.stroke('#4a5568');
                     background.strokeWidth(1);
@@ -1994,22 +1995,25 @@ function updateSelection() {
   const isEink = document.body.classList.contains('eink-theme');
   const isDark = document.body.classList.contains('dark-theme');
 
-  layer.find('.selected').forEach(group => {
-    const background = group.findOne('Rect');
-    group.removeName('selected');
-    if (background) {
-      if (isEink) {
-        background.stroke('#000000');
-        background.strokeWidth(2);
-      } else if (isDark) {
-        background.stroke('#4a5568');
-        background.strokeWidth(1);
-      } else {
-        background.stroke('#e0e0e0');
-        background.strokeWidth(1);
+  // Only deselect all if NOT additive selection (Shift not held)
+  if (!isAdditiveSelection) {
+    layer.find('.selected').forEach(group => {
+      const background = group.findOne('Rect');
+      group.removeName('selected');
+      if (background) {
+        if (isEink) {
+          background.stroke('#000000');
+          background.strokeWidth(1);
+        } else if (isDark) {
+          background.stroke('#4a5568');
+          background.strokeWidth(1);
+        } else {
+          background.stroke('#e0e0e0');
+          background.strokeWidth(1);
+        }
       }
-    }
-  });
+    });
+  }
 
   const groups = layer.getChildren(node => node.getAttr('cardId'));
   groups.forEach(group => {
@@ -2018,14 +2022,17 @@ function updateSelection() {
     // Check if rectangles intersect
     if (Konva.Util.haveIntersection(selBox, groupBox)) {
       const background = group.findOne('Rect');
-      group.addName('selected');
-      if (background) {
-        if (isEink) {
-          background.stroke('#000000');
-          background.strokeWidth(4);
-        } else {
-          background.stroke('#2196F3');
-          background.strokeWidth(3);
+      // Only add selection if not already selected
+      if (!group.hasName('selected')) {
+        group.addName('selected');
+        if (background) {
+          if (isEink) {
+            background.stroke('#000000');
+            background.strokeWidth(3);
+          } else {
+            background.stroke('#2196F3');
+            background.strokeWidth(3);
+          }
         }
       }
     }
@@ -2088,6 +2095,7 @@ function setupCanvasEvents() {
     // Left click on stage (not on card) = start selection
     if (e.target === stage && e.evt.button === 0) {
       isSelecting = true;
+      isAdditiveSelection = e.evt.shiftKey; // Shift = add to selection
       const pos = stage.getPointerPosition();
       const scale = stage.scaleX();
       selectionStartPos = {
@@ -2136,6 +2144,7 @@ function setupCanvasEvents() {
 
     if (isSelecting) {
       isSelecting = false;
+      isAdditiveSelection = false; // Reset
       selectionRectangle.visible(false);
       layer.batchDraw();
     }
@@ -2393,13 +2402,19 @@ function setupCanvasEvents() {
     // Ctrl+A - Select all cards
     if (e.ctrlKey && e.key === 'a') {
       e.preventDefault();
+      const isEink = document.body.classList.contains('eink-theme');
       const allCards = layer.getChildren(node => node.getAttr('cardId'));
       allCards.forEach(group => {
         const background = group.findOne('Rect');
         group.addName('selected');
         if (background) {
-          background.stroke('#2196F3');
-          background.strokeWidth(3);
+          if (isEink) {
+            background.stroke('#000000');
+            background.strokeWidth(3);
+          } else {
+            background.stroke('#2196F3');
+            background.strokeWidth(3);
+          }
         }
       });
       layer.batchDraw();
@@ -2556,6 +2571,32 @@ function setupCanvasEvents() {
           await handleDeleteCard(cardId);
         }
       }
+      return;
+    }
+
+    // Escape - Deselect all cards
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      const isEink = document.body.classList.contains('eink-theme');
+      const isDark = document.body.classList.contains('dark-theme');
+      const selectedNodes = layer.find('.selected');
+      selectedNodes.forEach(group => {
+        const background = group.findOne('Rect');
+        group.removeName('selected');
+        if (background) {
+          if (isEink) {
+            background.stroke('#000000');
+            background.strokeWidth(1);
+          } else if (isDark) {
+            background.stroke('#4a5568');
+            background.strokeWidth(1);
+          } else {
+            background.stroke('#e0e0e0');
+            background.strokeWidth(1);
+          }
+        }
+      });
+      layer.batchDraw();
       return;
     }
   });
@@ -2991,7 +3032,7 @@ function showCommandPalette() {
         if (background) {
           if (isEink) {
             background.stroke('#000000');
-            background.strokeWidth(4);
+            background.strokeWidth(3);
           } else {
             background.stroke('#2196F3');
             background.strokeWidth(3);
@@ -4365,21 +4406,30 @@ async function applyArrangement(arrangeFn, arrangeName) {
 
       if (image) {
         // Scale image proportionally to fit standard width
-        const currentWidth = image.width();
-        const currentHeight = image.height();
-        if (currentWidth !== standardWidth) {
-          const scale = standardWidth / currentWidth;
+        // Images use scaleX/scaleY, not width/height directly
+        const imageElement = image.image();
+        if (imageElement) {
+          const naturalWidth = imageElement.naturalWidth || imageElement.width;
+          const naturalHeight = imageElement.naturalHeight || imageElement.height;
+
+          // Calculate new scale to fit standard width
+          const newScaleX = standardWidth / naturalWidth;
+          const newScaleY = newScaleX; // Keep aspect ratio
+
+          const newDisplayHeight = naturalHeight * newScaleY;
+
           image.to({
-            width: standardWidth,
-            height: currentHeight * scale,
+            scaleX: newScaleX,
+            scaleY: newScaleY,
             duration: 0.3,
             easing: Konva.Easings.EaseOut
           });
 
           // Also resize background to match new image height
+          // Image cards have no text area, so just use image height
           if (background) {
             background.to({
-              height: currentHeight * scale + 60, // +60 for text area
+              height: newDisplayHeight,
               duration: 0.3,
               easing: Konva.Easings.EaseOut
             });
@@ -4592,7 +4642,7 @@ export function deselectAllCards() {
     if (background) {
       if (isEink) {
         background.stroke('#000000');
-        background.strokeWidth(2);
+        background.strokeWidth(1);
       } else if (isDark) {
         background.stroke('#4a5568');
         background.strokeWidth(1);

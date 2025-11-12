@@ -33,7 +33,9 @@
       "Bash(copy /Y \"spatial-view\\dist\\index.html\" \"index.html\")",
       "Bash(xcopy:*)",
       "Bash(git ls-tree:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(copy index.html index.html.prod)",
+      "Bash(copy index.html.dev index.html)"
     ],
     "deny": [],
     "ask": []
