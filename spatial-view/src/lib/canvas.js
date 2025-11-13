@@ -3652,7 +3652,9 @@ function showCommandPalette() {
 
   // Cleanup function
   const cleanup = () => {
-    document.body.removeChild(overlay);
+    if (overlay && overlay.parentNode) {
+      document.body.removeChild(overlay);
+    }
   };
 
   // ESC to close, arrow navigation, Enter to select, and keyboard shortcuts
@@ -3718,6 +3720,8 @@ function showCommandPalette() {
 
     // Don't handle letter shortcuts when typing in search
     if (isTypingInSearch) {
+      // Stop event from propagating to global keyboard handler
+      e.stopPropagation();
       return;
     }
 
@@ -3740,7 +3744,7 @@ function showCommandPalette() {
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) {
       cleanup();
-      document.removeEventListener('keydown', handleEsc);
+      document.removeEventListener('keydown', handleKeyboard);
     }
   });
 }

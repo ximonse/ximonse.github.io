@@ -35,7 +35,11 @@
       "Bash(git ls-tree:*)",
       "Bash(cat:*)",
       "Bash(copy index.html index.html.prod)",
-      "Bash(copy index.html.dev index.html)"
+      "Bash(copy index.html.dev index.html)",
+      "WebFetch(domain:codelabs.developers.google.com)",
+      "WebFetch(domain:ai.google.dev)",
+      "Bash(vercel ls:*)",
+      "Bash(npx vercel ls)"
     ],
     "deny": [],
     "ask": []
