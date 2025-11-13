@@ -3577,8 +3577,32 @@ function showCommandPalette() {
   // Add commands with original index for tracking
   const commandsWithIndex = commands.map((cmd, idx) => ({ ...cmd, originalIndex: idx }));
 
+  // Track selected index for arrow navigation
+  let selectedIndex = -1;
+  let currentCommands = commandsWithIndex;
+
   // Initial render with all commands
   renderCommands(commandsWithIndex);
+
+  // Helper to highlight selected command
+  const highlightCommand = (index) => {
+    const commandList = palette.querySelector('#command-list');
+    const items = commandList.querySelectorAll('.command-item');
+
+    items.forEach((item, idx) => {
+      if (idx === index) {
+        item.style.background = '#e3f2fd';
+        item.style.borderColor = '#2196F3';
+        item.style.transform = 'scale(1.01)';
+        item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      } else {
+        const originalCmd = currentCommands[idx];
+        item.style.background = originalCmd?.action ? '#f5f5f5' : '#fafafa';
+        item.style.borderColor = 'transparent';
+        item.style.transform = 'scale(1)';
+      }
+    });
+  };
 
   // Add search functionality
   const searchInput = palette.querySelector('#command-search');
@@ -3586,7 +3610,9 @@ function showCommandPalette() {
     const query = e.target.value.toLowerCase().trim();
 
     if (!query) {
+      currentCommands = commandsWithIndex;
       renderCommands(commandsWithIndex);
+      selectedIndex = -1;
       return;
     }
 
@@ -3596,11 +3622,25 @@ function showCommandPalette() {
       cmd.key.toLowerCase().includes(query)
     );
 
+    currentCommands = filtered;
     renderCommands(filtered);
+    selectedIndex = -1;
   });
 
   // Focus search input
   searchInput.focus();
+
+  // Tab to start arrow navigation
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      searchInput.blur();
+      selectedIndex = -1;
+      // Trigger first arrow down
+      const downEvent = new KeyboardEvent('keydown', { key: 'ArrowDown' });
+      document.dispatchEvent(downEvent);
+    }
+  });
 
   // Handle focus on border
   searchInput.addEventListener('focus', () => {
@@ -3615,7 +3655,7 @@ function showCommandPalette() {
     document.body.removeChild(overlay);
   };
 
-  // ESC to close and keyboard shortcuts
+  // ESC to close, arrow navigation, Enter to select, and keyboard shortcuts
   const handleKeyboard = async (e) => {
     if (e.key === 'Escape') {
       cleanup();
@@ -3623,12 +3663,61 @@ function showCommandPalette() {
       return;
     }
 
-    // Don't handle keys when typing in search
+    // Arrow navigation
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const actionableCommands = currentCommands.filter(cmd => cmd.action);
+      if (actionableCommands.length === 0) return;
+
+      // Find next actionable command index
+      let nextIndex = selectedIndex;
+      do {
+        nextIndex = (nextIndex + 1) % currentCommands.length;
+      } while (!currentCommands[nextIndex]?.action && nextIndex !== selectedIndex);
+
+      selectedIndex = nextIndex;
+      highlightCommand(selectedIndex);
+      return;
+    }
+
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const actionableCommands = currentCommands.filter(cmd => cmd.action);
+      if (actionableCommands.length === 0) return;
+
+      // Find previous actionable command index
+      let prevIndex = selectedIndex;
+      do {
+        prevIndex = prevIndex <= 0 ? currentCommands.length - 1 : prevIndex - 1;
+      } while (!currentCommands[prevIndex]?.action && prevIndex !== selectedIndex);
+
+      selectedIndex = prevIndex;
+      highlightCommand(selectedIndex);
+      return;
+    }
+
+    // Enter to execute selected command
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (selectedIndex >= 0 && selectedIndex < currentCommands.length) {
+        const selectedCmd = currentCommands[selectedIndex];
+        if (selectedCmd?.action) {
+          cleanup();
+          document.removeEventListener('keydown', handleKeyboard);
+          await selectedCmd.action();
+          return;
+        }
+      }
+      // If no selection, do nothing (search field will handle it)
+      return;
+    }
+
+    // Don't handle letter keys when typing in search
     if (document.activeElement === searchInput) {
       return;
     }
 
-    // Check for keyboard shortcuts
+    // Check for keyboard shortcuts (single letter)
     const key = e.key.toUpperCase();
     const command = commands.find(cmd =>
       cmd.key.toUpperCase() === key && cmd.action
