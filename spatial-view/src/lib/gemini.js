@@ -58,7 +58,8 @@ export async function testGeminiProxy(prompt) {
     if (!response.ok) {
       const errorData = await response.json();
       console.error('Fel från API-proxy (test):', errorData);
-      return `Test misslyckades: ${errorData.error || 'Okänt fel'}`;
+      const details = errorData.details ? JSON.stringify(errorData.details) : '';
+      return `Test misslyckades: ${errorData.error || 'Okänt fel'}${details ? '. Details: ' + details : ''}`;
     }
 
     const data = await response.json();
@@ -243,7 +244,9 @@ export async function readImageWithGemini(cardId) {
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(`Gemini API-fel: ${errorData.error || response.statusText}`);
+      console.error('Detaljerat fel från Gemini API:', errorData);
+      const details = errorData.details ? JSON.stringify(errorData.details) : '';
+      throw new Error(`Gemini API-fel: ${errorData.error || response.statusText}${details ? '. Details: ' + details : ''}`);
     }
 
     const data = await response.json();
