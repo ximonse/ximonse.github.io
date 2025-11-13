@@ -3090,8 +3090,192 @@ async function pasteImageFromClipboard() {
 }
 
 // ============================================================================
-// SECTION 9: UI DIALOGS (Command Palette, Quality Dialog, Text Input)
+// SECTION 9: UI DIALOGS (Command Palette, Quality Dialog, Text Input, Gemini Assistant)
 // ============================================================================
+
+/**
+ * Show Gemini Assistant dialog
+ */
+async function showGeminiAssistant() {
+  const { executeGeminiAgent } = await import('./gemini.js');
+
+  // Create overlay
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 10000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  `;
+
+  // Create dialog
+  const dialog = document.createElement('div');
+  dialog.style.cssText = `
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    padding: 24px;
+    border-radius: 12px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 70vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  `;
+
+  dialog.innerHTML = `
+    <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 20px; font-weight: 600;">
+      🤖 Gemini Assistant
+    </h3>
+    <p style="margin-bottom: 16px; color: var(--text-secondary); font-size: 14px;">
+      Fråga Gemini om hjälp med att hitta, filtrera och organisera dina kort.
+    </p>
+    <div style="margin-bottom: 16px;">
+      <textarea id="geminiQuery" placeholder="T.ex: 'Hitta alla kort om matematik', 'Arrangera kort med taggen zotero horisontellt', 'Visa kort från 2024'"
+        style="width: 100%; height: 100px; padding: 12px; font-size: 14px;
+               border: 2px solid var(--border-color); border-radius: 8px;
+               background: var(--bg-secondary); color: var(--text-primary);
+               font-family: sans-serif; resize: vertical; box-sizing: border-box;"></textarea>
+    </div>
+    <div id="geminiResponse" style="margin-bottom: 16px; padding: 12px; background: var(--bg-secondary);
+         border-radius: 8px; min-height: 60px; display: none; white-space: pre-wrap; font-size: 14px;"></div>
+    <div style="display: flex; gap: 12px; justify-content: flex-end;">
+      <button id="geminiCancel" style="padding: 10px 20px; background: var(--bg-secondary);
+              color: var(--text-primary); border: 2px solid var(--border-color);
+              border-radius: 8px; cursor: pointer; font-size: 14px;">Avbryt</button>
+      <button id="geminiAsk" style="padding: 10px 20px; background: var(--accent-color);
+              color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px;">Fråga Gemini</button>
+    </div>
+  `;
+
+  overlay.appendChild(dialog);
+  document.body.appendChild(overlay);
+
+  const queryInput = document.getElementById('geminiQuery');
+  const responseDiv = document.getElementById('geminiResponse');
+  const askBtn = document.getElementById('geminiAsk');
+  const cancelBtn = document.getElementById('geminiCancel');
+
+  // Focus input
+  queryInput.focus();
+
+  // Cleanup function
+  const cleanup = () => {
+    if (overlay.parentNode) {
+      document.body.removeChild(overlay);
+    }
+  };
+
+  // Cancel handler
+  cancelBtn.addEventListener('click', cleanup);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) cleanup();
+  });
+
+  // Ask handler
+  askBtn.addEventListener('click', async () => {
+    const query = queryInput.value.trim();
+    if (!query) return;
+
+    askBtn.disabled = true;
+    askBtn.textContent = 'Tänker...';
+    responseDiv.style.display = 'block';
+    responseDiv.textContent = '🤔 Gemini analyserar din fråga...';
+
+    try {
+      // Define tools that Gemini can use
+      const tools = [{
+        functionDeclarations: [
+          {
+            name: 'searchCards',
+            description: 'Sök efter kort baserat på text, tags eller innehåll. Returnerar matchande kort-ID:n.',
+            parameters: {
+              type: 'object',
+              properties: {
+                query: {
+                  type: 'string',
+                  description: 'Sökfråga (kan använda Boolean search: AND, OR, NOT)'
+                }
+              },
+              required: ['query']
+            }
+          },
+          {
+            name: 'getAllCards',
+            description: 'Hämta alla kort med deras data (text, tags, färg, position, etc.)',
+            parameters: {
+              type: 'object',
+              properties: {}
+            }
+          },
+          {
+            name: 'filterCardsByTag',
+            description: 'Filtrera kort baserat på en specifik tagg',
+            parameters: {
+              type: 'object',
+              properties: {
+                tag: {
+                  type: 'string',
+                  description: 'Taggen att filtrera på'
+                }
+              },
+              required: ['tag']
+            }
+          }
+        ]
+      }];
+
+      // Tool registry - actual functions
+      const toolRegistry = {
+        searchCards: async (args) => {
+          await searchCards(args.query);
+          const selectedCount = layer.find('.selected').length;
+          return `Hittade och markerade ${selectedCount} kort.`;
+        },
+        getAllCards: async () => {
+          const cards = await getAllCards();
+          return cards.map(c => ({
+            id: c.id,
+            text: c.text?.substring(0, 100),
+            tags: c.tags,
+            cardColor: c.cardColor,
+            hasImage: !!c.image
+          }));
+        },
+        filterCardsByTag: async (args) => {
+          await searchCards(`tags:${args.tag}`);
+          const selectedCount = layer.find('.selected').length;
+          return `Markerade ${selectedCount} kort med taggen "${args.tag}".`;
+        }
+      };
+
+      // Call Gemini with tools
+      const response = await executeGeminiAgent(query, tools, toolRegistry);
+
+      responseDiv.textContent = `💡 ${response}`;
+
+    } catch (error) {
+      console.error('Gemini Assistant error:', error);
+      responseDiv.textContent = `❌ Fel: ${error.message}`;
+    } finally {
+      askBtn.disabled = false;
+      askBtn.textContent = 'Fråga Gemini';
+    }
+  });
+
+  // Enter to submit
+  queryInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      askBtn.click();
+    }
+  });
+}
 
 /**
  * Show command palette
@@ -3141,8 +3325,20 @@ function showCommandPalette() {
 
       // Process each card
       for (const cardId of imageCardIds) {
-        await readImageWithGemini(cardId);
+        try {
+          await readImageWithGemini(cardId);
+        } catch (error) {
+          console.error('Fel vid OCR:', error);
+          alert(`Fel vid läsning av kort: ${error.message}`);
+        }
       }
+
+      // Reload canvas to show updated cards
+      await reloadCanvas();
+      alert(`✅ ${imageCardIds.length} kort lästa med Gemini AI. Texten finns på baksidan - dubbelklicka och klicka "Vänd kort" för att se.`);
+    }},
+    { key: 'A', icon: '🤖', name: 'Fråga Gemini', desc: 'Använd Gemini AI för att hitta, filtrera och organisera kort', action: async () => {
+      await showGeminiAssistant();
     }},
     { key: 'F', icon: '🔍', name: 'Sök kort', desc: 'Fokusera sökfältet', action: () => {
       const searchInput = document.getElementById('search-input');
@@ -3419,14 +3615,33 @@ function showCommandPalette() {
     document.body.removeChild(overlay);
   };
 
-  // ESC to close
-  const handleEsc = (e) => {
+  // ESC to close and keyboard shortcuts
+  const handleKeyboard = async (e) => {
     if (e.key === 'Escape') {
       cleanup();
-      document.removeEventListener('keydown', handleEsc);
+      document.removeEventListener('keydown', handleKeyboard);
+      return;
+    }
+
+    // Don't handle keys when typing in search
+    if (document.activeElement === searchInput) {
+      return;
+    }
+
+    // Check for keyboard shortcuts
+    const key = e.key.toUpperCase();
+    const command = commands.find(cmd =>
+      cmd.key.toUpperCase() === key && cmd.action
+    );
+
+    if (command) {
+      e.preventDefault();
+      cleanup();
+      document.removeEventListener('keydown', handleKeyboard);
+      await command.action();
     }
   };
-  document.addEventListener('keydown', handleEsc);
+  document.addEventListener('keydown', handleKeyboard);
 
   // Click overlay to close
   overlay.addEventListener('click', (e) => {
@@ -4033,7 +4248,16 @@ export async function showContextMenu(x, y, cardId, group) {
     if (card && card.image) {
       menuItems.push({
         label: '✨ Läs med AI',
-        action: () => readImageWithGemini(cardId)
+        action: async () => {
+          try {
+            await readImageWithGemini(cardId);
+            await reloadCanvas();
+            alert('✅ Kort läst med Gemini AI. Texten finns på baksidan - dubbelklicka och klicka "Vänd kort" för att se.');
+          } catch (error) {
+            console.error('Fel vid OCR:', error);
+            alert(`Fel vid läsning av kort: ${error.message}`);
+          }
+        }
       });
     }
 

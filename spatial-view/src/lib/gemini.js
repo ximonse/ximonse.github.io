@@ -186,15 +186,85 @@ export async function executeGeminiAgent(userPrompt, toolDefinitions, toolRegist
   throw new Error('Agenten fastnade i en loop utan att ge ett textsvar.');
 }
 
-// --- START PÅ FIX FÖR BYGGFELET ---
 /**
- * Dummy-funktion för att förhindra byggfel.
- * Denna importeras av canvas.js.
- * Vi implementerar denna senare när vi bygger multimodalitet.
+ * Read image with Gemini Vision API
+ * @param {string} cardId - The card ID to read
+ * @returns {Promise<string>} - The extracted text from the image
  */
-export async function readImageWithGemini(imageData) {
-  console.warn('readImageWithGemini är inte implementerad än.');
-  // Returnera en platshållare
-  return "Bildbeskrivning (ej implementerad)";
+export async function readImageWithGemini(cardId) {
+  try {
+    // Import storage functions
+    const { getCard, updateCard } = await import('./storage.js');
+
+    // Get the card
+    const card = await getCard(cardId);
+    if (!card || !card.image) {
+      throw new Error('Inget bildkort hittades');
+    }
+
+    // Get base64 image data
+    const imageData = typeof card.image === 'string' ? card.image : card.image.base64;
+
+    // Remove data URL prefix if present (e.g., "data:image/jpeg;base64,")
+    const base64Data = imageData.includes(',') ? imageData.split(',')[1] : imageData;
+
+    // Determine mime type from data URL or default to jpeg
+    let mimeType = 'image/jpeg';
+    if (imageData.startsWith('data:')) {
+      const match = imageData.match(/data:([^;]+);/);
+      if (match) mimeType = match[1];
+    }
+
+    console.log('Skickar bild till Gemini för OCR...');
+
+    // Call Gemini API with vision
+    const response = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              {
+                text: 'Läs all text i denna bild. Skriv ut texten exakt som den står, bevara formatering och struktur. Om det inte finns någon text, beskriv bilden kortfattat.'
+              },
+              {
+                inlineData: {
+                  mimeType: mimeType,
+                  data: base64Data
+                }
+              }
+            ]
+          }
+        ]
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(`Gemini API-fel: ${errorData.error || response.statusText}`);
+    }
+
+    const data = await response.json();
+    const extractedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!extractedText) {
+      throw new Error('Inget svar från Gemini');
+    }
+
+    console.log('Gemini OCR resultat:', extractedText);
+
+    // Update card with extracted text on the back
+    await updateCard(cardId, {
+      backText: extractedText,
+      flipped: false // Keep it on front, user can flip to see back
+    });
+
+    return extractedText;
+
+  } catch (error) {
+    console.error('Fel vid Gemini bildläsning:', error);
+    throw error;
+  }
 }
-// --- SLUT PÅ FIX ---

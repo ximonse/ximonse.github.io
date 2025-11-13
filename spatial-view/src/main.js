@@ -156,12 +156,15 @@ function setupEventListeners() {
   const searchInput = document.getElementById('search-input');
   searchInput?.addEventListener('input', debounce(handleSearch, 300));
 
-  // Escape to clear search (local - when focused)
+  // Escape to clear search, Enter to blur (local - when focused)
   searchInput?.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       searchInput.value = '';
       handleSearch({ target: searchInput }); // Clear search results
       searchInput.blur(); // Unfocus the search input
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      searchInput.blur(); // Unfocus so keyboard shortcuts work
     }
   });
 
