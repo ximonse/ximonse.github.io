@@ -8,7 +8,7 @@
  * Based on v2's arrangeSelectedInColumn
  */
 export function arrangeVertical(cards, centerPos) {
-  const gap = 60; // 20% of 300px card width
+  const gap = 40;
   const positions = [];
 
   // Calculate total height needed
@@ -43,7 +43,7 @@ export function arrangeVertical(cards, centerPos) {
  * Based on v2's arrangeSelectedInRow
  */
 export function arrangeHorizontal(cards, centerPos) {
-  const gap = 60; // 20% spacing
+  const gap = 40;
   const positions = [];
 
   // Calculate total width needed
@@ -135,7 +135,7 @@ export function arrangeCluster(cards, centerPos) {
  */
 export function arrangeGridVertical(cards, centerPos) {
   const maxCols = 5;
-  const gap = 20;
+  const gap = 40;
   const standardWidth = 200; // Standard width for all cards
   const positions = [];
 
@@ -180,7 +180,7 @@ export function arrangeGridVertical(cards, centerPos) {
  */
 export function arrangeGridHorizontal(cards, centerPos) {
   const maxCols = 5;
-  const gap = 20;
+  const gap = 40;
   const standardWidth = 200; // Standard width for all cards
   const positions = [];
 

@@ -448,10 +448,46 @@ function renderTextCard(group, cardData) {
     fillColor = '#2d3748';
   }
 
+  // Text (render first to calculate height)
+  const text = new Konva.Text({
+    text: cardData.text || '',
+    x: 16,
+    y: 16,
+    width: 168,
+    fontSize: 14,
+    fontFamily: 'sans-serif',
+    fill: isDark ? '#e0e0e0' : '#1a1a1a',
+    wrap: 'word',
+    ellipsis: false
+  });
+
+  // Comments (if exist) - shown in italic below main text
+  let commentsText = null;
+  let totalContentHeight = text.height();
+
+  if (cardData.comments) {
+    commentsText = new Konva.Text({
+      text: cardData.comments,
+      x: 16,
+      y: 16 + text.height() + 8, // 8px gap after main text
+      width: 168,
+      fontSize: 12,
+      fontFamily: 'sans-serif',
+      fontStyle: 'italic',
+      fill: isDark ? '#a0a0a0' : '#666666',
+      wrap: 'word',
+      ellipsis: false
+    });
+    totalContentHeight = text.height() + 8 + commentsText.height();
+  }
+
+  // Calculate card height based on content
+  const cardHeight = Math.max(150, totalContentHeight + 32); // 16px top + 16px bottom padding
+
   // Background
   const background = new Konva.Rect({
     width: 200,
-    height: 150,
+    height: cardHeight,
     fill: fillColor,
     stroke: isEink ? '#000000' : (isDark ? '#4a5568' : '#e0e0e0'),
     strokeWidth: 1,
@@ -462,20 +498,12 @@ function renderTextCard(group, cardData) {
     shadowOffset: { x: 0, y: isEink ? 0 : 2 }
   });
 
-  // Text
-  const text = new Konva.Text({
-    text: cardData.text || '',
-    x: 16,
-    y: 16,
-    width: 168,
-    fontSize: 16,
-    fontFamily: 'sans-serif',
-    fill: isDark ? '#e0e0e0' : '#1a1a1a',
-    wrap: 'word'
-  });
-
   group.add(background);
   group.add(text);
+
+  if (commentsText) {
+    group.add(commentsText);
+  }
 }
 
 /**
@@ -694,6 +722,7 @@ async function createInlineEditor(cardId, group, currentText, isImageBack = fals
 
   const currentTags = card.tags || [];
   const currentColor = card.cardColor || '';
+  const currentComments = card.comments || '';
 
   // Create overlay
   const overlay = document.createElement('div');
@@ -732,21 +761,31 @@ async function createInlineEditor(cardId, group, currentText, isImageBack = fals
     <div style="margin-bottom: 16px;">
       <label style="display: block; margin-bottom: 8px; font-weight: 500;">Text:</label>
       <textarea id="editCardText"
-        style="width: 100%; height: 200px; padding: 12px; font-size: 16px;
+        style="width: 100%; height: 200px; padding: 12px; font-size: 14px;
                border: 2px solid var(--border-color); border-radius: 8px;
                background: var(--bg-secondary); color: var(--text-primary);
-               font-family: inherit; resize: vertical; box-sizing: border-box;"
+               font-family: sans-serif; resize: vertical; box-sizing: border-box;"
       >${currentText || ''}</textarea>
     </div>
 
     ${!isImageBack ? `
     <div style="margin-bottom: 16px;">
       <label style="display: block; margin-bottom: 8px; font-weight: 500;">Tags (kommaseparerade):</label>
-      <input type="text" id="editCardTags" value="${currentTags.join(', ')}"
-        style="width: 100%; padding: 12px; font-size: 16px;
+      <input type="text" id="editCardTags"  value="${currentTags.join(', ')}"
+        style="width: 100%; padding: 12px; font-size: 14px;
                border: 2px solid var(--border-color); border-radius: 8px;
                background: var(--bg-secondary); color: var(--text-primary);
-               box-sizing: border-box;">
+               font-family: sans-serif; box-sizing: border-box;">
+    </div>
+
+    <div style="margin-bottom: 16px;">
+      <label style="display: block; margin-bottom: 8px; font-weight: 500;">Kommentar (visas i kursiv):</label>
+      <textarea id="editCardComments"
+        style="width: 100%; height: 80px; padding: 12px; font-size: 12px;
+               border: 2px solid var(--border-color); border-radius: 8px;
+               background: var(--bg-secondary); color: var(--text-primary);
+               font-family: sans-serif; font-style: italic; resize: vertical; box-sizing: border-box;"
+      >${currentComments}</textarea>
     </div>
 
     <div style="margin-bottom: 20px;">
@@ -871,10 +910,13 @@ async function createInlineEditor(cardId, group, currentText, isImageBack = fals
     } else {
       // Save regular card
       const newTags = tagsInput ? tagsInput.value.split(',').map(t => t.trim()).filter(t => t) : currentTags;
+      const commentsTextarea = document.getElementById('editCardComments');
+      const newComments = commentsTextarea ? commentsTextarea.value : currentComments;
 
       const updates = {
         text: newText,
-        tags: newTags
+        tags: newTags,
+        comments: newComments
       };
 
       // Add color if changed
@@ -885,7 +927,7 @@ async function createInlineEditor(cardId, group, currentText, isImageBack = fals
       pushUndo({
         type: 'update',
         cardId,
-        oldData: { text: currentText, tags: currentTags, cardColor: currentColor },
+        oldData: { text: currentText, tags: currentTags, cardColor: currentColor, comments: currentComments },
         newData: updates
       });
 
@@ -2809,6 +2851,161 @@ export async function importImage() {
 }
 
 /**
+ * Map Zotero highlight color to card color
+ */
+function mapZoteroColorToCard(bgColorStyle) {
+  // Extract hex color from style like "background-color: #ffd40080"
+  const match = bgColorStyle.match(/#([0-9a-fA-F]{6})/);
+  if (!match) return null;
+
+  const hexColor = match[1].toLowerCase();
+
+  // Map Zotero colors to spatial-view card colors (matching v2)
+  const colorMap = {
+    'ffd400': 'card-color-4', // Gul
+    'ff6666': 'card-color-3', // Röd
+    '5fb236': 'card-color-1', // Grön
+    '2ea8e5': 'card-color-6', // Blå/Cyan
+    'a28ae5': 'card-color-5', // Lila
+    'e56eee': 'card-color-5', // Magenta → Lila
+    'f19837': 'card-color-2', // Orange
+    'aaaaaa': 'card-color-7'  // Grå
+  };
+
+  return colorMap[hexColor] || null;
+}
+
+/**
+ * Import notes from Zotero HTML export
+ */
+export async function importFromZoteroHTML() {
+  return new Promise((resolve, reject) => {
+    // Create file input
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.html';
+
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) {
+        resolve(0);
+        return;
+      }
+
+      const reader = new FileReader();
+
+      reader.onload = async function(event) {
+        try {
+          const htmlContent = event.target.result;
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(htmlContent, 'text/html');
+
+          // Find all highlight paragraphs
+          const highlightParagraphs = doc.querySelectorAll('p');
+
+          let importedCount = 0;
+          const timestamp = Date.now();
+
+          // Calculate grid positioning
+          const cols = Math.ceil(Math.sqrt(highlightParagraphs.length));
+
+          for (let index = 0; index < highlightParagraphs.length; index++) {
+            const p = highlightParagraphs[index];
+
+            // Find the highlight span with background color
+            const highlightSpan = p.querySelector('span.highlight span[style*="background-color"]');
+            if (!highlightSpan) continue;
+
+            // Extract the quote text
+            const quoteText = highlightSpan.textContent.trim();
+            if (!quoteText) continue;
+
+            // Extract color
+            const bgStyle = highlightSpan.getAttribute('style');
+            const cardColor = mapZoteroColorToCard(bgStyle);
+
+            // Extract citation if available
+            const citationSpan = p.querySelector('span.citation');
+            let citation = '';
+            if (citationSpan) {
+              citation = citationSpan.textContent.trim();
+            }
+
+            // Extract PDF link
+            const pdfLink = p.querySelector('a[href*="open-pdf"]');
+            let pdfLinkText = '';
+            if (pdfLink) {
+              pdfLinkText = pdfLink.textContent.trim();
+            }
+
+            // Extract comment text (text after all spans/links)
+            let commentText = '';
+            const allText = p.textContent;
+            const highlightText = highlightSpan.textContent;
+            const citationText = citationSpan ? citationSpan.textContent : '';
+            const pdfText = pdfLink ? pdfLink.textContent : '';
+
+            // Remove all known parts and what's left is the comment
+            let remainingText = allText;
+            remainingText = remainingText.replace(highlightText, '');
+            remainingText = remainingText.replace(citationText, '');
+            remainingText = remainingText.replace(pdfText, '');
+            commentText = remainingText.replace(/\(|\)/g, '').trim();
+
+            // Build card text
+            let cardText = quoteText;
+            if (citation) {
+              cardText += `\n\n${citation}`;
+            }
+            if (pdfLinkText) {
+              cardText += ` (${pdfLinkText})`;
+            }
+
+            // Grid positioning
+            const pointer = stage.getPointerPosition() || { x: stage.width() / 2, y: stage.height() / 2 };
+            const scale = stage.scaleX();
+            const col = index % cols;
+            const row = Math.floor(index / cols);
+            const position = {
+              x: ((pointer.x - stage.x()) / scale) + col * 240,
+              y: ((pointer.y - stage.y()) / scale) + row * 240
+            };
+
+            // Create card
+            await createCard({
+              text: cardText,
+              comments: commentText || '',
+              tags: ['zotero', `import_${timestamp}`],
+              cardColor: cardColor,
+              position
+            });
+
+            importedCount++;
+          }
+
+          // Reload canvas to show new cards
+          await reloadCanvas();
+
+          // Show success message
+          alert(`📚 Zotero import: ${importedCount} kort importerade från ${file.name}`);
+          console.log(`Zotero import completed: ${importedCount} cards imported from ${file.name}`);
+
+          resolve(importedCount);
+        } catch (error) {
+          console.error('Error importing from Zotero:', error);
+          alert('Fel vid import från Zotero HTML: ' + error.message);
+          reject(error);
+        }
+      };
+
+      reader.readAsText(file);
+    };
+
+    input.click();
+  });
+}
+
+/**
  * Paste image from system clipboard (e.g. screenshot)
  */
 async function pasteImageFromClipboard() {
@@ -2966,6 +3163,9 @@ function showCommandPalette() {
       if (downloadBtn) {
         downloadBtn.click();
       }
+    }},
+    { key: 'Z', icon: '📚', name: 'Importera Zotero HTML', desc: 'Importera anteckningar från Zotero HTML-export', action: async () => {
+      await importFromZoteroHTML();
     }},
     { key: 'Delete', icon: '🗑️', name: 'Ta bort kort', desc: 'Ta bort markerade kort', action: async () => {
       const selectedNodes = layer.find('.selected');
