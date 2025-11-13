@@ -1,8 +1,11 @@
 // Vercel Serverless Function (Node.js)
-// Denna fil hanterar alla API-anrop till Gemini säkert.
 
-// Tillåt "Cross-Origin Resource Sharing" (CORS) så att din app kan anropa denna funktion
-// från både lokala `vercel dev` och din Vercel preview-URL.
+// --- START PÅ FIX FÖR VERCEL-BYGGET ---
+// Importera node-fetch för CommonJS-miljön
+const fetch = require('node-fetch');
+// --- SLUT PÅ FIX ---
+
+// CORS-hanterare
 const allowCors = (fn) => async (req, res) => {
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*'); // Du kan låsa detta till din Vercel-URL senare
@@ -31,23 +34,31 @@ async function handler(req, res) {
     return;
   }
 
-  // Hämta prompten och verktygen från klientens förfrågan
-  const { prompt, tools } = req.body;
-
-  if (!prompt) {
-    res.status(400).json({ error: 'Ingen "prompt" hittades i förfrågan.' });
-    return;
-  }
+  // Hämta hela "body" från klienten
+  const { prompt, contents, tools } = req.body;
 
   // URL till Google Gemini API
   const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
   // Bygg upp payloaden för Gemini
-  const payload = {
-    contents: [{ parts: [{ text: prompt }] }],
-    // Lägg till verktyg om de skickades med
-    ...(tools && tools.length > 0 && { tools: tools })
-  };
+  let payload;
+  if (contents) {
+    // FALL 1: Klienten skickar en hel konversationshistorik (för agent-loopen)
+    payload = {
+      contents: contents, // Använd hela historiken
+      ...(tools && tools.length > 0 && { tools: tools })
+    };
+  } else if (prompt) {
+    // FALL 2: Klienten skickar en enkel prompt (för testning)
+    payload = {
+      contents: [{ parts: [{ text: prompt }] }],
+      ...(tools && tools.length > 0 && { tools: tools })
+    };
+  } else {
+    // Fel: varken "contents" eller "prompt" skickades
+    res.status(400).json({ error: 'Ingen "prompt" eller "contents" hittades i förfrågan.' });
+    return;
+  }
 
   try {
     // Anropa Gemini API:t
