@@ -39,7 +39,8 @@
       "WebFetch(domain:codelabs.developers.google.com)",
       "WebFetch(domain:ai.google.dev)",
       "Bash(vercel ls:*)",
-      "Bash(npx vercel ls)"
+      "Bash(npx vercel ls)",
+      "Bash(npx vercel:*)"
     ],
     "deny": [],
     "ask": []
