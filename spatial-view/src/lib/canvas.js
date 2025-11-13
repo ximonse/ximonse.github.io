@@ -3657,13 +3657,17 @@ function showCommandPalette() {
 
   // ESC to close, arrow navigation, Enter to select, and keyboard shortcuts
   const handleKeyboard = async (e) => {
+    // Always allow ESC
     if (e.key === 'Escape') {
       cleanup();
       document.removeEventListener('keydown', handleKeyboard);
       return;
     }
 
-    // Arrow navigation
+    // If typing in search, only handle arrow keys and Enter
+    const isTypingInSearch = document.activeElement === searchInput;
+
+    // Arrow navigation (works everywhere)
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       const actionableCommands = currentCommands.filter(cmd => cmd.action);
@@ -3712,12 +3716,12 @@ function showCommandPalette() {
       return;
     }
 
-    // Don't handle letter keys when typing in search
-    if (document.activeElement === searchInput) {
+    // Don't handle letter shortcuts when typing in search
+    if (isTypingInSearch) {
       return;
     }
 
-    // Check for keyboard shortcuts (single letter)
+    // Check for keyboard shortcuts (single letter, only when NOT typing in search)
     const key = e.key.toUpperCase();
     const command = commands.find(cmd =>
       cmd.key.toUpperCase() === key && cmd.action
