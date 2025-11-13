@@ -3093,6 +3093,107 @@ async function pasteImageFromClipboard() {
 // SECTION 9: UI DIALOGS (Command Palette, Quality Dialog, Text Input, Gemini Assistant)
 // ============================================================================
 
+async function sortAndArrangeCards({ cardIds, filterQuery, sortBy, order, arrangement }) {
+  console.log(`IDs: ${cardIds}, Filter: ${filterQuery}, Sorting by ${sortBy} ${order}, Arranging in ${arrangement}`);
+
+  // Clear any previous selection before starting
+  deselectAllCards();
+  let selectedGroups = [];
+
+  if (cardIds && cardIds.length > 0) {
+    // Priority 1: Use the provided list of card IDs
+    console.log(`Selecting cards by provided IDs: ${cardIds}`);
+    cardIds.forEach(id => {
+      const group = cardGroups.get(id);
+      if (group && !group.getAttr('locked')) {
+        group.addName('selected');
+      }
+    });
+    selectedGroups = layer.find('.selected');
+  } else if (filterQuery) {
+    // Priority 2: Use a filter query
+    console.log(`Running search with query: "${filterQuery}"`);
+    await searchCards(filterQuery);
+    selectedGroups = layer.find('.selected');
+  } else {
+    // Priority 3 & 4: Use existing selection or all unlocked cards
+    selectedGroups = layer.find('.selected');
+    if (selectedGroups.length === 0) {
+      const allCardGroups = layer.getChildren(node => node.getAttr('cardId'));
+      if (allCardGroups.length > 0) {
+        allCardGroups.forEach(group => {
+          if (!group.getAttr('locked')) {
+            group.addName('selected');
+          }
+        });
+        selectedGroups = layer.find('.selected');
+        console.log('No cards were selected. Selecting all unlocked cards for sorting.');
+      }
+    }
+  }
+  
+  if (selectedGroups.length === 0) {
+    return 'Inga kort hittades eller valdes för sortering.';
+  }
+  
+  // Visually update the selection strokes
+  updateCardStrokes();
+  
+  // Get full card data for sorting
+  const finalCardIds = selectedGroups.map(g => g.getAttr('cardId'));
+  const allCards = await getAllCards();
+  let cardsToSort = allCards.filter(c => finalCardIds.includes(c.id));
+
+  // Sorting logic
+  cardsToSort.sort((a, b) => {
+    let valA, valB;
+    switch (sortBy) {
+      case 'color':
+        valA = a.cardColor || '';
+        valB = b.cardColor || '';
+        break;
+      case 'text':
+        valA = a.text || '';
+        valB = b.text || '';
+        break;
+      case 'creationDate':
+        valA = a.created || 0;
+        valB = b.created || 0;
+        break;
+      default:
+        return 0;
+    }
+
+    if (valA < valB) return order === 'ascending' ? -1 : 1;
+    if (valA > valB) return order === 'ascending' ? 1 : -1;
+    return 0;
+  });
+
+  // Create a map for quick lookup of Konva groups by card ID
+  const groupMap = new Map();
+  selectedGroups.forEach(g => groupMap.set(g.getAttr('cardId'), g));
+
+  // Create a new array of groups in the desired sorted order
+  const sortedGroups = cardsToSort.map(card => groupMap.get(card.id)).filter(Boolean);
+
+  // Map the arrangement name to the actual arrangement function
+  const arrangementMap = {
+    'grid': arrangeGrid,
+    'vertical': arrangeVertical,
+    'horizontal': arrangeHorizontal
+  };
+
+  const arrangeFn = arrangementMap[arrangement];
+  if (!arrangeFn) {
+    throw new Error(`Okänt arrangemang: ${arrangement}`);
+  }
+
+  // Apply the arrangement, passing the explicitly sorted array of groups
+  await applyArrangement(arrangeFn, arrangement, sortedGroups);
+
+  return `Sorterade ${cardsToSort.length} kort efter ${sortBy} (${order}) och arrangerade dem som en ${arrangement}.`;
+}
+
 /**
  * Show Gemini Assistant dialog
  */
@@ -3192,39 +3293,51 @@ async function showGeminiAssistant() {
       const tools = [{
         functionDeclarations: [
           {
-            name: 'searchCards',
-            description: 'Sök efter kort baserat på text, tags eller innehåll. Returnerar matchande kort-ID:n.',
-            parameters: {
-              type: 'object',
-              properties: {
-                query: {
-                  type: 'string',
-                  description: 'Sökfråga (kan använda Boolean search: AND, OR, NOT)'
-                }
-              },
-              required: ['query']
-            }
-          },
-          {
             name: 'getAllCards',
-            description: 'Hämta alla kort med deras data (text, tags, färg, position, etc.)',
-            parameters: {
-              type: 'object',
-              properties: {}
-            }
-          },
-          {
-            name: 'filterCardsByTag',
-            description: 'Filtrera kort baserat på en specifik tagg',
+            description: 'Hämta en lista över alla kort. Returnerar som standard en sammanfattning av varje kort. Använd includeFullText=true för att få allt textinnehåll, vilket är nödvändigt för att analysera eller kategorisera kort baserat på deras innehåll.',
             parameters: {
               type: 'object',
               properties: {
-                tag: {
+                includeFullText: {
+                  type: 'boolean',
+                  description: 'Sätt till true för att inkludera allt textinnehåll för varje kort. Använd detta när du behöver analysera innehållet.',
+                  default: false
+                }
+              }
+            }
+          },
+          {
+            name: 'sortAndArrangeCards',
+            description: 'Använd den här funktionen för att först filtrera och sedan sortera och arrangera kort. Kan antingen ta en sökfråga (filterQuery) eller en specifik lista med kort-IDn (cardIds). Använd cardIds när du själv har analyserat innehållet och valt ut kort. Om inget anges, gäller åtgärden alla markerade (eller alla olåsta) kort.',
+            parameters: {
+              type: 'object',
+              properties: {
+                filterQuery: {
                   type: 'string',
-                  description: 'Taggen att filtrera på'
+                  description: 'Valfri sökfråga för att först filtrera vilka kort som ska sorteras (t.ex. "tags:zotero").'
+                },
+                cardIds: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'Valfri lista med specifika kort-IDn att sortera och arrangera.'
+                },
+                sortBy: {
+                  type: 'string',
+                  description: 'Egenskap att sortera efter.',
+                  'enum': ['color', 'text', 'creationDate']
+                },
+                order: {
+                  type: 'string',
+                  description: 'Sorteringsordning, stigande eller fallande.',
+                  'enum': ['ascending', 'descending']
+                },
+                arrangement: {
+                  type: 'string',
+                  description: 'Layout att applicera efter sortering.',
+                  'enum': ['grid', 'vertical', 'horizontal']
                 }
               },
-              required: ['tag']
+              required: ['sortBy', 'order', 'arrangement']
             }
           }
         ]
@@ -3232,30 +3345,28 @@ async function showGeminiAssistant() {
 
       // Tool registry - actual functions
       const toolRegistry = {
-        searchCards: async (args) => {
-          await searchCards(args.query);
-          const selectedCount = layer.find('.selected').length;
-          return `Hittade och markerade ${selectedCount} kort.`;
-        },
-        getAllCards: async () => {
+        getAllCards: async (args) => {
+          const includeFullText = args?.includeFullText || false;
           const cards = await getAllCards();
           return cards.map(c => ({
             id: c.id,
-            text: c.text?.substring(0, 100),
+            text: includeFullText ? c.text : c.text?.substring(0, 100) + (c.text?.length > 100 ? '...' : ''),
+            backText: includeFullText ? c.backText : c.backText?.substring(0, 100) + (c.backText?.length > 100 ? '...' : ''),
             tags: c.tags,
             cardColor: c.cardColor,
-            hasImage: !!c.image
+            hasImage: !!c.image,
+            created: c.created
           }));
         },
-        filterCardsByTag: async (args) => {
-          await searchCards(`tags:${args.tag}`);
-          const selectedCount = layer.find('.selected').length;
-          return `Markerade ${selectedCount} kort med taggen "${args.tag}".`;
-        }
+        sortAndArrangeCards: sortAndArrangeCards
       };
 
+      // Add date context to the query for the AI
+      const today = new Date().toLocaleDateString('sv-SE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+      const augmentedQuery = `(Dagens datum är ${today}). Användarens fråga: ${query}`;
+
       // Call Gemini with tools
-      const response = await executeGeminiAgent(query, tools, toolRegistry);
+      const response = await executeGeminiAgent(augmentedQuery, tools, toolRegistry);
 
       responseDiv.textContent = `💡 ${response}`;
 
@@ -4843,8 +4954,8 @@ function createAddButton() {
 /**
  * Apply arrangement to selected cards with animation
  */
-async function applyArrangement(arrangeFn, arrangeName) {
-  const selectedGroups = layer.find('.selected');
+async function applyArrangement(arrangeFn, arrangeName, groups) {
+  const selectedGroups = groups || layer.find('.selected');
   if (selectedGroups.length === 0) {
     console.log('No cards selected for arrangement');
     return;
