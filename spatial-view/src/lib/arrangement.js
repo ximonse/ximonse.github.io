@@ -106,24 +106,57 @@ export function arrangeGrid(cards, centerPos) {
 }
 
 /**
- * Arrange cards in cluster (circle)
- * Based on v2's clusterSelectedCards
+ * Arrange cards in a spiral cluster
+ * Places one card in the center, then arranges the rest in concentric rings.
+ * Adds a "messy" factor with random offsets.
  */
 export function arrangeCluster(cards, centerPos) {
-  const radius = 50;
+  if (cards.length === 0) return [];
+
   const positions = [];
+  const cardData = cards.map(c => ({ ...c, width: c.width || 200, height: c.height || 150 }));
 
-  cards.forEach((card, index) => {
-    const angle = (index / cards.length) * 2 * Math.PI;
-    const x = centerPos.x + Math.cos(angle) * radius;
-    const y = centerPos.y + Math.sin(angle) * radius;
-
-    positions.push({
-      id: card.id,
-      x: x,
-      y: y
-    });
+  // Place first card at the center
+  positions.push({
+    id: cardData[0].id,
+    x: centerPos.x - cardData[0].width / 2,
+    y: centerPos.y - cardData[0].height / 2
   });
+
+  if (cards.length === 1) return positions;
+
+  let cardIndex = 1;
+  let ring = 1;
+  const baseRadius = 250; // Base radius for the first ring
+  const messyFactor = 40; // How "messy" the pile is (random offset)
+
+  while (cardIndex < cardData.length) {
+    const radius = baseRadius * ring * 0.8; // Make rings tighter
+    // Approximate number of cards in this ring based on circumference
+    const cardsInRing = Math.floor((2 * Math.PI * radius) / (150)); // Avg card width + gap
+
+    const angleStep = (2 * Math.PI) / cardsInRing;
+
+    for (let i = 0; i < cardsInRing && cardIndex < cardData.length; i++) {
+      const card = cardData[cardIndex];
+      const angle = i * angleStep;
+
+      // Add some randomness for a "messy" look
+      const randomAngle = angle + (Math.random() - 0.5) * (angleStep / 2);
+      const randomRadius = radius + (Math.random() - 0.5) * messyFactor;
+
+      const x = centerPos.x + Math.cos(randomAngle) * randomRadius - card.width / 2;
+      const y = centerPos.y + Math.sin(randomAngle) * randomRadius - card.height / 2;
+
+      positions.push({
+        id: card.id,
+        x: x,
+        y: y
+      });
+      cardIndex++;
+    }
+    ring++;
+  }
 
   return positions;
 }

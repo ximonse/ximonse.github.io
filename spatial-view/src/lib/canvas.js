@@ -2463,6 +2463,56 @@ function setupCanvasEvents() {
       return;
     }
 
+    // R - Läs med AI
+    if (e.key === 'r' && !e.ctrlKey) {
+      e.preventDefault();
+      const selectedNodes = layer.find('.selected');
+      if (selectedNodes.length === 0) {
+        alert('Markera först ett eller flera bildkort som du vill läsa med AI.');
+        return;
+      }
+
+      // Get all cards and filter only image cards
+      const allCards = await getAllCards();
+      const imageCardIds = [];
+
+      for (const node of selectedNodes) {
+        const cardId = node.getAttr('cardId');
+        if (cardId) {
+          const card = allCards.find(c => c.id === cardId);
+          if (card && card.image) {
+            imageCardIds.push(cardId);
+          }
+        }
+      }
+
+      if (imageCardIds.length === 0) {
+        alert('Inga bildkort är markerade. Endast bildkort kan läsas med AI.');
+        return;
+      }
+
+      // Process each card
+      for (const cardId of imageCardIds) {
+        try {
+          await readImageWithGemini(cardId);
+        } catch (error) {
+          console.error('Fel vid OCR:', error);
+          alert(`Fel vid läsning av kort: ${error.message}`);
+        }
+      }
+
+      // Reload canvas to show updated cards
+      await reloadCanvas();
+      alert(`✅ ${imageCardIds.length} kort lästa med Gemini AI. Texten finns på baksidan - dubbelklicka och klicka "Vänd kort" för att se.`);
+      return;
+    }
+    // A - Fråga Gemini
+    if (e.key === 'a' && !e.ctrlKey) {
+      e.preventDefault();
+      await showGeminiAssistant();
+      return;
+    }
+
     // S - Save (export)
     if (e.key === 's' && !e.ctrlKey) {
       e.preventDefault();
@@ -2600,6 +2650,13 @@ function setupCanvasEvents() {
     if (e.key === 'p' && !e.ctrlKey) {
       e.preventDefault();
       await togglePinSelectedCards();
+      return;
+    }
+
+    // Z - Importera Zotero HTML
+    if (e.key === 'z' && !e.ctrlKey) {
+      e.preventDefault();
+      await importFromZoteroHTML();
       return;
     }
 
@@ -3181,7 +3238,8 @@ async function sortAndArrangeCards({ filterByTag, filterByColor, sortBy, order, 
   const arrangementMap = {
     'grid': arrangeGrid,
     'vertical': arrangeVertical,
-    'horizontal': arrangeHorizontal
+    'horizontal': arrangeHorizontal,
+    'cluster': arrangeCluster
   };
   const arrangeFn = arrangementMap[arrangement];
   if (!arrangeFn) {
@@ -3377,7 +3435,7 @@ async function showGeminiAssistant() {
                 arrangement: {
                   type: 'string',
                   description: "Layout att applicera efter sortering. Standard är 'grid' om inget anges.",
-                  'enum': ['grid', 'vertical', 'horizontal']
+                  'enum': ['grid', 'vertical', 'horizontal', 'cluster']
                 }
               },
               required: ['sortBy', 'order']
@@ -3404,9 +3462,38 @@ async function showGeminiAssistant() {
         sortAndArrangeCards: sortAndArrangeCards
       };
 
+<<<<<<< Updated upstream
       // Add date context to the query for the AI
       const today = new Date().toLocaleDateString('sv-SE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
       const augmentedQuery = `(Dagens datum är ${today}). Användarens fråga: ${query}`;
+=======
+      const systemPrompt = `
+      **Systeminstruktion:**
+
+      Du är en AI-assistent inbäddad i en webbapplikation som heter "Spatial View". Ditt syfte är att hjälpa användaren att organisera och förstå sina idéer på en oändlig digital canvas.
+
+      **Din roll:**
+      Du är en intelligent och proaktiv assistent som förstår visuellt tänkande. Du hjälper användaren att hantera digitala "kort" som kan innehålla text, bilder och taggar.
+
+      **Dina förmågor:**
+      Du kan interagera med canvasen genom att använda följande verktyg:
+      1.  `getAllCards()`: Använd detta verktyg för att få en överblick över alla kort på canvasen. Du kan använda detta för att svara på frågor om kortens innehåll, analysera teman eller hitta specifik information.
+      2.  `sortAndArrangeCards()`: Använd detta verktyg för att sortera och arrangera kort. Du kan sortera efter färg, textinnehåll eller skapelsedatum. Du kan arrangera dem i ett rutnät (grid), vertikalt eller horisontellt.
+
+      **Hur du ska bete dig:**
+      *   **Var konverserande:** Ställ klargörande frågor om en förfrågan är oklar.
+      *   **Tänk steg-för-steg:** För komplexa uppgifter, bryt ner problemet och förklara din plan för användaren.
+      *   **Bekräfta innan du agerar:** Innan du utför en åtgärd som påverkar många kort (som att arrangera om allt), bekräfta med användaren. Exempel: "Jag hittade 50 kort med taggen 'projekt-x'. Vill du att jag ska arrangera dem i ett rutnät?"
+      *   **Använd dina verktyg:** Basera dina svar om kortens innehåll på informationen du får från dina verktyg, inte på allmän kunskap.
+
+      **Exempel:**
+      *   **Användare:** "Hitta alla kort som handlar om 'maskininlärning' och sortera dem i en vertikal kolumn."
+      *   **Du (tänker):** "Ok, jag behöver först använda \`getAllCards(includeFullText: true)\` för att hitta relevanta kort. Sedan tar jag ID:na från de korten och använder \`sortAndArrangeCards()\` för att arrangera dem vertikalt."
+
+      Dagens datum är ${today}.
+      `;
+      const augmentedQuery = `${systemPrompt}\n\nAnvändarens fråga: ${query}`;
+>>>>>>> Stashed changes
 
       // Call Gemini with tools and the current conversation history
       const { responseText, finalHistory } = await executeGeminiAgent(augmentedQuery, tools, toolRegistry, conversationHistory);
@@ -3552,7 +3639,7 @@ function showCommandPalette() {
     { key: 'H', icon: '↔️', name: 'Arrangera horisontellt', desc: 'Arrangera markerade kort i horisontell rad', action: async () => {
       await applyArrangement(arrangeHorizontal, 'Horizontal');
     }},
-    { key: 'Q', icon: '◉', name: 'Arrangera cirkel', desc: 'Klistra in och arrangera i cirkel (om kopierade kort), annars arrangera markerade', action: async () => {
+    { key: 'Q', icon: '🌀', name: 'Arrangera i kluster', desc: 'Arrangera markerade kort i ett spiral-kluster', action: async () => {
       if (clipboard.length > 0) {
         await pasteCardsWithArrangement(arrangeCluster, 'Cluster');
       } else {
