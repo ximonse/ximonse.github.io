@@ -3093,59 +3093,62 @@ async function pasteImageFromClipboard() {
 // SECTION 9: UI DIALOGS (Command Palette, Quality Dialog, Text Input, Gemini Assistant)
 // ============================================================================
 
-async function sortAndArrangeCards({ cardIds, filterQuery, sortBy, order, arrangement }) {
-  console.log(`IDs: ${cardIds}, Filter: ${filterQuery}, Sorting by ${sortBy} ${order}, Arranging in ${arrangement}`);
+async function sortAndArrangeCards({ filterByTag, filterByColor, sortBy, order, arrangement }) {
+  console.log(`Tag: ${filterByTag}, Color: ${filterByColor}, Sorting by ${sortBy} ${order}, Arranging in ${arrangement}`);
 
-  // Clear any previous selection before starting
-  deselectAllCards();
-  let selectedGroups = [];
+  const colorNameToClass = {
+    'grön': 'card-color-1',
+    'orange': 'card-color-2',
+    'röd': 'card-color-3',
+    'gul': 'card-color-4',
+    'lila': 'card-color-5',
+    'blå': 'card-color-6',
+    'grå': 'card-color-7',
+    'vit': 'card-color-8'
+  };
 
-  if (cardIds && cardIds.length > 0) {
-    // Priority 1: Use the provided list of card IDs
-    console.log(`Selecting cards by provided IDs: ${cardIds}`);
-    cardIds.forEach(id => {
-      const group = cardGroups.get(id);
-      if (group && !group.getAttr('locked')) {
-        group.addName('selected');
-      }
-    });
-    selectedGroups = layer.find('.selected');
-  } else if (filterQuery) {
-    // Priority 2: Use a filter query
-    console.log(`Running search with query: "${filterQuery}"`);
-    await searchCards(filterQuery);
-    selectedGroups = layer.find('.selected');
-  } else {
-    // Priority 3 & 4: Use existing selection or all unlocked cards
-    selectedGroups = layer.find('.selected');
-    if (selectedGroups.length === 0) {
-      const allCardGroups = layer.getChildren(node => node.getAttr('cardId'));
-      if (allCardGroups.length > 0) {
-        allCardGroups.forEach(group => {
-          if (!group.getAttr('locked')) {
-            group.addName('selected');
-          }
-        });
-        selectedGroups = layer.find('.selected');
-        console.log('No cards were selected. Selecting all unlocked cards for sorting.');
-      }
+  let cardsToProcess = await getAllCards();
+  let filtered = false;
+
+  // Filter by tag
+  if (filterByTag) {
+    cardsToProcess = cardsToProcess.filter(card => card.tags && card.tags.includes(filterByTag.toLowerCase()));
+    filtered = true;
+    console.log(`After tag filter ('${filterByTag}'), ${cardsToProcess.length} cards remain.`);
+  }
+
+  // Filter by color
+  if (filterByColor) {
+    const colorClass = colorNameToClass[filterByColor.toLowerCase()];
+    if (colorClass) {
+      cardsToProcess = cardsToProcess.filter(card => card.cardColor === colorClass);
+      filtered = true;
+      console.log(`After color filter ('${filterByColor}'), ${cardsToProcess.length} cards remain.`);
+    } else {
+      return `Färgen "${filterByColor}" är okänd.`;
+    }
+  }
+
+  // If no filters were applied, use the current selection or all unlocked cards
+  if (!filtered) {
+    const selectedGroups = layer.find('.selected');
+    if (selectedGroups.length > 0) {
+      const selectedIds = new Set(selectedGroups.map(g => g.getAttr('cardId')));
+      cardsToProcess = cardsToProcess.filter(c => selectedIds.has(c.id));
+      console.log(`No filters provided, using ${selectedGroups.length} selected cards.`);
+    } else {
+      // Default to all non-locked cards
+      cardsToProcess = cardsToProcess.filter(c => !c.locked);
+      console.log('No filters or selection, using all unlocked cards.');
     }
   }
   
-  if (selectedGroups.length === 0) {
-    return 'Inga kort hittades eller valdes för sortering.';
+  if (cardsToProcess.length === 0) {
+    return 'Inga kort matchade dina filterkriterier.';
   }
   
-  // Visually update the selection strokes
-  updateCardStrokes();
-  
-  // Get full card data for sorting
-  const finalCardIds = selectedGroups.map(g => g.getAttr('cardId'));
-  const allCards = await getAllCards();
-  let cardsToSort = allCards.filter(c => finalCardIds.includes(c.id));
-
-  // Sorting logic
-  cardsToSort.sort((a, b) => {
+  // --- Sorting Logic ---
+  cardsToProcess.sort((a, b) => {
     let valA, valB;
     switch (sortBy) {
       case 'color':
@@ -3163,35 +3166,31 @@ async function sortAndArrangeCards({ cardIds, filterQuery, sortBy, order, arrang
       default:
         return 0;
     }
-
     if (valA < valB) return order === 'ascending' ? -1 : 1;
     if (valA > valB) return order === 'ascending' ? 1 : -1;
     return 0;
   });
 
-  // Create a map for quick lookup of Konva groups by card ID
-  const groupMap = new Map();
-  selectedGroups.forEach(g => groupMap.set(g.getAttr('cardId'), g));
+  // --- Arrangement Logic ---
+  const sortedCardIds = new Set(cardsToProcess.map(c => c.id));
+  const sortedGroups = Array.from(cardGroups.values()).filter(g => sortedCardIds.has(g.getAttr('cardId')));
+  
+  // Re-order the groups array to match the sorted cards array
+  const finalGroups = cardsToProcess.map(card => sortedGroups.find(g => g.getAttr('cardId') === card.id)).filter(Boolean);
 
-  // Create a new array of groups in the desired sorted order
-  const sortedGroups = cardsToSort.map(card => groupMap.get(card.id)).filter(Boolean);
-
-  // Map the arrangement name to the actual arrangement function
   const arrangementMap = {
     'grid': arrangeGrid,
     'vertical': arrangeVertical,
     'horizontal': arrangeHorizontal
   };
-
   const arrangeFn = arrangementMap[arrangement];
   if (!arrangeFn) {
     throw new Error(`Okänt arrangemang: ${arrangement}`);
   }
 
-  // Apply the arrangement, passing the explicitly sorted array of groups
-  await applyArrangement(arrangeFn, arrangement, sortedGroups);
+  await applyArrangement(arrangeFn, arrangement, finalGroups);
 
-  return `Sorterade ${cardsToSort.length} kort efter ${sortBy} (${order}) och arrangerade dem som en ${arrangement}.`;
+  return `Sorterade och arrangerade ${finalGroups.length} kort.`;
 }
 
 /**
@@ -3308,18 +3307,17 @@ async function showGeminiAssistant() {
           },
           {
             name: 'sortAndArrangeCards',
-            description: 'Använd den här funktionen för att först filtrera och sedan sortera och arrangera kort. Kan antingen ta en sökfråga (filterQuery) eller en specifik lista med kort-IDn (cardIds). Använd cardIds när du själv har analyserat innehållet och valt ut kort. Om inget anges, gäller åtgärden alla markerade (eller alla olåsta) kort.',
+            description: 'Sorterar och arrangerar en grupp kort. Korten kan filtreras efter en specifik tagg och/eller färg innan de sorteras. Om inga filter anges, används de markerade korten (eller alla om inga är markerade).',
             parameters: {
               type: 'object',
               properties: {
-                filterQuery: {
+                filterByTag: {
                   type: 'string',
-                  description: 'Valfri sökfråga för att först filtrera vilka kort som ska sorteras (t.ex. "tags:zotero").'
+                  description: 'Valfri tagg att filtrera korten på, t.ex. "zotero" eller "projekt-x".'
                 },
-                cardIds: {
-                  type: 'array',
-                  items: { type: 'string' },
-                  description: 'Valfri lista med specifika kort-IDn att sortera och arrangera.'
+                filterByColor: {
+                  type: 'string',
+                  description: 'Valfri färg att filtrera korten på, t.ex. "lila", "blå", "grön".'
                 },
                 sortBy: {
                   type: 'string',
