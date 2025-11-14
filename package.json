@@ -1,0 +1,8 @@
+{
+  "name": "ximonse-github-io",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  }
+}
