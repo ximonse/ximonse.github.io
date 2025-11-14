@@ -1,9 +1,8 @@
 // api/gemini.js
-
-import fetch from 'node-fetch';
+const fetch = require('node-fetch');
 
 // Huvudfunktionen för Vercel serverless function
-export default async function handler(request, response) {
+module.exports = async function handler(request, response) {
   // 1. Säkerhetsåtgärd: Tillåt endast POST-anrop
   if (request.method !== 'POST') {
     response.status(405).json({ error: 'Method Not Allowed' });
