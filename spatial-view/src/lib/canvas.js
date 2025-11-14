@@ -3093,7 +3093,7 @@ async function pasteImageFromClipboard() {
 // SECTION 9: UI DIALOGS (Command Palette, Quality Dialog, Text Input, Gemini Assistant)
 // ============================================================================
 
-async function sortAndArrangeCards({ filterByTag, filterByColor, sortBy, order, arrangement }) {
+async function sortAndArrangeCards({ filterByTag, filterByColor, sortBy, order, arrangement = 'grid' }) {
   console.log(`Tag: ${filterByTag}, Color: ${filterByColor}, Sorting by ${sortBy} ${order}, Arranging in ${arrangement}`);
 
   const colorNameToClass = {
@@ -3331,11 +3331,11 @@ async function showGeminiAssistant() {
                 },
                 arrangement: {
                   type: 'string',
-                  description: 'Layout att applicera efter sortering.',
+                  description: "Layout att applicera efter sortering. Standard är 'grid' om inget anges.",
                   'enum': ['grid', 'vertical', 'horizontal']
                 }
               },
-              required: ['sortBy', 'order', 'arrangement']
+              required: ['sortBy', 'order']
             }
           }
         ]
@@ -3359,9 +3359,9 @@ async function showGeminiAssistant() {
         sortAndArrangeCards: sortAndArrangeCards
       };
 
-      // Add date context to the query for the AI
+      // Add date context and behavioral instruction to the query for the AI
       const today = new Date().toLocaleDateString('sv-SE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-      const augmentedQuery = `(Dagens datum är ${today}). Användarens fråga: ${query}`;
+      const augmentedQuery = `(Systeminstruktion: Var hjälpsam och gör rimliga antaganden om användarens avsikt är tydlig. Om en användare till exempel ber om 'ett rutnät', använd 'grid'-arrangemanget. Dagens datum är ${today}). Användarens fråga: ${query}`;
 
       // Call Gemini with tools
       const response = await executeGeminiAgent(augmentedQuery, tools, toolRegistry);
