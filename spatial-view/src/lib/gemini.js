@@ -176,7 +176,10 @@ export async function executeGeminiAgent(userPrompt, toolDefinitions, toolRegist
     // Då är loopen klar!
     if (responsePart.text) {
       console.log('Agenten gav ett slutgiltigt textsvar:', responsePart.text);
-      return responsePart.text; // Returnera det slutgiltiga svaret
+      return {
+        responseText: responsePart.text,
+        finalHistory: history
+      };
     }
 
     // Om vi hamnar här var svaret varken text eller toolcall (konstigt)

@@ -3194,10 +3194,45 @@ async function sortAndArrangeCards({ filterByTag, filterByColor, sortBy, order, 
 }
 
 /**
+ * Appends a styled chat message to the Gemini Assistant dialog.
+ * @param {string} role - The role of the sender ('user' or 'model').
+ * @param {string} text - The message content.
+ * @param {HTMLElement} container - The container element for the chat messages.
+ */
+function appendChatMessage(role, text, container) {
+  const messageWrapper = document.createElement('div');
+  messageWrapper.style.cssText = `
+    display: flex;
+    margin-bottom: 12px;
+    flex-direction: ${role === 'user' ? 'row-reverse' : 'row'};
+  `;
+
+  const messageBubble = document.createElement('div');
+  messageBubble.style.cssText = `
+    max-width: 80%;
+    padding: 10px 14px;
+    border-radius: 16px;
+    background: ${role === 'user' ? 'var(--accent-color)' : 'var(--bg-secondary)'};
+    color: ${role === 'user' ? 'white' : 'var(--text-primary)'};
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  `;
+  messageBubble.textContent = text;
+
+  messageWrapper.appendChild(messageBubble);
+  container.appendChild(messageWrapper);
+
+  // Scroll to bottom
+  container.scrollTop = container.scrollHeight;
+}
+
+
+/**
  * Show Gemini Assistant dialog
  */
 async function showGeminiAssistant() {
   const { executeGeminiAgent } = await import('./gemini.js');
+  let conversationHistory = []; // State for the chat history
 
   // Create overlay
   const overlay = document.createElement('div');
@@ -3207,7 +3242,8 @@ async function showGeminiAssistant() {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.8);
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
     z-index: 10000;
     display: flex;
     justify-content: center;
@@ -3219,37 +3255,36 @@ async function showGeminiAssistant() {
   dialog.style.cssText = `
     background: var(--bg-primary);
     color: var(--text-primary);
-    padding: 24px;
     border-radius: 12px;
     max-width: 600px;
     width: 90%;
-    max-height: 70vh;
-    overflow-y: auto;
+    height: 70vh;
+    display: flex;
+    flex-direction: column;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   `;
 
   dialog.innerHTML = `
-    <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 20px; font-weight: 600;">
-      🤖 Gemini Assistant
-    </h3>
-    <p style="margin-bottom: 16px; color: var(--text-secondary); font-size: 14px;">
-      Fråga Gemini om hjälp med att hitta, filtrera och organisera dina kort.
-    </p>
-    <div style="margin-bottom: 16px;">
-      <textarea id="geminiQuery" placeholder="T.ex: 'Hitta alla kort om matematik', 'Arrangera kort med taggen zotero horisontellt', 'Visa kort från 2024'"
-        style="width: 100%; height: 100px; padding: 12px; font-size: 14px;
-               border: 2px solid var(--border-color); border-radius: 8px;
-               background: var(--bg-secondary); color: var(--text-primary);
-               font-family: sans-serif; resize: vertical; box-sizing: border-box;"></textarea>
+    <div style="padding: 16px 24px; border-bottom: 1px solid var(--border-color);">
+      <h3 style="margin: 0; font-size: 20px; font-weight: 600;">
+        🤖 Gemini Assistant
+      </h3>
     </div>
-    <div id="geminiResponse" style="margin-bottom: 16px; padding: 12px; background: var(--bg-secondary);
-         border-radius: 8px; min-height: 60px; display: none; white-space: pre-wrap; font-size: 14px;"></div>
-    <div style="display: flex; gap: 12px; justify-content: flex-end;">
-      <button id="geminiCancel" style="padding: 10px 20px; background: var(--bg-secondary);
-              color: var(--text-primary); border: 2px solid var(--border-color);
-              border-radius: 8px; cursor: pointer; font-size: 14px;">Avbryt</button>
-      <button id="geminiAsk" style="padding: 10px 20px; background: var(--accent-color);
-              color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px;">Fråga Gemini</button>
+    
+    <div id="geminiChatLog" style="flex-grow: 1; padding: 16px 24px; overflow-y: auto;">
+      <!-- Chat messages will be appended here -->
+    </div>
+
+    <div style="padding: 16px 24px; border-top: 1px solid var(--border-color);">
+      <div style="display: flex; gap: 12px;">
+        <textarea id="geminiQuery" placeholder="Fråga något..."
+          style="flex-grow: 1; padding: 12px; font-size: 14px;
+                 border: 2px solid var(--border-color); border-radius: 8px;
+                 background: var(--bg-secondary); color: var(--text-primary);
+                 font-family: sans-serif; resize: none; height: 50px;"></textarea>
+        <button id="geminiAsk" style="padding: 0 20px; background: var(--accent-color);
+                color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px;">Skicka</button>
+      </div>
     </div>
   `;
 
@@ -3257,9 +3292,11 @@ async function showGeminiAssistant() {
   document.body.appendChild(overlay);
 
   const queryInput = document.getElementById('geminiQuery');
-  const responseDiv = document.getElementById('geminiResponse');
+  const chatLog = document.getElementById('geminiChatLog');
   const askBtn = document.getElementById('geminiAsk');
-  const cancelBtn = document.getElementById('geminiCancel');
+
+  // Initial greeting from the assistant
+  appendChatMessage('model', 'Hej! Hur kan jag hjälpa dig att organisera dina kort idag?', chatLog);
 
   // Focus input
   queryInput.focus();
@@ -3271,21 +3308,29 @@ async function showGeminiAssistant() {
     }
   };
 
-  // Cancel handler
-  cancelBtn.addEventListener('click', cleanup);
+  // Close on overlay click
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) cleanup();
   });
+  // ESC to close
+  const escHandler = (e) => {
+    if (e.key === 'Escape') {
+      cleanup();
+      document.removeEventListener('keydown', escHandler);
+    }
+  };
+  document.addEventListener('keydown', escHandler);
+
 
   // Ask handler
-  askBtn.addEventListener('click', async () => {
+  const handleAsk = async () => {
     const query = queryInput.value.trim();
     if (!query) return;
 
     askBtn.disabled = true;
-    askBtn.textContent = 'Tänker...';
-    responseDiv.style.display = 'block';
-    responseDiv.textContent = '🤔 Gemini analyserar din fråga...';
+    askBtn.textContent = '...';
+    appendChatMessage('user', query, chatLog);
+    queryInput.value = ''; // Clear input after sending
 
     try {
       // Define tools that Gemini can use
@@ -3363,19 +3408,24 @@ async function showGeminiAssistant() {
       const today = new Date().toLocaleDateString('sv-SE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
       const augmentedQuery = `(Systeminstruktion: Var hjälpsam och gör rimliga antaganden om användarens avsikt är tydlig. Om en användare till exempel ber om 'ett rutnät', använd 'grid'-arrangemanget. Dagens datum är ${today}). Användarens fråga: ${query}`;
 
-      // Call Gemini with tools
-      const response = await executeGeminiAgent(augmentedQuery, tools, toolRegistry);
+      // Call Gemini with tools and the current conversation history
+      const { responseText, finalHistory } = await executeGeminiAgent(augmentedQuery, tools, toolRegistry, conversationHistory);
+      
+      // Update the history for the next turn
+      conversationHistory = finalHistory;
 
-      responseDiv.textContent = `💡 ${response}`;
+      appendChatMessage('model', responseText, chatLog);
 
     } catch (error) {
       console.error('Gemini Assistant error:', error);
-      responseDiv.textContent = `❌ Fel: ${error.message}`;
+      appendChatMessage('model', `❌ Fel: ${error.message}`, chatLog);
     } finally {
       askBtn.disabled = false;
-      askBtn.textContent = 'Fråga Gemini';
+      askBtn.textContent = 'Skicka';
     }
-  });
+  };
+
+  askBtn.addEventListener('click', handleAsk);
 
   // Enter to submit
   queryInput.addEventListener('keydown', (e) => {
