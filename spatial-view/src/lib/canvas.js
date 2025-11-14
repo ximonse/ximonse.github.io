@@ -3404,9 +3404,9 @@ async function showGeminiAssistant() {
         sortAndArrangeCards: sortAndArrangeCards
       };
 
-      // Add date context and behavioral instruction to the query for the AI
+      // Add date context to the query for the AI
       const today = new Date().toLocaleDateString('sv-SE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-      const augmentedQuery = `(Systeminstruktion: Var hjälpsam och gör rimliga antaganden om användarens avsikt är tydlig. Om en användare till exempel ber om 'ett rutnät', använd 'grid'-arrangemanget. Dagens datum är ${today}). Användarens fråga: ${query}`;
+      const augmentedQuery = `(Dagens datum är ${today}). Användarens fråga: ${query}`;
 
       // Call Gemini with tools and the current conversation history
       const { responseText, finalHistory } = await executeGeminiAgent(augmentedQuery, tools, toolRegistry, conversationHistory);
