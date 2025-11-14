@@ -5423,3 +5423,4 @@ export function deselectAllCards() {
   layer.batchDraw();
   console.log('All cards deselected');
 }
+
