@@ -1,0 +1,5 @@
+{
+  "buildCommand": "cd spatial-view && npm install && npm run build",
+  "outputDirectory": "spatial-view/dist",
+  "framework": null
+}
