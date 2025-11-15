@@ -36,7 +36,7 @@ async function handler(req, res) {
   const { prompt, contents, tools } = req.body;
 
   // URL till Google Gemini API
-  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
+  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
 
   // Bygg upp payloaden för Gemini
   let payload;
