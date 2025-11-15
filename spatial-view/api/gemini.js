@@ -26,9 +26,9 @@ async function handler(req, res) {
     return;
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GOOGLE_AI_API_KEY;
   if (!apiKey) {
-    res.status(500).json({ error: 'API-nyckel saknas. Har du lagt till GEMINI_API_KEY i Vercels miljövariabler?' });
+    res.status(500).json({ error: 'API-nyckel saknas. Har du lagt till GOOGLE_AI_API_KEY i Vercels miljövariabler?' });
     return;
   }
 
