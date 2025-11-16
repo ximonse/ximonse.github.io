@@ -11,15 +11,15 @@ export default async function handler(request, response) {
   }
 
   // 2. Hämta API-nyckeln från serverns miljövariabler
-  const apiKey = process.env.GOOGLE_API_KEY;
+  const apiKey = process.env.GOOGLE_AI_API_KEY;
   if (!apiKey) {
-    console.error('GOOGLE_API_KEY is not set on the server.');
+    console.error('GOOGLE_AI_API_KEY is not set on the server.');
     response.status(500).json({ error: 'Server configuration error: API key is missing.' });
     return;
   }
 
   // 3. Bygg URL:en till Google AI API
-  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
+  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
   try {
     // 4. Vidarebefordra klientens request body till Gemini
