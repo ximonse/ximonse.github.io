@@ -1,0 +1,9 @@
+{
+  "buildCommand": "cd spatial-view && npm install && npm run build",
+  "outputDirectory": "spatial-view/dist",
+  "functions": {
+    "spatial-view/api/**/*.js": {
+      "maxDuration": 10
+    }
+  }
+}
