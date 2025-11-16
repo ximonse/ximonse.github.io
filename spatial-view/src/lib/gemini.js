@@ -1,267 +1,299 @@
-// URL till vår Vercel API-proxy. /api/gemini pekar på api/gemini.js-filen.
-const PROXY_URL = '/api/gemini';
+// Gemini AI Integration for Spatial View                                                                                                
+                                                                                                                                         
+import { updateCard, getAllCards } from './storage.js';                                                                                  
+import { reloadCanvas } from './canvas.js';                                                                                              
+                                                                                                                                         
+/**                                                                                                                                      
+ * Prompts the user for their Google AI API key and saves it to localStorage.                                                            
+ * @returns {Promise<string|null>} The API key, or null if the user cancels.                                                             
+ */                                                                                                                                      
+function showGoogleAIAPIKeyDialog() {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');                                                                                   
+        overlay.style.cssText = `                                                                                                        
+            position: fixed;                                                                                                             
+            top: 0;                                                                                                                      
+            left: 0;                                                                                                                     
+            width: 100vw;                                                                                                                
+            height: 100vh;                                                                                                               
+            background: rgba(0, 0, 0, 0.7);                                                                                              
+            z-index: 10000;                                                                                                              
+            display: flex;                                                                                                               
+            align-items: center;                                                                                                         
+            justify-content: center;                                                                                                     
+        `;                                                                                                                               
+                                                                                                                                         
+        const dialog = document.createElement('div');                                                                                    
+        dialog.style.cssText = `                                                                                                         
+            background: var(--bg-primary);                                                                                               
+            color: var(--text-primary);                                                                                                  
+            border-radius: 12px;                                                                                                         
+            padding: 30px;                                                                                                               
+            width: 90%;                                                                                                                  
+            max-width: 500px;                                                                                                            
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);                                                                                      
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;                                              
+        `;                                                                                                                               
+                                                                                                                                         
+        dialog.innerHTML = `                                                                                                             
+            <h2 style="margin: 0 0 20px 0; color: var(--text-primary);">✨ Gemini AI Assistent</h2>                                       
+            <p style="margin: 0 0 20px 0; color: var(--text-secondary); line-height: 1.6;">                                              
+                För att använda bildigenkänning med Gemini behöver du en Google AI API-nyckel.                                           
+            </p>                                                                                                                         
+            <p style="margin: 0 0 15px 0; color: var(--text-secondary); line-height: 1.6;">                                              
+                <strong>Så här skaffar du en nyckel:</strong><br>                                                                        
+                1. Gå till <a href="https://makersuite.google.com/app/apikey" target="_blank" style="color: var(--accent-color);">Google 
+AI Studio</a><br>                                                                                                                        
+                2. Skapa ett konto eller logga in<br>                                                                                    
+                3. Klicka på "Create API key"<br>                                                                                        
+                4. Klistra in nyckeln här nedan                                                                                          
+            </p>                                                                                                                         
+            <p style="margin: 0 0 15px 0; color: #e67e22; font-size: 13px;">                                                             
+                ⚠️ Din API-nyckel sparas endast lokalt i din webbläsare.                                                                  
+            </p>                                                                                                                         
+            <input type="password" id="googleAiApiKeyInput" placeholder="Din Google AI API-nyckel..." style="                            
+                width: 100%;                                                                                                             
+                padding: 12px;                                                                                                           
+                border: 1px solid var(--border-color);                                                                                   
+                border-radius: 6px;                                                                                                      
+                font-family: monospace;                                                                                                  
+                font-size: 14px;                                                                                                         
+                box-sizing: border-box;                                                                                                  
+                margin-bottom: 20px;                                                                                                     
+                background: var(--bg-secondary);                                                                                         
+                color: var(--text-primary);                                                                                              
+            ">                                                                                                                           
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">                                                           
+                <button id="cancelApiKey" style="                                                                                        
+                    padding: 10px 20px;                                                                                                  
+                    border: 1px solid var(--border-color);                                                                               
+                    background: var(--bg-secondary);                                                                                     
+                    color: var(--text-primary);                                                                                          
+                    border-radius: 6px;                                                                                                  
+                    cursor: pointer;                                                                                                     
+                    font-size: 14px;                                                                                                     
+                ">Avbryt</button>                                                                                                        
+                <button id="saveApiKey" style="                                                                                          
+                    padding: 10px 20px;                                                                                                  
+                    border: none;                                                                                                        
+                    background: var(--accent-color);                                                                                     
+                    color: white;                                                                                                        
+                    border-radius: 6px;                                                                                                  
+                    cursor: pointer;                                                                                                     
+                    font-size: 14px;                                                                                                     
+                ">Spara och fortsätt</button>                                                                                            
+            </div>                                                                                                                       
+        `;                                                                                                                               
+                                                                                                                                         
+        overlay.appendChild(dialog);                                                                                                     
+        document.body.appendChild(overlay);                                                                                              
+                                                                                                                                         
+        const input = document.getElementById('googleAiApiKeyInput');                                                                    
+        input.focus();                                                                                                                   
+                                                                                                                                         
+        const closeDialog = (key = null) => {                                                                                            
+            overlay.remove();                                                                                                            
+            resolve(key);                                                                                                                
+        };                                                                                                                               
+                                                                                                                                         
+        document.getElementById('cancelApiKey').onclick = () => closeDialog();                                                           
+                                                                                                                                         
+        document.getElementById('saveApiKey').onclick = () => {                                                                          
+            const apiKey = input.value.trim();                                                                                           
+            if (apiKey) {                                                                                                                
+                localStorage.setItem('googleAiApiKey', apiKey);                                                                          
+                closeDialog(apiKey);                                                                                                     
+            } else {                                                                                                                     
+                alert('Vänligen ange en giltig API-nyckel.');                                                                            
+            }                                                                                                                            
+        };                                                                                                                               
+                                                                                                                                         
+        input.addEventListener('keydown', (e) => {                                                                                       
+            if (e.key === 'Enter') {                                                                                                     
+                document.getElementById('saveApiKey').click();                                                                           
+            }                                                                                                                            
+        });                                                                                                                              
+                                                                                                                                         
+        overlay.addEventListener('keydown', (e) => {                                                                                     
+            if (e.key === 'Escape') {                                                                                                    
+                closeDialog();                                                                                                           
+            }                                                                                                                            
+        });                                                                                                                              
+    });                                                                                                                                  
+}
+                                                                                                                                         
+/**                                                                                                                                      
+ * Retrieves the Google AI API key from localStorage or prompts the user for it.                                                         
+ * @returns {Promise<string|null>} The API key or null.                                                                                  
+ */                                                                                                                                      
+async function getGoogleAIAPIKey() {                                                                                                     
+    let apiKey = localStorage.getItem('googleAiApiKey');                                                                                 
+    if (!apiKey) {                                                                                                                       
+        apiKey = await showGoogleAIAPIKeyDialog();                                                                                       
+    }                                                                                                                                    
+    return apiKey;                                                                                                                       
+}
+                                                                                                                                         
+/**                                                                                                                                      
+ * Calls the Gemini API with the provided image data and a complex prompt.                                                               
+ * @param {string} apiKey - The Google AI API key.                                                                                       
+ * @param {string} imageData - The base64 encoded image data.                                                                            
+ * @returns {Promise<Object>} The JSON response from the API.                                                                            
+ */                                                                                                                                      
+async function callGeminiAPI(apiKey, imageData) {                                                                                        
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;                
+                                                                                                                                         
+    const payload = {                                                                                                                    
+        contents: [                                                                                                                      
+            {                                                                                                                            
+                parts: [                                                                                                                 
+                    {                                                                                                                    
+                        text: `Transkribera texten från bilden exakt som den är skriven och extrahera metadata.                          
+                                                                                                                                         
+OM BILDEN INTE HAR NÅGON TEXT: Beskriv kort vad bilden visar (1-2 meningar).                                                             
+                                                                                                                                         
+VIKTIGT: Svara ENDAST med en JSON-struktur enligt detta format:                                                                          
+                                                                                                                                         
+{                                                                                                                                        
+  "text": "[transkriberad text här, eller tom sträng om ingen text]",                                                              
+  "description": "[kort bildbeskrivning om ingen text finns, annars null]",                                                              
+  "metadata": {                                                                                                                          
+    "extractedDate": "YYYY-MM-DD eller null",                                                                                            
+    "extractedTime": "HH:MM eller null",                                                                                                 
+    "extractedDateTime": "YYYY-MM-DDTHH:MM eller null (kombinera datum+tid)",                                                            
+    "extractedPeople": ["person1", "person2"] eller [],                                                                                  
+    "extractedPlaces": ["plats1", "plats2"] eller []                                                                                     
+  },                                                                                                                                     
+  "hashtags": ["tag1", "tag2", "tag3"]                                                                                            
+}                                                                                                                                        
+                                                                                                                                         
+HASHTAG-REGLER:                                                                                                                          
+1. Datumtaggar: Om datum hittas, skapa #YYMMDD (ex: #250819 för 2025-08-19)                                                              
+2. Veckotaggar: Om datum känt, skapa #YYvVV (ex: #25v44 för vecka 44, 2025)                                                              
+3. Kategoritaggar: #möte #anteckning #todo #faktura #kontrakt #brev #kvitto #foto etc                                                    
+4. Namntaggar: Personer som nämns, normaliserade (ex: #smith #jones)                                                                     
+5. Platstaggar: Platser som nämns (ex: #stockholm #kontoret)                                                                             
+                                                                                                                                         
+METADATA-INSTRUKTIONER:                                                                                                                  
+- extractedDate: Extrahera datum från SYNLIG text i bilden (YYYY-MM-DD format)                                                           
+- extractedTime: Extrahera tid från SYNLIG text (HH:MM format)                                                                           
+- extractedDateTime: Om både datum OCH tid finns, kombinera till ISO-format (YYYY-MM-DDTHH:MM)                                           
+- extractedPeople: Lista alla personnamn som nämns i texten                                                                              
+- extractedPlaces: Lista alla platser/adresser som nämns                                                                                 
+                                                                                                                                         
+BESKRIVNING-INSTRUKTIONER:                                                                                                               
+- Om bilden INTE har någon läsbar text: Beskriv kort vad som visas (ex: "En solnedgång över havet", "En katt på en soffa")               
+- Om bilden HAR text: Sätt description till null                                                                                         
+- Håll beskrivningen kort och koncis (max 2 meningar)                                                                                    
+                                                                                                                                         
+OBS: Vi kommer senare även lägga till EXIF-metadata från filen (GPS, filskapare, originaldatum etc), så håll strukturen ren.`            
+                    },
+                    {
+                        inline_data: {
+                            mime_type: "image/jpeg", // Assuming JPEG, adjust if needed
+                            data: imageData.split(',')[1]
+                        }
+                    }
+                ]
+            }
+        ]
+    };
 
-/**
- * Anropar vår Vercel-proxy med en hel konversationshistorik och verktyg.
- * @param {Array<Object>} contents - Hela konversationshistoriken (Gemini-format).
- * @param {Array<Object>} [tools] - (Valfritt) En lista med verktygsdefinitioner.
- * @returns {Promise<Object>} - Hela svaret från Gemini (inkl. candidates).
- */
-async function callProxy(contents, tools) {
-  console.log('Anropar proxy med historik:', contents);
-  if (tools) {
-    console.log('...och med verktyg:', tools);
-  }
-
-  try {
-    const response = await fetch(PROXY_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: contents, // Skicka hela historiken
-        ...(tools && { tools: tools }) // Skicka verktyg om de finns
-      })
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('Fel från API-proxy:', errorData);
-      throw new Error(`API-proxy-fel: ${errorData.error || response.statusText}`);
+        const errorData = await response.json();
+        throw new Error(errorData.error.message || `API request failed with status ${response.status}`);
     }
 
-    const data = await response.json();
-    console.log('Svar från proxy:', data);
-    return data;
-
-  } catch (error) {
-    console.error('Nätverksfel eller fel vid anrop av proxy:', error);
-    throw new Error(`Kunde inte anropa proxyn: ${error.message}`);
-  }
+    return response.json();
 }
 
 /**
- * En enkel testfunktion för att se om proxyn fungerar.
- * Anropar proxyn med en enkel textsträng.
- * @param {string} prompt - En enkel textfråga.
- * @returns {Promise<string>} - Textsvaret från Gemini.
- */
-export async function testGeminiProxy(prompt) {
-  console.log('Startar testGeminiProxy...');
-  try {
-    // Skickar en enkel prompt-sträng (Vår proxy hanterar detta i "FALL 2")
-    const response = await fetch(PROXY_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: prompt })
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('Fel från API-proxy (test):', errorData);
-      return `Test misslyckades: ${errorData.error || 'Okänt fel'}`;
-    }
-
-    const data = await response.json();
-    console.log('Testsvar från proxy:', data);
-
-    // Plocka ut textsvaret
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (text) {
-      return `Testsvar: ${text}`;
-    } else {
-      return 'Test lyckades, men fick inget text-svar.';
-    }
-
-  } catch (error) {
-    console.error('Fel under testGeminiProxy:', error);
-    return `Test misslyckades: ${error.message}`;
-  }
-}
-
-
-/**
- * Kör hela Gemini-agent-loopen med verktyg.
- * @param {string} userPrompt - Användarens ursprungliga fråga.
- * @param {Array<Object>} toolDefinitions - JSON-schemadefinitioner för dina verktyg.
- * @param {Object} toolRegistry - Ett objekt där nycklar är verktygsnamn och värden är de faktiska lokala JS-funktionerna (t.ex. { createCard: boardView.createCard }).
- * @param {Array<Object>} [chatHistory] - (Valfritt) Befintlig chatthistorik.
- * @returns {Promise<string>} - Det slutgiltiga textsvaret från AI:n.
- */
-export async function executeGeminiAgent(userPrompt, toolDefinitions, toolRegistry, chatHistory = []) {
-  
-  // 1. Lägg till användarens nya fråga i historiken
-  let history = [
-    ...chatHistory,
-    { role: 'user', parts: [{ text: userPrompt }] }
-  ];
-
-  let safetyStop = 0; // Förhindra oändliga loopar
-  const MAX_LOOPS = 10;
-
-  while (safetyStop < MAX_LOOPS) {
-    safetyStop++;
-
-    // 2. Anropa proxyn med den aktuella historiken och verktygen
-    const data = await callProxy(history, toolDefinitions);
-
-    const candidate = data.candidates?.[0];
-    if (!candidate) {
-      throw new Error('Inget giltigt svar (candidate) från Gemini.');
-    }
-
-    const responsePart = candidate.content.parts[0];
-    
-    // 3. Lägg till AI:ns svar (även om det är ett toolCall) i historiken
-    // Vi måste skicka tillbaka detta till Gemini, annars blir den förvirrad
-    history.push({
-      role: 'model',
-      parts: candidate.content.parts
-    });
-
-    // 4. Kolla om svaret är ett funktionsanrop (Tool Call)
-    if (responsePart.functionCall) {
-      const call = responsePart.functionCall;
-      const toolName = call.name;
-      const toolArgs = call.args;
-
-      console.log(`Agenten vill anropa verktyg: ${toolName}`, toolArgs);
-
-      // Hitta den faktiska lokala funktionen i vårt register
-      const toolFunction = toolRegistry[toolName];
-
-      if (toolFunction) {
-        try {
-          // 5. Kör den lokala funktionen
-          const result = await toolFunction(toolArgs);
-
-          // 6. Lägg till verktygets *resultat* i historiken
-          history.push({
-            role: 'function', // Särskild roll för verktygssvar
-            parts: [
-              { functionResponse: { name: toolName, response: { result: result } } }
-            ]
-          });
-          
-          // 7. Fortsätt loopen: Skicka den uppdaterade historiken (med verktygsresultatet) tillbaka till Gemini
-          // för att få ett slutgiltigt text-svar.
-          console.log('Verktyg kört. Fortsätter loopen med resultat.');
-          continue; 
-
-        } catch (error) {
-          console.error(`Fel vid körning av lokalt verktyg "${toolName}":`, error);
-          // Lägg till ett felmeddelande i historiken och fortsätt
-          history.push({
-            role: 'function',
-            parts: [
-              { functionResponse: { name: toolName, response: { error: `Fel: ${error.message}` } } }
-            ]
-          });
-          continue;
-        }
-      } else {
-        console.warn(`Gemini försökte anropa ett okänt verktyg: ${toolName}`);
-        // Lägg till ett felmeddelande och fortsätt
-        history.push({
-          role: 'function',
-          parts: [
-            { functionResponse: { name: toolName, response: { error: 'Fel: Verktyget finns inte.' } } }
-          ]
-        });
-        continue;
-      }
-    } 
-    
-    // 8. Om det INTE var ett funktionsanrop, då är det ett vanligt text-svar.
-    // Då är loopen klar!
-    if (responsePart.text) {
-      console.log('Agenten gav ett slutgiltigt textsvar:', responsePart.text);
-      return responsePart.text; // Returnera det slutgiltiga svaret
-    }
-
-    // Om vi hamnar här var svaret varken text eller toolcall (konstigt)
-    throw new Error('Gemini-svar var varken text eller funktionsanrop.');
-  }
-
-  // Om vi når hit har vi fastnat i en loop
-  throw new Error('Agenten fastnade i en loop utan att ge ett textsvar.');
-}
-
-/**
- * Read image with Gemini Vision API
- * @param {string} cardId - The card ID to read
- * @returns {Promise<string>} - The extracted text from the image
+ * Main function to read an image card with Gemini, process the result, and update the card.
+ * @param {number} cardId - The ID of the card to process.
  */
 export async function readImageWithGemini(cardId) {
-  try {
-    // Import storage functions
-    const { getCard, updateCard } = await import('./storage.js');
-
-    // Get the card
-    const card = await getCard(cardId);
-    if (!card || !card.image) {
-      throw new Error('Inget bildkort hittades');
+    const apiKey = await getGoogleAIAPIKey();
+    if (!apiKey) {
+        console.log('Gemini OCR cancelled: No API key provided.');
+        return;
     }
 
-    // Get base64 image data
-    const imageData = typeof card.image === 'string' ? card.image : card.image.base64;
+    const allCards = await getAllCards();
+    const card = allCards.find(c => c.id === cardId);
 
-    // Remove data URL prefix if present (e.g., "data:image/jpeg;base64,")
-    const base64Data = imageData.includes(',') ? imageData.split(',')[1] : imageData;
-
-    // Determine mime type from data URL or default to jpeg
-    let mimeType = 'image/jpeg';
-    if (imageData.startsWith('data:')) {
-      const match = imageData.match(/data:([^;]+);/);
-      if (match) mimeType = match[1];
+    if (!card || !card.image || !card.image.base64) {
+        alert('Ingen bilddata hittades för detta kort.');
+        return;
     }
 
-    console.log('Skickar bild till Gemini för OCR via callProxy...');
+    // Simple loading indicator
+    const statusIndicator = document.createElement('div');
+    statusIndicator.textContent = '✨ Läser bild med Gemini...';
+    statusIndicator.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #333;
+        color: white;
+        padding: 12px 24px;
+        border-radius: 8px;
+        z-index: 10001;
+        font-family: sans-serif;
+    `;
+    document.body.appendChild(statusIndicator);
 
-    // Bygg 'contents'-arrayen för anropet
-    const contents = [
-      {
-        role: 'user',
-        parts: [
-          {
-            text: 'Läs all text i denna bild. Skriv ut texten exakt som den står, bevara formatering och struktur. Om det inte finns någon text, beskriv bilden kortfattat.'
-          },
-          {
-            inlineData: {
-              mimeType: mimeType,
-              data: base64Data
-            }
-          }
-        ]
-      }
-    ];
+    try {
+        const response = await callGeminiAPI(apiKey, card.image.base64);
 
-    // Använd den centraliserade callProxy-funktionen
-    const data = await callProxy(contents);
+        if (!response || !response.candidates || !response.candidates[0].content || !response.candidates[0].content.parts) {
+            throw new Error('Invalid response structure from Gemini API.');
+        }
 
-    const extractedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        const rawText = response.candidates[0].content.parts[0].text;
 
-    if (!extractedText) {
-      throw new Error('Inget textinnehåll från Gemini');
+        let parsedData;
+        try {
+            const jsonMatch = rawText.match(/```json\s*([\s\S]*?)\s*```/) || rawText.match(/```\s*([\s\S]*?)\s*```/);
+            const jsonText = jsonMatch ? jsonMatch[1] : rawText;
+            parsedData = JSON.parse(jsonText.trim());
+        } catch (parseError) {
+            console.warn('Failed to parse JSON, falling back to raw text:', parseError);
+            parsedData = { text: rawText, hashtags: [] };
+        }
+
+        const hashtagText = (parsedData.hashtags || []).map(tag => tag.startsWith('#') ? tag : '#' + tag).join(' ');
+        const mainContent = parsedData.text || parsedData.description || '';
+        const newBackText = (mainContent + '\n\n' + hashtagText).trim();
+
+        const existingTags = card.tags || [];
+        const newTags = (parsedData.hashtags || []).map(tag => tag.replace('#', ''));
+        const mergedTags = [...new Set([...existingTags, ...newTags])];
+
+        const updates = {
+            backText: newBackText,
+            tags: mergedTags,
+            geminiMetadata: parsedData.metadata || {} // Store metadata
+        };
+
+        await updateCard(cardId, updates);
+        await reloadCanvas();
+
+        statusIndicator.textContent = '✅ Bilden är analyserad!';
+    } catch (error) {
+        console.error('Error reading image with Gemini:', error);
+        statusIndicator.textContent = `❌ Fel: ${error.message}`;
+    } finally {
+        setTimeout(() => {
+            statusIndicator.remove();
+        }, 3000);
     }
-
-    console.log('Gemini OCR resultat:', extractedText);
-
-    // Update card with extracted text on the back
-    await updateCard(cardId, {
-      backText: extractedText,
-      flipped: false // Keep it on front, user can flip to see back
-    });
-
-    return extractedText;
-
-  } catch (error) {
-    console.error('Fel vid Gemini bildläsning:', error);
-    // Om felet kommer från vår proxy, kan vi ge ett bättre meddelande
-    if (error.message.includes('API-proxy-fel') && error.message.includes('500')) {
-        alert('Ett serverfel inträffade. Kontrollera att GOOGLE_API_KEY är korrekt inställd i Vercel-miljövariablerna.');
-    } else {
-        alert(`Ett fel inträffade vid bildläsning: ${error.message}`);
-    }
-    throw error;
-  }
 }
