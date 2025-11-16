@@ -1,0 +1,5 @@
+# Vercel
+.vercel/
+
+# Node modules (if any root-level packages are added)
+node_modules/
