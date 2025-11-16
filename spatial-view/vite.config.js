@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   root: '.',
-  base: '/spatial-view/', // GitHub Pages subfolder path
+  base: '/', // Vercel root deployment
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
