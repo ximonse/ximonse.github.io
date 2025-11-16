@@ -215,42 +215,33 @@ export async function readImageWithGemini(cardId) {
       if (match) mimeType = match[1];
     }
 
-    console.log('Skickar bild till Gemini för OCR...');
+    console.log('Skickar bild till Gemini för OCR via callProxy...');
 
-    // Call Gemini API with vision
-    const response = await fetch(PROXY_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [
+    // Bygg 'contents'-arrayen för anropet
+    const contents = [
+      {
+        role: 'user',
+        parts: [
           {
-            role: 'user',
-            parts: [
-              {
-                text: 'Läs all text i denna bild. Skriv ut texten exakt som den står, bevara formatering och struktur. Om det inte finns någon text, beskriv bilden kortfattat.'
-              },
-              {
-                inlineData: {
-                  mimeType: mimeType,
-                  data: base64Data
-                }
-              }
-            ]
+            text: 'Läs all text i denna bild. Skriv ut texten exakt som den står, bevara formatering och struktur. Om det inte finns någon text, beskriv bilden kortfattat.'
+          },
+          {
+            inlineData: {
+              mimeType: mimeType,
+              data: base64Data
+            }
           }
         ]
-      })
-    });
+      }
+    ];
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`Gemini API-fel: ${errorData.error || response.statusText}`);
-    }
+    // Använd den centraliserade callProxy-funktionen
+    const data = await callProxy(contents);
 
-    const data = await response.json();
     const extractedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!extractedText) {
-      throw new Error('Inget svar från Gemini');
+      throw new Error('Inget textinnehåll från Gemini');
     }
 
     console.log('Gemini OCR resultat:', extractedText);
@@ -265,6 +256,12 @@ export async function readImageWithGemini(cardId) {
 
   } catch (error) {
     console.error('Fel vid Gemini bildläsning:', error);
+    // Om felet kommer från vår proxy, kan vi ge ett bättre meddelande
+    if (error.message.includes('API-proxy-fel') && error.message.includes('500')) {
+        alert('Ett serverfel inträffade. Kontrollera att GOOGLE_API_KEY är korrekt inställd i Vercel-miljövariablerna.');
+    } else {
+        alert(`Ett fel inträffade vid bildläsning: ${error.message}`);
+    }
     throw error;
   }
 }
