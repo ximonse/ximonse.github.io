@@ -19,7 +19,7 @@ export default async function handler(request, response) {
   }
 
   // 3. Bygg URL:en till Google AI API
-  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
+  const geminiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
   try {
     // 4. Vidarebefordra klientens request body till Gemini
