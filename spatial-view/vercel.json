@@ -1,7 +1,7 @@
 {
   "builds": [
     {
-      "src": "api/**/*.js",
+      "src": "api/gemini.js",
       "use": "@vercel/node"
     },
     {
@@ -13,6 +13,10 @@
     }
   ],
   "rewrites": [
+    {
+      "source": "/api/gemini",
+      "destination": "/api/gemini"
+    },
     {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
