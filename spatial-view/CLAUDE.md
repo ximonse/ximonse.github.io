@@ -1,0 +1,2 @@
+- alla kortkommandon som skapas ska även skapas i commando-palette
+- alla kortkommandon som skapas ska även skapas i commando-palette

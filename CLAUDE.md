@@ -19,3 +19,4 @@
 
 ## Övriga instruktioner
 - när ett nytt kortkommando eller funktion görs, lägg till den till command-palett
+- vercel bygger själv, vi skickar bara källkod till git
