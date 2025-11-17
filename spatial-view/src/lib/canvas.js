@@ -3437,6 +3437,9 @@ function showCommandPalette() {
       });
       layer.batchDraw();
     }},
+    { key: 'Escape', icon: '☐', name: 'Avmarkera alla', desc: 'Avmarkera alla markerade kort', action: () => {
+      deselectAllCards();
+    }},
     { key: 'Scroll', icon: '🔍', name: 'Zooma', desc: 'Zooma in/ut med mushjulet', action: null },
     { key: 'Ctrl+Drag', icon: '✋', name: 'Panorera', desc: 'Panorera canvas genom att hålla Ctrl och dra', action: null },
     { key: 'Double-click', icon: '✏️', name: 'Redigera kort', desc: 'Dubbelklicka på kort för att redigera', action: null },
@@ -4494,6 +4497,8 @@ async function togglePinSelectedCards() {
  * Create "Fit All" button
  */
 function createFitAllButton() {
+  const isEink = document.body.classList.contains('eink-theme');
+
   const button = document.createElement('button');
   button.id = 'fit-all-button';
   button.innerHTML = '🔍';
@@ -4504,13 +4509,13 @@ function createFitAllButton() {
     right: 24px;
     width: 56px;
     height: 56px;
-    background: #2196F3;
-    color: white;
-    border: none;
+    background: ${isEink ? 'white' : '#2196F3'};
+    color: ${isEink ? 'black' : 'white'};
+    border: ${isEink ? '2px solid black' : 'none'};
     border-radius: 50%;
     font-size: 24px;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: ${isEink ? '0 2px 8px rgba(0, 0, 0, 0.2)' : '0 4px 12px rgba(0, 0, 0, 0.15)'};
     z-index: 1000;
     transition: all 0.2s;
     display: flex;
@@ -4520,12 +4525,12 @@ function createFitAllButton() {
 
   button.addEventListener('mouseenter', () => {
     button.style.transform = 'scale(1.1)';
-    button.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.2)';
+    button.style.boxShadow = isEink ? '0 4px 12px rgba(0, 0, 0, 0.3)' : '0 6px 16px rgba(0, 0, 0, 0.2)';
   });
 
   button.addEventListener('mouseleave', () => {
     button.style.transform = 'scale(1)';
-    button.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+    button.style.boxShadow = isEink ? '0 2px 8px rgba(0, 0, 0, 0.2)' : '0 4px 12px rgba(0, 0, 0, 0.15)';
   });
 
   button.addEventListener('click', fitAllCards);
@@ -4538,6 +4543,8 @@ function createFitAllButton() {
  * Create "Command Palette" button
  */
 function createCommandPaletteButton() {
+  const isEink = document.body.classList.contains('eink-theme');
+
   const button = document.createElement('button');
   button.id = 'command-palette-button';
   button.innerHTML = '⌘';
@@ -4548,13 +4555,13 @@ function createCommandPaletteButton() {
     right: 24px;
     width: 56px;
     height: 56px;
-    background: #2196F3;
-    color: white;
-    border: none;
+    background: ${isEink ? 'white' : '#2196F3'};
+    color: ${isEink ? 'black' : 'white'};
+    border: ${isEink ? '2px solid black' : 'none'};
     border-radius: 50%;
     font-size: 28px;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: ${isEink ? '0 2px 8px rgba(0, 0, 0, 0.2)' : '0 4px 12px rgba(0, 0, 0, 0.15)'};
     z-index: 1000;
     transition: all 0.2s;
     display: flex;
@@ -4564,12 +4571,12 @@ function createCommandPaletteButton() {
 
   button.addEventListener('mouseenter', () => {
     button.style.transform = 'scale(1.1)';
-    button.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.2)';
+    button.style.boxShadow = isEink ? '0 4px 12px rgba(0, 0, 0, 0.3)' : '0 6px 16px rgba(0, 0, 0, 0.2)';
   });
 
   button.addEventListener('mouseleave', () => {
     button.style.transform = 'scale(1)';
-    button.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+    button.style.boxShadow = isEink ? '0 2px 8px rgba(0, 0, 0, 0.2)' : '0 4px 12px rgba(0, 0, 0, 0.15)';
   });
 
   button.addEventListener('click', showCommandPalette);
@@ -4744,6 +4751,8 @@ function toggleViewFromMenu() {
  * Create floating add button
  */
 function createAddButton() {
+  const isEink = document.body.classList.contains('eink-theme');
+
   const button = document.createElement('button');
   button.id = 'add-button';
   button.innerHTML = '+';
@@ -4754,14 +4763,14 @@ function createAddButton() {
     right: 24px;
     width: 56px;
     height: 56px;
-    background: #4CAF50;
-    color: white;
-    border: none;
+    background: ${isEink ? 'white' : '#4CAF50'};
+    color: ${isEink ? 'black' : 'white'};
+    border: ${isEink ? '2px solid black' : 'none'};
     border-radius: 50%;
     font-size: 32px;
     font-weight: 300;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: ${isEink ? '0 2px 8px rgba(0, 0, 0, 0.2)' : '0 4px 12px rgba(0, 0, 0, 0.15)'};
     z-index: 1000;
     transition: all 0.2s;
     display: flex;
