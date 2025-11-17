@@ -19,16 +19,13 @@ jobs:
           node-version: '18' # Use a recent LTS version
 
       - name: Install dependencies
-        # Run install from the project's subdirectory
-        run: cd spatial-view && npm install
+        run: npm install
 
       - name: Build project
-        # Run build from the project's subdirectory
-        run: cd spatial-view && npm run build
+        run: npm run build
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          # The directory to deploy from, relative to the repository root
-          publish_dir: ./spatial-view/dist
+          publish_dir: ./dist
