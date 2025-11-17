@@ -4515,7 +4515,7 @@ function createFitAllButton() {
     border-radius: 50%;
     font-size: 24px;
     cursor: pointer;
-    box-shadow: ${isEink ? '0 2px 8px rgba(0, 0, 0, 0.2)' : '0 4px 12px rgba(0, 0, 0, 0.15)'};
+    box-shadow: ${isEink ? 'none' : '0 4px 12px rgba(0, 0, 0, 0.15)'};
     z-index: 1000;
     transition: all 0.2s;
     display: flex;
@@ -4525,12 +4525,12 @@ function createFitAllButton() {
 
   button.addEventListener('mouseenter', () => {
     button.style.transform = 'scale(1.1)';
-    button.style.boxShadow = isEink ? '0 4px 12px rgba(0, 0, 0, 0.3)' : '0 6px 16px rgba(0, 0, 0, 0.2)';
+    button.style.boxShadow = isEink ? 'none' : '0 6px 16px rgba(0, 0, 0, 0.2)';
   });
 
   button.addEventListener('mouseleave', () => {
     button.style.transform = 'scale(1)';
-    button.style.boxShadow = isEink ? '0 2px 8px rgba(0, 0, 0, 0.2)' : '0 4px 12px rgba(0, 0, 0, 0.15)';
+    button.style.boxShadow = isEink ? 'none' : '0 4px 12px rgba(0, 0, 0, 0.15)';
   });
 
   button.addEventListener('click', fitAllCards);
@@ -4561,7 +4561,7 @@ function createCommandPaletteButton() {
     border-radius: 50%;
     font-size: 28px;
     cursor: pointer;
-    box-shadow: ${isEink ? '0 2px 8px rgba(0, 0, 0, 0.2)' : '0 4px 12px rgba(0, 0, 0, 0.15)'};
+    box-shadow: ${isEink ? 'none' : '0 4px 12px rgba(0, 0, 0, 0.15)'};
     z-index: 1000;
     transition: all 0.2s;
     display: flex;
@@ -4571,12 +4571,12 @@ function createCommandPaletteButton() {
 
   button.addEventListener('mouseenter', () => {
     button.style.transform = 'scale(1.1)';
-    button.style.boxShadow = isEink ? '0 4px 12px rgba(0, 0, 0, 0.3)' : '0 6px 16px rgba(0, 0, 0, 0.2)';
+    button.style.boxShadow = isEink ? 'none' : '0 6px 16px rgba(0, 0, 0, 0.2)';
   });
 
   button.addEventListener('mouseleave', () => {
     button.style.transform = 'scale(1)';
-    button.style.boxShadow = isEink ? '0 2px 8px rgba(0, 0, 0, 0.2)' : '0 4px 12px rgba(0, 0, 0, 0.15)';
+    button.style.boxShadow = isEink ? 'none' : '0 4px 12px rgba(0, 0, 0, 0.15)';
   });
 
   button.addEventListener('click', showCommandPalette);
@@ -4770,7 +4770,7 @@ function createAddButton() {
     font-size: 32px;
     font-weight: 300;
     cursor: pointer;
-    box-shadow: ${isEink ? '0 2px 8px rgba(0, 0, 0, 0.2)' : '0 4px 12px rgba(0, 0, 0, 0.15)'};
+    box-shadow: ${isEink ? 'none' : '0 4px 12px rgba(0, 0, 0, 0.15)'};
     z-index: 1000;
     transition: all 0.2s;
     display: flex;
